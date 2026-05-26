@@ -19,7 +19,7 @@
 #include <unistd.h>
 #endif
 
-/* Version information - fallback if not defined by autoconf */
+#include "bloom_version.h"
 #ifndef BLOOM_LISP_VERSION
 #define BLOOM_LISP_VERSION "unknown"
 #endif

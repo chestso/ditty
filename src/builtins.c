@@ -1,6 +1,8 @@
+#include "bloom_version.h"
 #include "builtins_internal.h"
 
-/* Version information - fallbacks if not defined by autoconf */
+/* BLOOM_LISP_VERSION comes from bloom_version.h (regenerated each build
+ * from git state). MAJOR/MINOR/PATCH still come from config.h. */
 #ifndef BLOOM_LISP_VERSION
 #define BLOOM_LISP_VERSION "unknown"
 #endif

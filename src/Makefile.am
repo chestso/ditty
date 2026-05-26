@@ -1,9 +1,28 @@
 # Build static libraries
 lib_LIBRARIES = libbloomlisp.a
 
-# Generate docstrings header from markdown files
-BUILT_SOURCES = docstrings.gen.h
-CLEANFILES = docstrings.gen.h
+# Generated headers: docstrings (from markdown) and version (from git state).
+# bloom_version.h is regenerated on every `make` so the embedded version
+# string tracks the current git HEAD (including a -dirty suffix when the
+# working tree has uncommitted changes). The recipe always runs, but the
+# file is only rewritten when the version actually changes — so dependent
+# .o files stay cached when nothing changed.
+BUILT_SOURCES = docstrings.gen.h bloom_version.h
+CLEANFILES = docstrings.gen.h bloom_version.h
+
+.PHONY: bloom_version_force
+bloom_version.h: bloom_version_force
+	@v=`"$(top_srcdir)/build-aux/git-version.sh" "$(top_srcdir)" 2>/dev/null`; \
+	test -n "$$v" || v="$(BLOOM_LISP_VERSION)"; \
+	test -n "$$v" || v="unknown"; \
+	printf '#ifndef BLOOM_VERSION_H\n#define BLOOM_VERSION_H\n#define BLOOM_LISP_VERSION "%s"\n#endif\n' "$$v" > $@.tmp; \
+	if cmp -s $@.tmp $@ 2>/dev/null; then \
+	  rm -f $@.tmp; \
+	else \
+	  mv $@.tmp $@; \
+	  echo "  GEN      $@ ($$v)"; \
+	fi
+bloom_version_force:
 
 DOC_FILES = \
     $(top_srcdir)/doc/arithmetic.md \

@@ -7,7 +7,8 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
 
-AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror])
+AM_INIT_AUTOMAKE([1.14 foreign subdir-objects -Wall -Werror])
+AM_SILENT_RULES([yes])
 
 dnl Recompute the version at configure time so a rebuild after new commits
 dnl picks up the current version without needing to re-run autoreconf. Falls
@@ -77,8 +78,8 @@ AC_CHECK_HEADERS([stdlib.h string.h unistd.h termios.h sys/ioctl.h])
 # Checks for typedefs, structures, and compiler characteristics
 AC_TYPE_SIZE_T
 
-# Define version macros for config.h
-AC_DEFINE_UNQUOTED([BLOOM_LISP_VERSION], ["$BLOOM_LISP_VERSION"], [Full version string])
+# BLOOM_LISP_VERSION comes from the compile-time-generated bloom_version.h
+# (see src/Makefile.am); MAJOR/MINOR/PATCH stay here as hardcoded constants.
 AC_DEFINE([BLOOM_LISP_VERSION_MAJOR], [0], [Major version number])
 AC_DEFINE([BLOOM_LISP_VERSION_MINOR], [0], [Minor version number])
 AC_DEFINE([BLOOM_LISP_VERSION_PATCH], [1], [Patch version number])
