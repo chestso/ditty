@@ -1391,6 +1391,7 @@ File streams are **EOL-aware** (Emacs Lisp style): on open-for-read, the stream 
 - `read-json` - Read JSON from file (filename or file stream) - returns Lisp data structures (objects → hash tables, arrays → vectors, etc.)
 - `read-file-raw` - Read an entire file into a string verbatim, preserving every byte including carriage returns. Opens in binary mode; use when you need the exact on-disk bytes (tools that care about original formatting, CRLF preservation, etc.)
 - `delete-file` - Delete a file from the filesystem (filename) - returns nil on success, error if file doesn't exist or cannot be deleted
+- `file-exists?` - Test whether a file or directory exists (path) - returns `#t` if it exists, `nil` otherwise. See [Filesystem Functions](#filesystem-functions)
 - `load` - Load and evaluate a Lisp file (filename) - returns the result of the last expression evaluated, or an error if loading fails
 
 ### Package Functions
@@ -1422,17 +1423,29 @@ All package functions accept symbols as package names. Strings are also accepted
 
 ### String Port Functions
 
-String ports provide efficient character-by-character reading from strings with O(1) access time (compared to O(n) for repeated `string-ref` calls). They maintain position state and support UTF-8 characters.
+String ports come in two flavors: **input ports** read characters sequentially from a string, and **output ports** accumulate characters into a buffer for efficient string building. Both support UTF-8 characters.
 
-- `open-input-string` - Create a string port from a string for sequential reading
+**Input string ports** provide O(1) character-by-character access (compared to O(n) for repeated `string-ref` calls) and maintain position state:
+
+- `open-input-string` - Create an input string port from a string for sequential reading
 - `port-read-char` - Read the next character and advance position (returns nil at EOF)
 - `port-peek-char` - Peek at next character without advancing position (returns nil at EOF)
 - `port-position` - Get the current character position (0-indexed)
 - `port-source` - Get the original source string
 - `port-eof?` - Check if at end of string (returns #t or nil)
+
+**Output string ports** accumulate written text in an internal buffer, giving O(n) total string construction instead of the O(n²) cost of repeated `concat`:
+
+- `open-output-string` - Create an empty output string port (takes no arguments)
+- `port-write-string` - Append a string to the port's buffer (returns nil)
+- `port-write-char` - Append a single character to the port's buffer (returns nil)
+- `get-output-string` - Return the accumulated contents of the port as a string
+
+**Type predicate** (both flavors):
+
 - `string-port?` - Type predicate (returns #t if argument is a string port)
 
-**Examples:**
+**Input examples:**
 
 ```lisp
 ;; Create a string port
@@ -1463,9 +1476,31 @@ String ports provide efficient character-by-character reading from strings with 
 (string-port? "hello")   ; => nil
 ```
 
-### Path Expansion Functions
+**Output examples:**
 
-Cross-platform file path expansion utilities.
+```lisp
+;; Create an output port and accumulate text
+(define out (open-output-string))
+(port-write-string out "hello")
+(port-write-char out #\,)
+(port-write-char out #\space)
+(port-write-string out "world")
+(get-output-string out)  ; => "hello, world"
+
+;; Efficient string building in a loop (O(n), not O(n^2))
+(define buf (open-output-string))
+(do ((i 0 (+ i 1)))
+    ((= i 3))
+  (port-write-string buf (number->string i)))
+(get-output-string buf)  ; => "012"
+
+;; Output ports are string ports too
+(string-port? (open-output-string))  ; => #t
+```
+
+### Filesystem Functions
+
+Cross-platform file path expansion, environment variables, and directory utilities.
 
 #### `(home-directory)`
 
@@ -1600,6 +1635,66 @@ Return the platform-specific user config directory for an application. Does not 
 ```lisp
 (config-directory "my-app")            ; => "/home/alice/.config/my-app"
 (mkdir (config-directory "my-app"))    ; create it if needed
+```
+
+#### `(getenv name)`
+
+Read an environment variable.
+
+**Arguments:**
+
+- `name` (string) - Environment variable name
+
+**Returns:**
+
+- String value of the variable
+- `nil` if the variable is not set
+
+**Examples:**
+
+```lisp
+(getenv "HOME")            ; => "/home/alice"
+(getenv "PATH")            ; => "/usr/bin:/bin:..."
+(getenv "NONEXISTENT")     ; => nil
+```
+
+#### `(file-exists? path)`
+
+Check whether a file or directory exists.
+
+**Arguments:**
+
+- `path` (string) - File or directory path
+
+**Returns:**
+
+- `#t` if the path exists
+- `nil` otherwise
+
+**Examples:**
+
+```lisp
+(file-exists? "/tmp")          ; => #t
+(file-exists? "/no/such/path") ; => nil
+```
+
+#### `(mkdir path)`
+
+Create a directory and all missing parent directories (like `mkdir -p`).
+
+**Arguments:**
+
+- `path` (string) - Directory path to create
+
+**Returns:**
+
+- `#t` on success (succeeds silently if the directory already exists)
+
+**Examples:**
+
+```lisp
+(mkdir "/tmp/my-app/data")         ; creates /tmp/my-app and /tmp/my-app/data
+(mkdir (data-directory "my-app"))  ; create app data dir
 ```
 
 ### Printing Functions (Common Lisp Style)

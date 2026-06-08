@@ -11,7 +11,7 @@ An embeddable Lisp interpreter library written in C. This implementation follows
 - **Data Types**: Numbers, integers, booleans, strings (UTF-8), characters, symbols, keywords, lists, vectors, hash tables, lambdas, errors
 - **Special Forms**: `quote`, `quasiquote`, `if`, `define`, `set!`, `lambda`, `defmacro`, `let`/`let*`, `progn`, `do`, `cond`, `case`, `and`, `or`, `condition-case`, `unwind-protect`, `package-ref`
 - **Macros**: Code transformation with `defmacro`, quasiquote (`` ` ``), unquote (`,`), unquote-splicing (`,@`), and built-in `defun` macro
-- **Functions**: Arithmetic, strings, lists, vectors, hash tables, regex (PCRE2), file I/O, packages, profiling
+- **Functions**: Arithmetic, strings, lists, vectors, hash tables, regex (PCRE2), file I/O, string ports, filesystem, packages, profiling
 - **Type Predicates**: `null?`, `atom?`, `pair?`, `list?`, `integer?`, `boolean?`, `number?`, `string?`, `char?`, `symbol?`, `keyword?`, `vector?`, `hash-table?`, `function?`, `callable?`, `error?`
 
 See **[LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md)** for complete function listings and examples.
@@ -219,7 +219,7 @@ myapp_LDADD = libs/bloom-lisp/src/libbloomlisp.a
 include/         public headers — lisp.h, lisp_value.h, utf8.h, file_utils.h
 src/             interpreter core
   lisp.c           constructors, lisp_init, NIL/LISP_TRUE
-  eval.c           eval loop, all 16 special forms, macro expansion
+  eval.c           eval loop, all 18 special forms, macro expansion
   reader.c         S-expression parser
   print.c          object → string
   env.c            environments, call stack, handler contexts
