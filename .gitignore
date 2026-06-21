@@ -31,30 +31,34 @@ Makefile.in
 
 # Generated files
 /src/docstrings.gen.h
+/src/bloom_version.h
 /version
 
 # Executables
 /repl/bloom-repl
+/tests/test_sf_kind
 
 # pkg-config generated
 /bloom-lisp.pc
 
 # Test outputs
-*.log
-*.trs
+/tests/**/*.log
+/tests/**/*.trs
 /test-suite.log
 
 # clangd/bear artifacts
 /compile_commands.json
 /.cache/
 
-# Crush (third-party tool config)
+# Crush
+/.crush/
 /crush.json
 /.crushignore
 
-# Claude Code
+# AI assistant artifacts
 /.claude/
 /CLAUDE.md
+/AGENTS.md
 
 # Editor files
 *~
