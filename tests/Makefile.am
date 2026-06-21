@@ -1,4 +1,23 @@
 # Test suite using Automake's parallel test harness
+# C unit tests (compiled, run as plain executables)
+check_PROGRAMS = test_sf_kind
+
+test_sf_kind_SOURCES = test_sf_kind.c
+test_sf_kind_CPPFLAGS = \
+    -I$(top_srcdir)/include \
+    -I$(top_srcdir)/src \
+    -I$(top_builddir)/src \
+    $(GC_CFLAGS) \
+    $(PCRE2_CFLAGS)
+test_sf_kind_LDADD = \
+    $(top_builddir)/src/libbloomlisp.a \
+    $(GC_LIBS) \
+    $(PCRE2_LIBS)
+
+# Force bloom_version.h to exist before test objects compile
+$(test_sf_kind_OBJECTS): $(top_builddir)/src/bloom_version.h
+
+# Lisp script tests
 TESTS = \
     basic/alists.lisp \
     basic/apply.lisp \
@@ -45,7 +64,8 @@ TESTS = \
     regression/list_ref_type_check.lisp \
     regression/multiline_parsing.lisp \
     regression/nested-unknown-hash-syntax.lisp \
-    regression/tail_call_unwrap.lisp
+    regression/tail_call_unwrap.lisp \
+    test_sf_kind
 
 TEST_EXTENSIONS = .lisp
 LISP_LOG_COMPILER = $(srcdir)/run-test.sh
@@ -56,5 +76,6 @@ AM_TESTS_ENVIRONMENT = \
 
 EXTRA_DIST = \
     run-test.sh \
+    test_sf_kind.c \
     test-helpers.lisp \
     $(TESTS)
