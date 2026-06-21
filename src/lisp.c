@@ -13,8 +13,8 @@ LispObject *symbol_table = NULL;
 /* Global keyword intern table */
 static LispObject *keyword_table = NULL;
 
-/* Define special form symbol globals */
-#define DEFINE_SYM(c_name, lisp_name) LispObject *c_name = NULL;
+/* Define special form symbol globals (third column ignored) */
+#define DEFINE_SYM(c_name, lisp_name, ...) LispObject *c_name = NULL;
 SPECIAL_FORMS(DEFINE_SYM)
 #undef DEFINE_SYM
 
@@ -29,15 +29,48 @@ LispObject *sym_unclosed_input = NULL;
 LispObject *sym_package_ref = NULL;
 LispObject *sym_star_package_star = NULL;
 
-/* Name array for completion API */
+/* Name array for completion API (third column ignored) */
 const char *lisp_special_forms[] = {
-#define SF_NAME(c_name, lisp_name) lisp_name,
+#define SF_NAME(c_name, lisp_name, ...) lisp_name,
     SPECIAL_FORMS(SF_NAME)
 #undef SF_NAME
         NULL
 };
 Symbol *pkg_core = NULL;
 Symbol *pkg_user = NULL;
+
+/* Special form classification — built from the same X-macro, single source of truth */
+typedef struct {
+    const char *name;
+    LispObject **sym_ptr;
+    SfKind kind;
+} SfInfo;
+
+/* Auto-generate the table: each row captures the symbol pointer and its kind */
+#define SF_INFO(c_name, lisp_name, kind) \
+    { lisp_name, &c_name, kind },
+
+static const SfInfo sf_table[] = {
+    SPECIAL_FORMS(SF_INFO)
+};
+#undef SF_INFO
+
+#define SF_TABLE_COUNT (sizeof(sf_table) / sizeof(sf_table[0]))
+
+int lisp_sf_kind(LispObject *sym)
+{
+    if (!sym) return -1;
+    for (size_t i = 0; i < SF_TABLE_COUNT; i++) {
+        if (sym == *sf_table[i].sym_ptr)
+            return (int)sf_table[i].kind;
+    }
+    return -1;
+}
+
+size_t lisp_sf_count(void)
+{
+    return SF_TABLE_COUNT;
+}
 
 /* Object creation functions */
 LispObject *lisp_make_number(double value)
@@ -642,7 +675,8 @@ Environment *lisp_init(void)
     symbol_table = lisp_make_hash_table();
 
     /* Pre-intern special form symbols */
-#define INIT_SYM(c_name, lisp_name) c_name = lisp_intern(lisp_name);
+/* Pre-intern special form symbols (third column ignored) */
+#define INIT_SYM(c_name, lisp_name, ...) c_name = lisp_intern(lisp_name);
     SPECIAL_FORMS(INIT_SYM)
 #undef INIT_SYM
 

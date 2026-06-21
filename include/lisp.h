@@ -295,28 +295,41 @@ void lisp_set_docstring(const char *name, const char *docstring);
 /* Keyword interning */
 LispObject *lisp_make_keyword(const char *name);
 
-/* X(c_name, lisp_name) — single source of truth for special forms */
-#define SPECIAL_FORMS(X)                    \
-    X(sym_quote, "quote")                   \
-    X(sym_quasiquote, "quasiquote")         \
-    X(sym_if, "if")                         \
-    X(sym_define, "define")                 \
-    X(sym_set, "set!")                      \
-    X(sym_lambda, "lambda")                 \
-    X(sym_defmacro, "defmacro")             \
-    X(sym_let, "let")                       \
-    X(sym_let_star, "let*")                 \
-    X(sym_progn, "progn")                   \
-    X(sym_do, "do")                         \
-    X(sym_cond, "cond")                     \
-    X(sym_case, "case")                     \
-    X(sym_and, "and")                       \
-    X(sym_or, "or")                         \
-    X(sym_condition_case, "condition-case") \
-    X(sym_unwind_protect, "unwind-protect")
+/* Semantic classification of special forms.
+ * These categories describe the language-level role of each form,
+ * independent of any particular consumer (highlighter, debugger, doc generator). */
+typedef enum {
+    SF_KIND_QUOTE,       /* quote, quasiquote — data-shape, no eval */
+    SF_KIND_DEFINE,      /* define, set!, lambda — env mutation or closure construction */
+    SF_KIND_CONTROL,     /* if, cond, case, and, or, do — conditional or iterative */
+    SF_KIND_MACRO_DEF,   /* defmacro — macro definition */
+    SF_KIND_BINDING,     /* let, let* — local scope introduction */
+    SF_KIND_BODY,        /* progn — sequential evaluation */
+    SF_KIND_EXCEPTION    /* condition-case, unwind-protect — non-local exit */
+} SfKind;
 
-/* Declare special form symbol globals */
-#define DECLARE_SYM(c_name, lisp_name) extern LispObject *c_name;
+/* X(c_name, lisp_name, kind) — single source of truth for special forms */
+#define SPECIAL_FORMS(X)                            \
+    X(sym_quote, "quote", SF_KIND_QUOTE)             \
+    X(sym_quasiquote, "quasiquote", SF_KIND_QUOTE)   \
+    X(sym_if, "if", SF_KIND_CONTROL)                 \
+    X(sym_define, "define", SF_KIND_DEFINE)           \
+    X(sym_set, "set!", SF_KIND_DEFINE)               \
+    X(sym_lambda, "lambda", SF_KIND_DEFINE)          \
+    X(sym_defmacro, "defmacro", SF_KIND_MACRO_DEF)    \
+    X(sym_let, "let", SF_KIND_BINDING)               \
+    X(sym_let_star, "let*", SF_KIND_BINDING)         \
+    X(sym_progn, "progn", SF_KIND_BODY)              \
+    X(sym_do, "do", SF_KIND_CONTROL)                 \
+    X(sym_cond, "cond", SF_KIND_CONTROL)             \
+    X(sym_case, "case", SF_KIND_CONTROL)             \
+    X(sym_and, "and", SF_KIND_CONTROL)               \
+    X(sym_or, "or", SF_KIND_CONTROL)                 \
+    X(sym_condition_case, "condition-case", SF_KIND_EXCEPTION) \
+    X(sym_unwind_protect, "unwind-protect", SF_KIND_EXCEPTION)
+
+/* Declare special form symbol globals (third column ignored) */
+#define DECLARE_SYM(c_name, lisp_name, ...) extern LispObject *c_name;
 SPECIAL_FORMS(DECLARE_SYM)
 #undef DECLARE_SYM
 
@@ -335,6 +348,13 @@ extern LispObject *sym_star_package_star;
 extern const char *lisp_special_forms[];
 extern Symbol *pkg_core;
 extern Symbol *pkg_user;
+
+/* Special form classification API */
+/* Returns the semantic kind of a special form, or -1 if not a special form.
+ * Return type is int (not SfKind) so the -1 sentinel survives unsigned enum
+ * comparison: casting an SfKind variable to int before >= 0 is also safe. */
+int lisp_sf_kind(LispObject *sym);
+size_t lisp_sf_count(void);
 
 /* Hash table entry structure */
 struct HashEntry
