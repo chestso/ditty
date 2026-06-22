@@ -28,41 +28,41 @@ static char *strip_ansi(const char *s)
 static void test_roundtrip_simple(void)
 {
     const char *src = "(+ 1 2)";
-    BflareResult r = bflare_highlight(src, strlen(src), NULL, NULL, NULL);
+    FlareResult r = flare_highlight(src, strlen(src), NULL, NULL, NULL);
     char *plain = strip_ansi(r.data);
     ASSERT_STR_EQ(plain, src);
     free(plain);
-    bflare_result_free(r);
+    flare_result_free(r);
 }
 
 static void test_roundtrip_define_lambda(void)
 {
     const char *src = "(define (add a b) (+ a b))";
-    BflareResult r = bflare_highlight(src, strlen(src), NULL, NULL, NULL);
+    FlareResult r = flare_highlight(src, strlen(src), NULL, NULL, NULL);
     char *plain = strip_ansi(r.data);
     ASSERT_STR_EQ(plain, src);
     free(plain);
-    bflare_result_free(r);
+    flare_result_free(r);
 }
 
 static void test_roundtrip_quasiquote(void)
 {
     const char *src = "`(list ,a ,@bs)";
-    BflareResult r = bflare_highlight(src, strlen(src), NULL, NULL, NULL);
+    FlareResult r = flare_highlight(src, strlen(src), NULL, NULL, NULL);
     char *plain = strip_ansi(r.data);
     ASSERT_STR_EQ(plain, src);
     free(plain);
-    bflare_result_free(r);
+    flare_result_free(r);
 }
 
 static void test_roundtrip_comment_and_string(void)
 {
     const char *src = "; comment\n\"hello world\"";
-    BflareResult r = bflare_highlight(src, strlen(src), NULL, NULL, NULL);
+    FlareResult r = flare_highlight(src, strlen(src), NULL, NULL, NULL);
     char *plain = strip_ansi(r.data);
     ASSERT_STR_EQ(plain, src);
     free(plain);
-    bflare_result_free(r);
+    flare_result_free(r);
 }
 
 int main(void)

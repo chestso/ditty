@@ -13,7 +13,7 @@
 
 /* ----- Token type constants --------------------------------------------- */
 
-typedef int BflareTokenType;
+typedef int FlareTokenType;
 
 #define HL_TEXT                      0
 #define HL_KEYWORD                   1000
@@ -55,21 +55,21 @@ typedef int BflareTokenType;
 
 /* Return the category (range base) for a token type:
  *   0, 1000, 2000, 3000, 4000, 5000, 6000, 7000 */
-int bflare_token_category(BflareTokenType type);
+int flare_token_category(FlareTokenType type);
 
 /* Return the subcategory for a token type:
  *   e.g. HL_KEYWORD_SPECIAL_FORM → 1010 */
-int bflare_token_subcategory(BflareTokenType type);
+int flare_token_subcategory(FlareTokenType type);
 
 /* ----- Core types ------------------------------------------------------- */
 
 /* Token produced by the lexer */
 typedef struct
 {
-    BflareTokenType type;
+    FlareTokenType type;
     size_t offset; /* byte offset into source */
     size_t length; /* byte length of the token text */
-} BflareToken;
+} FlareToken;
 
 /* Styling for a token type */
 typedef struct
@@ -77,23 +77,23 @@ typedef struct
     uint8_t fg_r, fg_g, fg_b;
     uint8_t bg_r, bg_g, bg_b;
     int bold, italic, underline, faint, strikethrough;
-} BflareStyleEntry;
+} FlareStyleEntry;
 
 /* A complete style (collection of type → entry mappings) */
-typedef struct BflareStyle BflareStyle;
+typedef struct FlareStyle FlareStyle;
 
 /* A lexer (language-specific tokenizer) */
-typedef struct BflareLexer BflareLexer;
+typedef struct FlareLexer FlareLexer;
 
 /* A formatter (produces output from token stream + style) */
-typedef struct BflareFormatter BflareFormatter;
+typedef struct FlareFormatter FlareFormatter;
 
 /* Result of highlighting: ANSI-escaped string */
 typedef struct
 {
     char *data;    /* NUL-terminated ANSI string */
     size_t length; /* byte length (not counting NUL) */
-} BflareResult;
+} FlareResult;
 
 /* ----- Lexer API -------------------------------------------------------- */
 
@@ -101,36 +101,36 @@ typedef struct
  * from lisp_init()) for semantic classification of symbols as
  * special forms, builtins, macros, or variables. Passing NULL
  * returns NULL. */
-BflareLexer *bflare_lexer_bloom_lisp(Environment *env);
+FlareLexer *flare_lexer_bloom_lisp(Environment *env);
 
 /* Generic lexer by name (future: "c", "python", etc.) */
-BflareLexer *bflare_lexer_get(const char *name);
+FlareLexer *flare_lexer_get(const char *name);
 
 /* Tokenize input. Returns a malloc'd array of tokens;
  * *out_count receives the number of tokens (0 for empty input).
  * Caller frees the array with free(). */
-BflareToken *bflare_lex(const BflareLexer *lexer, const char *input,
-                        size_t input_len, size_t *out_count);
+FlareToken *flare_lex(const FlareLexer *lexer, const char *input,
+                      size_t input_len, size_t *out_count);
 
-void bflare_lexer_free(BflareLexer *lexer);
+void flare_lexer_free(FlareLexer *lexer);
 
 /* ----- Style API ------------------------------------------------------- */
 
 /* Built-in styles */
-BflareStyle *bflare_style_monokai(void);
-BflareStyle *bflare_style_dracula(void);
-BflareStyle *bflare_style_github_dark(void);
-BflareStyle *bflare_style_github_light(void);
+FlareStyle *flare_style_monokai(void);
+FlareStyle *flare_style_dracula(void);
+FlareStyle *flare_style_github_dark(void);
+FlareStyle *flare_style_github_light(void);
 
 /* Look up style entry for a token type (walks hierarchy) */
-BflareStyleEntry bflare_style_get(const BflareStyle *style, BflareTokenType type);
+FlareStyleEntry flare_style_get(const FlareStyle *style, FlareTokenType type);
 
 /* Custom style building */
-BflareStyle *bflare_style_new(void);
-void bflare_style_set(BflareStyle *style, BflareTokenType type,
-                      const BflareStyleEntry *entry);
+FlareStyle *flare_style_new(void);
+void flare_style_set(FlareStyle *style, FlareTokenType type,
+                     const FlareStyleEntry *entry);
 
-void bflare_style_free(BflareStyle *style);
+void flare_style_free(FlareStyle *style);
 
 /* ----- Formatter API --------------------------------------------------- */
 
@@ -141,26 +141,26 @@ typedef enum
     BFLARE_COLOR_16,       /* ANSI 16-color (SGR 30-37, 90-97) */
     BFLARE_COLOR_256,      /* xterm-256 (SGR 38;5;N) */
     BFLARE_COLOR_TRUECOLOR /* 24-bit RGB (SGR 38;2;R;G;B) */
-} BflareColorDepth;
+} FlareColorDepth;
 
 /* Create a terminal formatter at the given color depth */
-BflareFormatter *bflare_formatter_terminal(BflareColorDepth depth);
+FlareFormatter *flare_formatter_terminal(FlareColorDepth depth);
 
-void bflare_formatter_free(BflareFormatter *formatter);
+void flare_formatter_free(FlareFormatter *formatter);
 
 /* ----- Color conversion API -------------------------------------------- */
 
 /* Convert 24-bit RGB to closest 256-color palette index (0-255) */
-int bflare_color_rgb_to_256(int r, int g, int b);
+int flare_color_rgb_to_256(int r, int g, int b);
 
 /* Convert 24-bit RGB to closest 8-color ANSI index (0-7) */
-int bflare_color_rgb_to_8(int r, int g, int b);
+int flare_color_rgb_to_8(int r, int g, int b);
 
 /* Convert 24-bit RGB to closest 16-color ANSI index (0-15) via nearest-match */
-int bflare_color_rgb_to_16(int r, int g, int b);
+int flare_color_rgb_to_16(int r, int g, int b);
 
 /* Reverse mapping: 256-color palette index to RGB */
-void bflare_color_256_to_rgb(int idx, uint8_t *r, uint8_t *g, uint8_t *b);
+void flare_color_256_to_rgb(int idx, uint8_t *r, uint8_t *g, uint8_t *b);
 
 /* ----- One-shot highlight API ------------------------------------------ */
 
@@ -169,13 +169,13 @@ void bflare_color_256_to_rgb(int idx, uint8_t *r, uint8_t *g, uint8_t *b);
  * lexer, style, formatter are all optional (NULL = defaults:
  * bloom-lisp lexer, monokai style, truecolor terminal formatter).
  *
- * Returns a BflareResult with a malloc'd ANSI string.
- * Caller frees with bflare_result_free(). */
-BflareResult bflare_highlight(const char *input, size_t input_len,
-                              const BflareLexer *lexer,
-                              const BflareStyle *style,
-                              const BflareFormatter *formatter);
+ * Returns a FlareResult with a malloc'd ANSI string.
+ * Caller frees with flare_result_free(). */
+FlareResult flare_highlight(const char *input, size_t input_len,
+                            const FlareLexer *lexer,
+                            const FlareStyle *style,
+                            const FlareFormatter *formatter);
 
-void bflare_result_free(BflareResult result);
+void flare_result_free(FlareResult result);
 
 #endif /* BLOOM_FLARE_HIGHLIGHT_H */

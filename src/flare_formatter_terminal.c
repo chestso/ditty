@@ -6,33 +6,33 @@
 #include <string.h>
 
 /* Format an SGR fg color sequence into buf. Returns bytes written. */
-static int format_fg_color(char *buf, size_t bufsize, const BflareStyleEntry *entry,
-                           BflareColorDepth depth)
+static int format_fg_color(char *buf, size_t bufsize, const FlareStyleEntry *entry,
+                           FlareColorDepth depth)
 {
     if (depth == BFLARE_COLOR_TRUECOLOR) {
         return snprintf(buf, bufsize, "\033[38;2;%d;%d;%dm",
                         entry->fg_r, entry->fg_g, entry->fg_b);
     }
     if (depth == BFLARE_COLOR_256) {
-        int idx = bflare_color_rgb_to_256(entry->fg_r, entry->fg_g, entry->fg_b);
+        int idx = flare_color_rgb_to_256(entry->fg_r, entry->fg_g, entry->fg_b);
         return snprintf(buf, bufsize, "\033[38;5;%dm", idx);
     }
     /* 16-color: aixterm bright codes 90-97 */
     if (depth == BFLARE_COLOR_16) {
-        int idx = bflare_color_rgb_to_16(entry->fg_r, entry->fg_g, entry->fg_b);
+        int idx = flare_color_rgb_to_16(entry->fg_r, entry->fg_g, entry->fg_b);
         if (idx >= 8)
             return snprintf(buf, bufsize, "\033[%dm", 90 + (idx - 8));
         return snprintf(buf, bufsize, "\033[%dm", 30 + idx);
     }
     /* 8-color: bold prefix for bright */
-    int idx = bflare_color_rgb_to_8(entry->fg_r, entry->fg_g, entry->fg_b);
+    int idx = flare_color_rgb_to_8(entry->fg_r, entry->fg_g, entry->fg_b);
     if (idx >= 8)
         return snprintf(buf, bufsize, "\033[1m\033[%dm", 30 + (idx - 8));
     return snprintf(buf, bufsize, "\033[%dm", 30 + idx);
 }
 
 /* Check if two style entries are visually identical */
-static int style_entries_equal(const BflareStyleEntry *a, const BflareStyleEntry *b)
+static int style_entries_equal(const FlareStyleEntry *a, const FlareStyleEntry *b)
 {
     return a->fg_r == b->fg_r && a->fg_g == b->fg_g && a->fg_b == b->fg_b &&
            a->bg_r == b->bg_r && a->bg_g == b->bg_g && a->bg_b == b->bg_b &&
@@ -42,9 +42,9 @@ static int style_entries_equal(const BflareStyleEntry *a, const BflareStyleEntry
 }
 
 /* Format token stream into an ANSI string */
-char *bflare_format_terminal(const BflareToken *tokens, size_t count,
-                             const char *input, const BflareStyle *style,
-                             BflareColorDepth depth)
+char *flare_format_terminal(const FlareToken *tokens, size_t count,
+                            const char *input, const FlareStyle *style,
+                            FlareColorDepth depth)
 {
     if (!tokens || count == 0 || !input || !style) {
         char *empty = malloc(5);
@@ -58,11 +58,11 @@ char *bflare_format_terminal(const BflareToken *tokens, size_t count,
     char *out = malloc(cap);
     size_t pos = 0;
 
-    BflareStyleEntry prev = { 0 };
+    FlareStyleEntry prev = { 0 };
     int prev_valid = 0;
 
     for (size_t i = 0; i < count; i++) {
-        BflareStyleEntry entry = bflare_style_get(style, tokens[i].type);
+        FlareStyleEntry entry = flare_style_get(style, tokens[i].type);
 
         /* Coalesce: if same style as previous, skip the escape */
         if (prev_valid && style_entries_equal(&prev, &entry)) {
@@ -136,14 +136,14 @@ char *bflare_format_terminal(const BflareToken *tokens, size_t count,
         } else if (depth == BFLARE_COLOR_256) {
             if (need_semi)
                 sgr[sgrpos++] = ';';
-            int idx = bflare_color_rgb_to_256(entry.fg_r, entry.fg_g, entry.fg_b);
+            int idx = flare_color_rgb_to_256(entry.fg_r, entry.fg_g, entry.fg_b);
             fglen = sprintf(fgbuf, "38;5;%d", idx);
             memcpy(sgr + sgrpos, fgbuf, fglen);
             sgrpos += fglen;
             need_semi = 1;
         } else if (depth == BFLARE_COLOR_16) {
             /* 16-color: aixterm bright codes 90-97 */
-            int idx = bflare_color_rgb_to_16(entry.fg_r, entry.fg_g, entry.fg_b);
+            int idx = flare_color_rgb_to_16(entry.fg_r, entry.fg_g, entry.fg_b);
             if (need_semi)
                 sgr[sgrpos++] = ';';
             if (idx >= 8) {
@@ -156,7 +156,7 @@ char *bflare_format_terminal(const BflareToken *tokens, size_t count,
             need_semi = 1;
         } else {
             /* 8-color: normal codes 30-37, bold-intensity for bright */
-            int idx = bflare_color_rgb_to_8(entry.fg_r, entry.fg_g, entry.fg_b);
+            int idx = flare_color_rgb_to_8(entry.fg_r, entry.fg_g, entry.fg_b);
             if (idx >= 8) {
                 /* Bright: emit 1; (bold-intensity) + color in one SGR param.
                  * Avoid double-bold if entry.bold was already emitted above. */

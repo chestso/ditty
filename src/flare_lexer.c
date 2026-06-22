@@ -1,25 +1,25 @@
-/* lexer.c - BflareLexer interface + registry */
+/* lexer.c - FlareLexer interface + registry */
 
 #include "../include/bloom-lisp/highlight.h"
 #include <stdlib.h>
 #include <string.h>
 
-struct BflareLexer
+struct FlareLexer
 {
     char *name;
-    BflareToken *(*scan)(const char *input, size_t len, void *ctx, size_t *count);
+    FlareToken *(*scan)(const char *input, size_t len, void *ctx, size_t *count);
     void *ctx;
     void (*free_ctx)(void *ctx);
 };
 
-BflareLexer *bflare_lexer_get(const char *name)
+FlareLexer *flare_lexer_get(const char *name)
 {
     if (strcmp(name, "bloom-lisp") == 0)
-        return bflare_lexer_bloom_lisp(NULL);
+        return flare_lexer_bloom_lisp(NULL);
     return NULL;
 }
 
-void bflare_lexer_free(BflareLexer *lexer)
+void flare_lexer_free(FlareLexer *lexer)
 {
     if (!lexer)
         return;
@@ -29,8 +29,8 @@ void bflare_lexer_free(BflareLexer *lexer)
     free(lexer);
 }
 
-BflareToken *bflare_lex(const BflareLexer *lexer, const char *input,
-                        size_t input_len, size_t *out_count)
+FlareToken *flare_lex(const FlareLexer *lexer, const char *input,
+                      size_t input_len, size_t *out_count)
 {
     if (!lexer || !input || !out_count) {
         if (out_count)
@@ -41,11 +41,11 @@ BflareToken *bflare_lex(const BflareLexer *lexer, const char *input,
 }
 
 /* Internal: create a lexer struct (used by language-specific constructors) */
-BflareLexer *bflare_lexer_alloc(const char *name, void *ctx,
-                                BflareToken *(*scan)(const char *, size_t, void *, size_t *),
-                                void (*free_ctx)(void *))
+FlareLexer *flare_lexer_alloc(const char *name, void *ctx,
+                              FlareToken *(*scan)(const char *, size_t, void *, size_t *),
+                              void (*free_ctx)(void *))
 {
-    BflareLexer *l = malloc(sizeof(BflareLexer));
+    FlareLexer *l = malloc(sizeof(FlareLexer));
     if (!l)
         return NULL;
     l->name = strdup(name);

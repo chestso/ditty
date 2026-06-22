@@ -15,9 +15,9 @@
 #include <string.h>
 
 /* Forward declaration from lexer.c */
-extern BflareLexer *bflare_lexer_alloc(const char *name, void *ctx,
-                                       BflareToken *(*scan)(const char *, size_t, void *, size_t *),
-                                       void (*free_ctx)(void *));
+extern FlareLexer *flare_lexer_alloc(const char *name, void *ctx,
+                                     FlareToken *(*scan)(const char *, size_t, void *, size_t *),
+                                     void (*free_ctx)(void *));
 
 typedef struct
 {
@@ -25,7 +25,7 @@ typedef struct
 } BloomLispCtx;
 
 /* Map bloom-lisp's SfKind to bloom-flare's token subcategory */
-static BflareTokenType sf_kind_to_type(SfKind kind)
+static FlareTokenType sf_kind_to_type(SfKind kind)
 {
     switch (kind) {
     case SF_KIND_DEFINE:
@@ -50,16 +50,16 @@ static int is_delimiter(char c)
 
 typedef struct
 {
-    BflareToken *items;
+    FlareToken *items;
     size_t count;
     size_t capacity;
 } TokenVec;
 
-static void tv_push(TokenVec *v, BflareTokenType type, size_t offset, size_t length)
+static void tv_push(TokenVec *v, FlareTokenType type, size_t offset, size_t length)
 {
     if (v->count >= v->capacity) {
         v->capacity = v->capacity ? v->capacity * 2 : 16;
-        v->items = realloc(v->items, v->capacity * sizeof(BflareToken));
+        v->items = realloc(v->items, v->capacity * sizeof(FlareToken));
     }
     v->items[v->count].type = type;
     v->items[v->count].offset = offset;
@@ -73,8 +73,8 @@ static void tv_push_text(TokenVec *v, size_t start, size_t end)
         tv_push(v, HL_TEXT, start, end - start);
 }
 
-static BflareTokenType classify_atom(const char *input, size_t offset, size_t length,
-                                     const BloomLispCtx *ctx)
+static FlareTokenType classify_atom(const char *input, size_t offset, size_t length,
+                                    const BloomLispCtx *ctx)
 {
     const char *s = input + offset;
 
@@ -148,8 +148,8 @@ static BflareTokenType classify_atom(const char *input, size_t offset, size_t le
 }
 
 /* Main scan function */
-static BflareToken *bloom_lisp_scan(const char *input, size_t len,
-                                    void *ctx, size_t *out_count)
+static FlareToken *bloom_lisp_scan(const char *input, size_t len,
+                                   void *ctx, size_t *out_count)
 {
     TokenVec v = { NULL, 0, 0 };
     size_t pos = 0;
@@ -281,7 +281,7 @@ static BflareToken *bloom_lisp_scan(const char *input, size_t len,
                 pos++;
 
             if (pos > start) {
-                BflareTokenType t = classify_atom(input, start, pos - start, lctx);
+                FlareTokenType t = classify_atom(input, start, pos - start, lctx);
                 tv_push(&v, t, start, pos - start);
             } else {
                 tv_push(&v, HL_TEXT, pos, 1);
@@ -299,7 +299,7 @@ static void lctx_free(void *p)
     free(p);
 }
 
-BflareLexer *bflare_lexer_bloom_lisp(Environment *env)
+FlareLexer *flare_lexer_bloom_lisp(Environment *env)
 {
     if (!env)
         return NULL;
@@ -310,7 +310,7 @@ BflareLexer *bflare_lexer_bloom_lisp(Environment *env)
 
     ctx->env = env;
 
-    return bflare_lexer_alloc("bloom-lisp", ctx,
-                              bloom_lisp_scan,
-                              lctx_free);
+    return flare_lexer_alloc("bloom-lisp", ctx,
+                             bloom_lisp_scan,
+                             lctx_free);
 }

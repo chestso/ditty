@@ -1,29 +1,29 @@
-/* formatter.c - BflareFormatter interface */
+/* formatter.c - FlareFormatter interface */
 
 #include "../include/bloom-lisp/highlight.h"
 #include <stdlib.h>
 
-struct BflareFormatter
+struct FlareFormatter
 {
-    BflareColorDepth depth;
+    FlareColorDepth depth;
 };
 
-BflareFormatter *bflare_formatter_terminal(BflareColorDepth depth)
+FlareFormatter *flare_formatter_terminal(FlareColorDepth depth)
 {
-    BflareFormatter *f = malloc(sizeof(BflareFormatter));
+    FlareFormatter *f = malloc(sizeof(FlareFormatter));
     if (!f)
         return NULL;
     f->depth = depth;
     return f;
 }
 
-void bflare_formatter_free(BflareFormatter *formatter)
+void flare_formatter_free(FlareFormatter *formatter)
 {
     free(formatter);
 }
 
 /* Internal accessors used by formatter_terminal.c */
-BflareColorDepth bflare_formatter_depth(const BflareFormatter *f)
+FlareColorDepth flare_formatter_depth(const FlareFormatter *f)
 {
     return f ? f->depth : BFLARE_COLOR_TRUECOLOR;
 }

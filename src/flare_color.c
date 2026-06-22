@@ -3,7 +3,7 @@
 #include "../include/bloom-lisp/highlight.h"
 #include <math.h>
 
-int bflare_color_rgb_to_256(int r, int g, int b)
+int flare_color_rgb_to_256(int r, int g, int b)
 {
     /* Greyscale ramp: indices 232-255 hold 24 shades from (8,8,8) to (238,238,238) */
     if (r == g && g == b) {
@@ -39,8 +39,8 @@ int bflare_color_rgb_to_256(int r, int g, int b)
         gray_idx = 232;
 
     uint8_t cr, cg, cb, gr2, gg2, gb2;
-    bflare_color_256_to_rgb(cube, &cr, &cg, &cb);
-    bflare_color_256_to_rgb(gray_idx, &gr2, &gg2, &gb2);
+    flare_color_256_to_rgb(cube, &cr, &cg, &cb);
+    flare_color_256_to_rgb(gray_idx, &gr2, &gg2, &gb2);
 
     int cube_dist = (cr - r) * (cr - r) + (cg - g) * (cg - g) + (cb - b) * (cb - b);
     int gray_dist = (gr2 - r) * (gr2 - r) + (gg2 - g) * (gg2 - g) + (gb2 - b) * (gb2 - b);
@@ -48,7 +48,7 @@ int bflare_color_rgb_to_256(int r, int g, int b)
     return (gray_dist < cube_dist) ? gray_idx : cube;
 }
 
-int bflare_color_rgb_to_8(int r, int g, int b)
+int flare_color_rgb_to_8(int r, int g, int b)
 {
     /* Map to the nearest ANSI 8-color by finding which primary is strongest */
     int idx = 0;
@@ -63,12 +63,12 @@ int bflare_color_rgb_to_8(int r, int g, int b)
 
 /* Chroma-style 16-color palette for nearest-match mapping.
  * Normal colors (0-7) use half-intensity, bright colors (8-15) use full.
- * Matches the reference RGB values returned by bflare_color_256_to_rgb(0..15). */
+ * Matches the reference RGB values returned by flare_color_256_to_rgb(0..15). */
 static const uint8_t ansi16[16][3] = {
     { 0, 0, 0 }, { 128, 0, 0 }, { 0, 128, 0 }, { 128, 128, 0 }, { 0, 0, 128 }, { 128, 0, 128 }, { 0, 128, 128 }, { 192, 192, 192 }, { 128, 128, 128 }, { 255, 0, 0 }, { 0, 255, 0 }, { 255, 255, 0 }, { 0, 0, 255 }, { 255, 0, 255 }, { 0, 255, 255 }, { 255, 255, 255 }
 };
 
-int bflare_color_rgb_to_16(int r, int g, int b)
+int flare_color_rgb_to_16(int r, int g, int b)
 {
     int best = 0;
     int best_dist = 0x7fffffff;
@@ -85,7 +85,7 @@ int bflare_color_rgb_to_16(int r, int g, int b)
     return best;
 }
 
-void bflare_color_256_to_rgb(int idx, uint8_t *r, uint8_t *g, uint8_t *b)
+void flare_color_256_to_rgb(int idx, uint8_t *r, uint8_t *g, uint8_t *b)
 {
     if (idx < 16) {
         /* Standard 16 colors — just return approximate RGB */
