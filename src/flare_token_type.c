@@ -2,7 +2,7 @@
 
 #include "../include/bloom-lisp/highlight.h"
 
-int bflare_token_category(BflareTokenType type)
+int flare_token_category(FlareTokenType type)
 {
     if (type < 1000)
         return 0;
@@ -21,9 +21,9 @@ int bflare_token_category(BflareTokenType type)
     return 7000;
 }
 
-int bflare_token_subcategory(BflareTokenType type)
+int flare_token_subcategory(FlareTokenType type)
 {
-    int cat = bflare_token_category(type);
+    int cat = flare_token_category(type);
     if (type == cat)
         return cat;
     /* Round down to the nearest 10 within the category's range */

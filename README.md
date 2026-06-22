@@ -267,7 +267,7 @@ src/                interpreter core
     formatter.c         formatter struct (wraps color depth)
     formatter_terminal.c terminal SGR/ANSI emission
     color.c             RGB ↔ 256 ↔ 16 ↔ 8 color conversion
-    highlight.c         one-shot bflare_highlight() convenience function
+    highlight.c         one-shot flare_highlight() convenience function
 lat/                lat — syntax highlighting CLI (links bloomflare + bloomlisp)
 lisp/               Lisp source formatter (lisp-fmt.lisp, loaded by bloom-repl)
 repl/               interactive TUI REPL (links bloom-boba)

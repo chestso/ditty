@@ -1,4 +1,4 @@
-/* style.c - BflareStyle hierarchy resolution */
+/* style.c - FlareStyle hierarchy resolution */
 
 #include "../include/bloom-lisp/highlight.h"
 #include <stdlib.h>
@@ -8,31 +8,31 @@
 
 typedef struct
 {
-    BflareTokenType type;
-    BflareStyleEntry entry;
+    FlareTokenType type;
+    FlareStyleEntry entry;
 } StyleMapping;
 
-struct BflareStyle
+struct FlareStyle
 {
     StyleMapping entries[MAX_STYLE_ENTRIES];
     size_t count;
 };
 
-static const BflareStyleEntry EMPTY_ENTRY = { 0 };
+static const FlareStyleEntry EMPTY_ENTRY = { 0 };
 
-BflareStyle *bflare_style_new(void)
+FlareStyle *flare_style_new(void)
 {
-    BflareStyle *s = calloc(1, sizeof(BflareStyle));
+    FlareStyle *s = calloc(1, sizeof(FlareStyle));
     return s;
 }
 
-void bflare_style_free(BflareStyle *style)
+void flare_style_free(FlareStyle *style)
 {
     free(style);
 }
 
-void bflare_style_set(BflareStyle *style, BflareTokenType type,
-                      const BflareStyleEntry *entry)
+void flare_style_set(FlareStyle *style, FlareTokenType type,
+                     const FlareStyleEntry *entry)
 {
     if (!style || !entry)
         return;
@@ -52,7 +52,7 @@ void bflare_style_set(BflareStyle *style, BflareTokenType type,
 }
 
 /* Find an explicit entry for a given type (no hierarchy walk) */
-static const BflareStyleEntry *find_entry(const BflareStyle *style, BflareTokenType type)
+static const FlareStyleEntry *find_entry(const FlareStyle *style, FlareTokenType type)
 {
     for (size_t i = 0; i < style->count; i++) {
         if (style->entries[i].type == type)
@@ -61,26 +61,26 @@ static const BflareStyleEntry *find_entry(const BflareStyle *style, BflareTokenT
     return NULL;
 }
 
-BflareStyleEntry bflare_style_get(const BflareStyle *style, BflareTokenType type)
+FlareStyleEntry flare_style_get(const FlareStyle *style, FlareTokenType type)
 {
     if (!style)
         return EMPTY_ENTRY;
 
     /* Walk hierarchy: specific → subcategory → category → HL_TEXT */
-    const BflareStyleEntry *e;
+    const FlareStyleEntry *e;
 
     e = find_entry(style, type);
     if (e)
         return *e;
 
-    int sub = bflare_token_subcategory(type);
+    int sub = flare_token_subcategory(type);
     if (sub != type) {
         e = find_entry(style, sub);
         if (e)
             return *e;
     }
 
-    int cat = bflare_token_category(type);
+    int cat = flare_token_category(type);
     if (cat != sub) {
         e = find_entry(style, cat);
         if (e)
@@ -97,23 +97,23 @@ BflareStyleEntry bflare_style_get(const BflareStyle *style, BflareTokenType type
 }
 
 /* Helper to add an RGB+attrs entry to a style being built */
-static void add_rgb(BflareStyle *s, BflareTokenType type,
+static void add_rgb(FlareStyle *s, FlareTokenType type,
                     int r, int g, int b, int bold, int italic, int underline,
                     int faint, int strikethrough)
 {
-    BflareStyleEntry e = {
+    FlareStyleEntry e = {
         .fg_r = r, .fg_g = g, .fg_b = b, .bg_r = 0, .bg_g = 0, .bg_b = 0, .bold = bold, .italic = italic, .underline = underline, .faint = faint, .strikethrough = strikethrough
     };
-    bflare_style_set(s, type, &e);
+    flare_style_set(s, type, &e);
 }
 
 /* Forward declarations for built-in style constructors (defined in their own .c files) */
-extern BflareStyle *bflare_style_build_monokai(void);
-extern BflareStyle *bflare_style_build_dracula(void);
-extern BflareStyle *bflare_style_build_github_dark(void);
-extern BflareStyle *bflare_style_build_github_light(void);
+extern FlareStyle *flare_style_build_monokai(void);
+extern FlareStyle *flare_style_build_dracula(void);
+extern FlareStyle *flare_style_build_github_dark(void);
+extern FlareStyle *flare_style_build_github_light(void);
 
-BflareStyle *bflare_style_monokai(void) { return bflare_style_build_monokai(); }
-BflareStyle *bflare_style_dracula(void) { return bflare_style_build_dracula(); }
-BflareStyle *bflare_style_github_dark(void) { return bflare_style_build_github_dark(); }
-BflareStyle *bflare_style_github_light(void) { return bflare_style_build_github_light(); }
+FlareStyle *flare_style_monokai(void) { return flare_style_build_monokai(); }
+FlareStyle *flare_style_dracula(void) { return flare_style_build_dracula(); }
+FlareStyle *flare_style_github_dark(void) { return flare_style_build_github_dark(); }
+FlareStyle *flare_style_github_light(void) { return flare_style_build_github_light(); }

@@ -62,7 +62,7 @@ static void usage(void)
         PROGNAME);
 }
 
-static int parse_format(const char *s, BflareColorDepth *out)
+static int parse_format(const char *s, FlareColorDepth *out)
 {
     if (strcmp(s, "truecolor") == 0) {
         *out = BFLARE_COLOR_TRUECOLOR;
@@ -85,24 +85,24 @@ static int parse_format(const char *s, BflareColorDepth *out)
     return -1;
 }
 
-typedef BflareStyle *(*style_ctor)(void);
+typedef FlareStyle *(*style_ctor)(void);
 
 static int parse_style(const char *s, style_ctor *out)
 {
     if (strcmp(s, "dracula") == 0) {
-        *out = bflare_style_dracula;
+        *out = flare_style_dracula;
         return 0;
     }
     if (strcmp(s, "monokai") == 0) {
-        *out = bflare_style_monokai;
+        *out = flare_style_monokai;
         return 0;
     }
     if (strcmp(s, "github-dark") == 0) {
-        *out = bflare_style_github_dark;
+        *out = flare_style_github_dark;
         return 0;
     }
     if (strcmp(s, "github-light") == 0) {
-        *out = bflare_style_github_light;
+        *out = flare_style_github_light;
         return 0;
     }
     fprintf(stderr,
@@ -137,8 +137,8 @@ static char *read_all(FILE *f, size_t *out_len)
     return buf;
 }
 
-static int highlight_file(const char *path, BflareLexer *lexer,
-                          BflareStyle *style, BflareFormatter *formatter)
+static int highlight_file(const char *path, FlareLexer *lexer,
+                          FlareStyle *style, FlareFormatter *formatter)
 {
     FILE *f;
     int close_it = 0;
@@ -165,7 +165,7 @@ static int highlight_file(const char *path, BflareLexer *lexer,
         return 1;
     }
 
-    BflareResult r = bflare_highlight(src, src_len, lexer, style, formatter);
+    FlareResult r = flare_highlight(src, src_len, lexer, style, formatter);
     free(src);
 
     if (!r.data) {
@@ -174,14 +174,14 @@ static int highlight_file(const char *path, BflareLexer *lexer,
     }
 
     fwrite(r.data, 1, r.length, stdout);
-    bflare_result_free(r);
+    flare_result_free(r);
     return 0;
 }
 
 int main(int argc, char **argv)
 {
-    BflareColorDepth depth = BFLARE_COLOR_TRUECOLOR;
-    style_ctor make_style = bflare_style_dracula;
+    FlareColorDepth depth = BFLARE_COLOR_TRUECOLOR;
+    style_ctor make_style = flare_style_dracula;
     int file_start = argc;
 
     for (int i = 1; i < argc; i++) {
@@ -224,9 +224,9 @@ int main(int argc, char **argv)
 
     Environment *env = lisp_init();
 
-    BflareLexer *lexer = bflare_lexer_bloom_lisp(env);
-    BflareStyle *style = make_style();
-    BflareFormatter *fmt = bflare_formatter_terminal(depth);
+    FlareLexer *lexer = flare_lexer_bloom_lisp(env);
+    FlareStyle *style = make_style();
+    FlareFormatter *fmt = flare_formatter_terminal(depth);
 
     int rc = 0;
 
@@ -239,9 +239,9 @@ int main(int argc, char **argv)
         }
     }
 
-    bflare_lexer_free(lexer);
-    bflare_style_free(style);
-    bflare_formatter_free(fmt);
+    flare_lexer_free(lexer);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
     lisp_cleanup();
 
     return rc;

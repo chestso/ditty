@@ -5,22 +5,22 @@
 
 static void test_token_category_text(void)
 {
-    ASSERT_EQ(bflare_token_category(HL_TEXT), 0);
+    ASSERT_EQ(flare_token_category(HL_TEXT), 0);
 }
 
 static void test_token_category_keyword(void)
 {
-    ASSERT_EQ(bflare_token_category(HL_KEYWORD_SPECIAL_FORM), 1000);
+    ASSERT_EQ(flare_token_category(HL_KEYWORD_SPECIAL_FORM), 1000);
 }
 
 static void test_token_subcategory_kw(void)
 {
-    ASSERT_EQ(bflare_token_subcategory(HL_KEYWORD_SPECIAL_FORM), 1010);
+    ASSERT_EQ(flare_token_subcategory(HL_KEYWORD_SPECIAL_FORM), 1010);
 }
 
 static void test_token_subcategory_literal(void)
 {
-    ASSERT_EQ(bflare_token_subcategory(HL_LITERAL_STRING_ESCAPE), 3010);
+    ASSERT_EQ(flare_token_subcategory(HL_LITERAL_STRING_ESCAPE), 3010);
 }
 
 static void test_token_ranges(void)
@@ -36,7 +36,7 @@ static void test_token_ranges(void)
     };
     int valid_cats[] = { 0, 1000, 2000, 3000, 4000, 5000, 6000, 7000 };
     for (int i = 0; i < (int)(sizeof(types) / sizeof(types[0])); i++) {
-        int cat = bflare_token_category(types[i]);
+        int cat = flare_token_category(types[i]);
         int found = 0;
         for (int j = 0; j < (int)(sizeof(valid_cats) / sizeof(valid_cats[0])); j++) {
             if (cat == valid_cats[j]) {
