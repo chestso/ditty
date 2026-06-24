@@ -17,7 +17,7 @@
 ;; source files.  Unlike the stock `lisp-mode', this mode knows about
 ;; bloom-lisp's special forms (`define', `set!', `defmacro', `do', `case',
 ;; `condition-case', `unwind-protect', ...), reader syntax (`pkg:symbol',
-;; `:keyword', `#t', `#f', `#\\char'), and its ~120 built-in functions.
+;; `:keyword', `#t', `#f', `#\\char'), and its built-in functions.
 
 ;;; Code:
 
@@ -48,7 +48,7 @@
 
 (defface bloom-lisp-builtin-face
   '((t (:inherit font-lock-builtin-face)))
-  "Face for bloom-lisp built-in functions (the ~120 C-level builtins)."
+  "Face for bloom-lisp built-in functions (C-level builtins + defalias aliases)."
   :group 'bloom-lisp)
 
 (defface bloom-lisp-definition-name-face
@@ -83,11 +83,12 @@
 (defconst bloom-lisp--special-forms
   '("quote" "quasiquote" "if" "define" "set!" "lambda" "defmacro"
     "let" "let*" "progn" "do" "cond" "case" "and" "or"
-    "condition-case" "unwind-protect" "package-ref")
+    "condition-case" "unwind-protect")
   "Bloom-lisp special forms (from `SPECIAL_FORMS' in include/lisp.h).")
 
 (defconst bloom-lisp--stdlib-macros
-  '("defun" "when" "unless" "defvar" "defconst" "defalias")
+  '("defun" "when" "unless" "defvar" "defconst" "defalias"
+    "with-output-to-string")
   "Bloom-lisp stdlib macros defined via Lisp in src/lisp.c.")
 
 (defconst bloom-lisp--builtins
@@ -98,7 +99,7 @@
     ;; --- Type predicates (src/builtins_type_predicates.c) ---
     "null?" "atom?" "pair?" "integer?" "boolean?" "number?" "vector?"
     "hash-table?" "string?" "symbol?" "keyword?" "list?" "function?"
-    "macro?" "builtin?" "callable?"
+    "macro?" "builtin?" "callable?" "regex?"
     ;; --- Characters (src/builtins_characters.c) ---
     "char?" "char-code" "code-char" "char->string" "string->char"
     "char=?" "char<?" "char>?" "char<=?" "char>=?"
@@ -124,7 +125,7 @@
     "make-hash-table" "hash-ref" "hash-set!" "hash-remove!" "hash-clear!"
     "hash-count" "hash-keys" "hash-values" "hash-entries"
     ;; --- Regex (src/builtins_regex.c) ---
-    "regex-match?" "regex-find" "regex-find-all" "regex-extract"
+    "regex-compile" "regex-match?" "regex-find" "regex-find-all" "regex-extract"
     "regex-replace" "regex-replace-all" "regex-split"
     "regex-escape" "regex-valid?"
     ;; --- Functions / meta (src/builtins_functions.c) ---
@@ -138,11 +139,14 @@
     "stream-eol" "read-sexp" "read-json" "read-file-raw"
     "delete-file" "load"
     ;; --- String ports (src/builtins_string_ports.c) ---
-    "open-input-string" "port-peek-char" "port-read-char"
+    "open-input-string" "open-output-string"
+    "port-peek-char" "port-read-char" "port-write-char"
+    "port-write-string"
     "port-position" "port-source" "port-eof?" "string-port?"
+    "get-output-string"
     ;; --- Filesystem (src/builtins_filesystem.c) ---
     "home-directory" "expand-path" "getenv" "data-directory"
-    "file-exists?" "mkdir"
+    "config-directory" "file-exists?" "mkdir"
     ;; --- Time / profiling (src/builtins_time_profiling.c) ---
     "current-time-ms" "profile-start" "profile-stop"
     "profile-report" "profile-reset"
@@ -231,6 +235,7 @@ Does not include `:' so that package prefixes can be separated.")
                 (cond            . 0)
                 (condition-case  . 2)
                 (unwind-protect  . 1)
+                (with-output-to-string . 1)
                 (when            . 1)
                 (unless          . 1)
                 (progn           . 0)
