@@ -77,15 +77,19 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
             continue;
         }
 
-        /* Build SGR sequence for this style */
+        /* Build SGR sequence for this style.
+         * Always lead with reset (0) to clear attributes from the previous
+         * token — ANSI attributes are cumulative, so without an explicit
+         * reset a bold from token N would persist into token N+1. */
         char sgr[128];
         int sglen = 0;
 
-        /* Start building the CSI sequence */
         int need_semi = 0;
         int sgrpos = 0;
         sgr[sgrpos++] = '\033';
         sgr[sgrpos++] = '[';
+        sgr[sgrpos++] = '0';
+        need_semi = 1;
 
         if (entry.bold) {
             if (need_semi)

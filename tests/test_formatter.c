@@ -76,6 +76,54 @@ static void test_formatter_ends_with_reset(void)
     flare_formatter_free(fmt);
 }
 
+static void test_formatter_bold_does_not_leak_into_next_token(void)
+{
+    /* Regression: bold from HL_KEYWORD_DEFINE (e.g. "defun", "set!")
+     * was persisting into subsequent non-bold tokens because the SGR
+     * sequence only set new attributes without first resetting old ones.
+     * ANSI attributes are cumulative — \033[38;2;...m does NOT cancel
+     * a prior \033[1m.  Every SGR must lead with 0 (reset). */
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_bloom_lisp(env);
+    FlareResult r = flare_highlight("(set! x 1)", 10, lex, style, fmt);
+
+    /* Find the SGR right after the bold "set!" token.
+     * The next token should start with \033[0; (reset) and NOT contain
+     * ";1;" (bold) since HL_NAME_VARIABLE and HL_PUNCTUATION are non-bold. */
+    const char *set_sgr = strstr(r.data, "\033[0;1;");
+    ASSERT_NOT_NULL(set_sgr); /* "set!" itself must be bold */
+
+    /* Scan SGR sequences after the bold one: none should contain ";1;"
+     * (bold parameter) unless the token actually requests bold. */
+    const char *p = set_sgr + 4; /* skip past the bold SGR intro */
+    while ((p = strstr(p, "\033[")) != NULL) {
+        /* Find the 'm' that ends this SGR */
+        const char *m = strchr(p, 'm');
+        if (!m)
+            break;
+        /* The trailing \033[0m reset is expected — skip it */
+        if (m - p == 3 && p[1] == '0') {
+            p = m + 1;
+            continue;
+        }
+        /* Check that ";1;" does not appear inside the SGR params */
+        size_t sgr_len = m - p;
+        char sgr_buf[128];
+        ASSERT_TRUE(sgr_len < sizeof(sgr_buf));
+        memcpy(sgr_buf, p, sgr_len);
+        sgr_buf[sgr_len] = '\0';
+        /* ";1;" = bold as a non-leading param; "0;1;" = reset+bold (ok) */
+        ASSERT_TRUE(strstr(sgr_buf, ";1;") == NULL);
+        p = m + 1;
+    }
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
 static void test_formatter_coalesces_same_style(void)
 {
     FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
@@ -102,6 +150,7 @@ int main(void)
     RUN_TEST(test_formatter_16_produces_aixterm_ansi);
     RUN_TEST(test_formatter_8_produces_basic_ansi);
     RUN_TEST(test_formatter_ends_with_reset);
+    RUN_TEST(test_formatter_bold_does_not_leak_into_next_token);
     RUN_TEST(test_formatter_coalesces_same_style);
     lisp_cleanup();
     TEST_SUMMARY();
