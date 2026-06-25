@@ -21,24 +21,37 @@ AC_SUBST([BLOOM_LISP_VERSION])
 AC_MSG_NOTICE([bloom-lisp version: $BLOOM_LISP_VERSION])
 
 # Checks for programs
+# Save CFLAGS before AC_PROG_CC so we can detect whether the user
+# set them or whether AC_PROG_CC applied its default (-g -O2).
+user_cflags="$CFLAGS"
 AC_PROG_CC
 AC_PROG_RANLIB
 AM_PROG_AR
 
-# Debug option
+# Build mode selection (--enable-release > --enable-debug > default ASan)
 AC_ARG_ENABLE([debug],
   [AS_HELP_STRING([--enable-debug],
-    [enable debug symbols and disable optimizations])],
+    [unsanitized debug build (-O0 -g3, no ASan)])],
   [enable_debug=$enableval],
   [enable_debug=no])
 
-if test "x$enable_debug" = "xyes"; then
-  CFLAGS="-O0 -g3 -DDEBUG $CFLAGS"
-  AC_MSG_NOTICE([Debug mode enabled: CFLAGS set to -O0 -g3 -DDEBUG])
-else
-  if test "x$CFLAGS" = "x"; then
-    CFLAGS="-O2"
-  fi
+AC_ARG_ENABLE([release],
+  [AS_HELP_STRING([--enable-release],
+    [optimized release build (-O3 -DNDEBUG)])],
+  [enable_release=$enableval],
+  [enable_release=no])
+
+if test "x$enable_release" = "xyes"; then
+  CFLAGS="-O3 -DNDEBUG"
+  AC_MSG_NOTICE([Release mode: CFLAGS set to -O3 -DNDEBUG])
+elif test "x$enable_debug" = "xyes"; then
+  CFLAGS="-O0 -g3"
+  AC_MSG_NOTICE([Debug mode: CFLAGS set to -O0 -g3])
+elif test "x$user_cflags" = "x"; then
+  # No user CFLAGS — default to ASan+UBSan (matches monorepo Makefile)
+  CFLAGS="-O1 -g3 -fno-omit-frame-pointer -fno-common -fsanitize=address,undefined -fno-sanitize-recover=undefined"
+  LDFLAGS="-fsanitize=address,undefined $LDFLAGS"
+  AC_MSG_NOTICE([ASan+UBSan mode (default): CFLAGS=$CFLAGS])
 fi
 
 # Detect cross-compilation target
