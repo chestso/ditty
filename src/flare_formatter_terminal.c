@@ -41,6 +41,15 @@ static int style_entries_equal(const FlareStyleEntry *a, const FlareStyleEntry *
            a->strikethrough == b->strikethrough;
 }
 
+/* Check if a token type is a fenced code block structural marker that
+ * should be suppressed from rendered output.  The fence delimiters
+ * (``` or ~~~) and info strings are structural, not visual content. */
+static int is_fenced_marker(FlareTokenType type)
+{
+    return type == HL_MARKUP_FENCED_OPEN || type == HL_MARKUP_FENCED_INFO ||
+           type == HL_MARKUP_FENCED_CLOSE;
+}
+
 /* Format token stream into an ANSI string */
 char *flare_format_terminal(const FlareToken *tokens, size_t count,
                             const char *input, const FlareStyle *style,
@@ -62,6 +71,28 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
     int prev_valid = 0;
 
     for (size_t i = 0; i < count; i++) {
+        /* Skip fenced code block structural markers — they are not
+         * visual content. Also suppress HL_TEXT newlines that are
+         * part of a suppressed fence line: a bare "\n" HL_TEXT token
+         * adjacent to a fence marker is the line-ending newline of
+         * that fence line, not meaningful whitespace. */
+        if (is_fenced_marker(tokens[i].type)) {
+            prev_valid = 0;
+            continue;
+        }
+        if (tokens[i].type == HL_TEXT && tokens[i].length == 1 &&
+            input[tokens[i].offset] == '\n') {
+            /* Check if adjacent to a suppressed fence marker */
+            int adjacent = 0;
+            if (i > 0 && is_fenced_marker(tokens[i - 1].type))
+                adjacent = 1;
+            if (i + 1 < count && is_fenced_marker(tokens[i + 1].type))
+                adjacent = 1;
+            if (adjacent) {
+                prev_valid = 0;
+                continue;
+            }
+        }
         FlareStyleEntry entry = flare_style_get(style, tokens[i].type);
 
         /* Coalesce: if same style as previous, skip the escape */
