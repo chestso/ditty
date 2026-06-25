@@ -221,6 +221,47 @@ static void test_formatter_fenced_no_spurious_blank_line(void)
     flare_formatter_free(fmt);
 }
 
+/* Regression: blank lines within and around fenced code blocks must be
+ * preserved.  The formatter should only suppress the fence markers and
+ * their line-ending newlines, not legitimate blank lines:
+ *   - blank line between preceding text and code block (paragraph sep)
+ *   - blank line within the code block (between code lines)
+ *   - blank line after the code block (paragraph sep) */
+static void test_formatter_fenced_preserves_blank_lines(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_dracula();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("Text\n\n```lisp\nfoo\n\nbar\n```\n\nAfter\n",
+                                    34, lex, style, fmt);
+
+    /* Strip ANSI escapes to get plain text */
+    char plain[512];
+    size_t j = 0;
+    for (size_t i = 0; i < r.length && j < sizeof(plain) - 1; i++) {
+        if (r.data[i] == '\033') {
+            while (i < r.length && r.data[i] != 'm')
+                i++;
+            continue;
+        }
+        plain[j++] = r.data[i];
+    }
+    plain[j] = '\0';
+
+    /* Expected: "Text\n\nfoo\n\nbar\n\nAfter\n"
+     * - blank line between Text and foo (paragraph separator)
+     * - blank line between foo and bar (within code block)
+     * - blank line between bar and After (paragraph separator) */
+    ASSERT_TRUE(strstr(plain, "Text\n\n") != NULL);
+    ASSERT_TRUE(strstr(plain, "foo\n\nbar") != NULL);
+    ASSERT_TRUE(strstr(plain, "bar\n\nAfter") != NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
 int main(void)
 {
     env = lisp_init();
@@ -233,6 +274,7 @@ int main(void)
     RUN_TEST(test_formatter_coalesces_same_style);
     RUN_TEST(test_formatter_plain_fenced_suppresses_markers);
     RUN_TEST(test_formatter_fenced_no_spurious_blank_line);
+    RUN_TEST(test_formatter_fenced_preserves_blank_lines);
     lisp_cleanup();
     TEST_SUMMARY();
 }
