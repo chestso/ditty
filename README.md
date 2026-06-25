@@ -72,7 +72,7 @@ Pure GNU Autotools — no wrapper script:
 ./autogen.sh
 mkdir build && cd build
 PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig:$HOME/.local/lib64/pkgconfig \
-  ../configure --prefix=$HOME/.local --enable-debug
+  ../configure --prefix=$HOME/.local
 make -j$(nproc)
 make check          # Run the test suite
 make install        # Install library, headers, REPL, pkg-config file
@@ -86,7 +86,7 @@ Useful targets (from `build/`):
 - `make format` — clang-format on C, shfmt on shell, prettier on Markdown, lisp-fmt on Lisp
 - `make bear` — produce `compile_commands.json` for clangd
 
-Drop `--enable-debug` for an optimized release build.
+Use `--enable-release` for an optimized build or `--enable-debug` for unsanitized debug.
 
 ### Emacs Major Mode
 
