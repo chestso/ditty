@@ -388,13 +388,17 @@ static void test_fenced_backtick_info_with_backticks(void)
     free(tokens);
 }
 
-/* Lisp sub-lexing: ```lisp blocks suppress fence markers */
-static void test_fenced_lisp_suppresses_fences(void)
+/* Lisp sub-lexing: lexer emits fence markers + sub-lexed content */
+static void test_fenced_lisp_emits_fences_and_content(void)
 {
     size_t count = 0;
     FlareToken *tokens = lex("```lisp\n(+ 1 2)\n```\n", &count);
-    ASSERT_EQ(count_token(tokens, count, HL_MARKUP_FENCED_OPEN), 0);
-    ASSERT_EQ(count_token(tokens, count, HL_MARKUP_FENCED_CLOSE), 0);
+    /* Lexer emits structural fence tokens */
+    ASSERT_TRUE(find_token(tokens, count, HL_MARKUP_FENCED_OPEN) >= 0);
+    ASSERT_TRUE(find_token(tokens, count, HL_MARKUP_FENCED_CLOSE) >= 0);
+    /* Lexer emits sub-lexed content tokens */
+    ASSERT_TRUE(find_token(tokens, count, HL_PUNCT_OPEN_PAREN) >= 0);
+    ASSERT_TRUE(find_token(tokens, count, HL_NAME_BUILTIN) >= 0);
     free(tokens);
 }
 
@@ -413,7 +417,9 @@ static void test_fenced_bloom_lisp_alias(void)
 {
     size_t count = 0;
     FlareToken *tokens = lex("```bloom-lisp\n(+ 1)\n```\n", &count);
-    ASSERT_EQ(count_token(tokens, count, HL_MARKUP_FENCED_OPEN), 0);
+    /* Lexer emits fence markers + sub-lexed content */
+    ASSERT_TRUE(find_token(tokens, count, HL_MARKUP_FENCED_OPEN) >= 0);
+    ASSERT_TRUE(find_token(tokens, count, HL_PUNCT_OPEN_PAREN) >= 0);
     free(tokens);
 }
 
@@ -421,7 +427,9 @@ static void test_fenced_bloom_alias(void)
 {
     size_t count = 0;
     FlareToken *tokens = lex("```bloom\n(+ 1)\n```\n", &count);
-    ASSERT_EQ(count_token(tokens, count, HL_MARKUP_FENCED_OPEN), 0);
+    /* Lexer emits fence markers + sub-lexed content */
+    ASSERT_TRUE(find_token(tokens, count, HL_MARKUP_FENCED_OPEN) >= 0);
+    ASSERT_TRUE(find_token(tokens, count, HL_PUNCT_OPEN_PAREN) >= 0);
     free(tokens);
 }
 
@@ -1057,7 +1065,7 @@ int main(void)
     RUN_TEST(test_fenced_indent_too_much);
     RUN_TEST(test_fenced_info_string);
     RUN_TEST(test_fenced_backtick_info_with_backticks);
-    RUN_TEST(test_fenced_lisp_suppresses_fences);
+    RUN_TEST(test_fenced_lisp_emits_fences_and_content);
     RUN_TEST(test_fenced_lisp_sublexes_content);
     RUN_TEST(test_fenced_bloom_lisp_alias);
     RUN_TEST(test_fenced_bloom_alias);

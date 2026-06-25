@@ -142,6 +142,85 @@ static void test_formatter_coalesces_same_style(void)
     flare_formatter_free(fmt);
 }
 
+/* Non-lisp fenced code blocks also have fence markers suppressed.
+ * The opening/closing ``` and info strings are structural, not content. */
+static void test_formatter_plain_fenced_suppresses_markers(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_dracula();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("```ruby\ncode\n```\n", 16,
+                                    lex, style, fmt);
+
+    /* Strip ANSI escapes to get plain text */
+    char plain[256];
+    size_t j = 0;
+    for (size_t i = 0; i < r.length && j < sizeof(plain) - 1; i++) {
+        if (r.data[i] == '\033') {
+            while (i < r.length && r.data[i] != 'm')
+                i++;
+            continue;
+        }
+        plain[j++] = r.data[i];
+    }
+    plain[j] = '\0';
+
+    /* Fence markers and info string should NOT appear in output */
+    ASSERT_TRUE(strstr(plain, "```") == NULL);
+    ASSERT_TRUE(strstr(plain, "ruby") == NULL);
+    /* Code content should appear */
+    ASSERT_TRUE(strstr(plain, "code") != NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Regression: fenced code block markers and their line-ending newlines
+ * must be suppressed from rendered output.  Previously the opening fence
+ * newline was emitted as a standalone HL_TEXT token, producing a spurious
+ * blank line between the preceding paragraph and the code content.
+ * Input:  "Text\n\n```lisp\n'()\n```\n"
+ * Output should have exactly one blank line (paragraph separator)
+ * between "Text" and "'()", not two. */
+static void test_formatter_fenced_no_spurious_blank_line(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_dracula();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("Text\n\n```lisp\n'()\n```\n", 22,
+                                    lex, style, fmt);
+
+    /* Strip ANSI escapes to get plain text */
+    char plain[256];
+    size_t j = 0;
+    for (size_t i = 0; i < r.length && j < sizeof(plain) - 1; i++) {
+        if (r.data[i] == '\033') {
+            while (i < r.length && r.data[i] != 'm')
+                i++;
+            continue;
+        }
+        plain[j++] = r.data[i];
+    }
+    plain[j] = '\0';
+
+    /* Should be "Text\n\n'()\n" — one blank line, not two.
+     * A spurious blank line would produce "Text\n\n\n'()\n"
+     * (three consecutive newlines). */
+    const char *triple = strstr(plain, "\n\n\n");
+    ASSERT_TRUE(triple == NULL);
+
+    /* Verify the content is actually present */
+    ASSERT_TRUE(strstr(plain, "Text") != NULL);
+    ASSERT_TRUE(strstr(plain, "'()") != NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
 int main(void)
 {
     env = lisp_init();
@@ -152,6 +231,8 @@ int main(void)
     RUN_TEST(test_formatter_ends_with_reset);
     RUN_TEST(test_formatter_bold_does_not_leak_into_next_token);
     RUN_TEST(test_formatter_coalesces_same_style);
+    RUN_TEST(test_formatter_plain_fenced_suppresses_markers);
+    RUN_TEST(test_formatter_fenced_no_spurious_blank_line);
     lisp_cleanup();
     TEST_SUMMARY();
 }

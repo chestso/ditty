@@ -1045,26 +1045,24 @@ static FlareToken *commonmark_scan(const char *input, size_t len,
                                  &fence_len, &info_start, &info_len)) {
                 int sub_lex = is_lisp_info(line, info_start, info_len);
 
-                if (!sub_lex) {
-                    /* No sub-lexer: emit the full fence line with markup tokens */
-                    if (indent_bytes > 0)
-                        tv_push_text(&v, line_off, line_off + indent_bytes);
+                /* Opening fence line */
+                if (indent_bytes > 0)
+                    tv_push_text(&v, line_off, line_off + indent_bytes);
 
-                    tv_push(&v, HL_MARKUP_FENCED_OPEN,
-                            line_off + indent_bytes, fence_len);
+                tv_push(&v, HL_MARKUP_FENCED_OPEN,
+                        line_off + indent_bytes, fence_len);
 
-                    if (info_start > indent_bytes + fence_len)
-                        tv_push_text(&v, line_off + indent_bytes + fence_len,
-                                     line_off + info_start);
+                if (info_start > indent_bytes + fence_len)
+                    tv_push_text(&v, line_off + indent_bytes + fence_len,
+                                 line_off + info_start);
 
-                    if (info_len > 0)
-                        tv_push(&v, HL_MARKUP_FENCED_INFO,
-                                line_off + info_start, info_len);
+                if (info_len > 0)
+                    tv_push(&v, HL_MARKUP_FENCED_INFO,
+                            line_off + info_start, info_len);
 
-                    size_t info_end = info_start + info_len;
-                    if (info_end < line_len)
-                        tv_push_text(&v, line_off + info_end, line_off + line_len);
-                }
+                size_t info_end = info_start + info_len;
+                if (info_end < line_len)
+                    tv_push_text(&v, line_off + info_end, line_off + line_len);
 
                 /* Newline after opening fence */
                 size_t nl_off = line_off + line_len;
@@ -1096,24 +1094,17 @@ static FlareToken *commonmark_scan(const char *input, size_t len,
                                          code_start + code_content_len);
 
                         /* Newline before closing fence */
-                        if (!sub_lex && code_content_len > 0)
+                        if (code_content_len > 0)
                             tv_push_text(&v, code_start + code_content_len,
                                          code_start + code_content_len + 1);
 
-                        if (!sub_lex) {
-                            /* Closing fence */
-                            tv_push(&v, HL_MARKUP_FENCED_CLOSE,
-                                    line_offset(&it, inner_line), inner_len);
+                        /* Closing fence */
+                        tv_push(&v, HL_MARKUP_FENCED_CLOSE,
+                                line_offset(&it, inner_line), inner_len);
 
-                            size_t close_nl = line_offset(&it, inner_line) + inner_len;
-                            if (close_nl < len && input[close_nl] == '\n')
-                                tv_push_text(&v, close_nl, close_nl + 1);
-                        } else {
-                            /* Sub-lexed: skip closing fence entirely */
-                            size_t close_nl = line_offset(&it, inner_line) + inner_len;
-                            if (close_nl < len && input[close_nl] == '\n')
-                                tv_push_text(&v, close_nl, close_nl + 1);
-                        }
+                        size_t close_nl = line_offset(&it, inner_line) + inner_len;
+                        if (close_nl < len && input[close_nl] == '\n')
+                            tv_push_text(&v, close_nl, close_nl + 1);
 
                         goto next_line;
                     }
