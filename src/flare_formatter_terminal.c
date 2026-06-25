@@ -72,26 +72,33 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
 
     for (size_t i = 0; i < count; i++) {
         /* Skip fenced code block structural markers — they are not
-         * visual content. Also suppress HL_TEXT newlines that are
-         * part of a suppressed fence line: a bare "\n" HL_TEXT token
-         * adjacent to a fence marker is the line-ending newline of
-         * that fence line, not meaningful whitespace. */
+         * visual content. When skipping, also consume the line-ending
+         * newline that belongs to the fence line:
+         *   - \n immediately after FENCED_OPEN/INFO: ends the opening
+         *     fence line (not a paragraph separator)
+         *   - \n immediately before FENCED_CLOSE: ends the last code
+         *     content line (not a paragraph separator)
+         * The \n BEFORE FENCED_OPEN and AFTER FENCED_CLOSE are
+         * paragraph separators and must be kept. */
         if (is_fenced_marker(tokens[i].type)) {
+            if (tokens[i].type == HL_MARKUP_FENCED_OPEN ||
+                tokens[i].type == HL_MARKUP_FENCED_INFO) {
+                /* Consume trailing \n that ends the fence line */
+                if (i + 1 < count && tokens[i + 1].type == HL_TEXT &&
+                    tokens[i + 1].length == 1 &&
+                    input[tokens[i + 1].offset] == '\n')
+                    i++;
+            }
             prev_valid = 0;
             continue;
         }
         if (tokens[i].type == HL_TEXT && tokens[i].length == 1 &&
-            input[tokens[i].offset] == '\n') {
-            /* Check if adjacent to a suppressed fence marker */
-            int adjacent = 0;
-            if (i > 0 && is_fenced_marker(tokens[i - 1].type))
-                adjacent = 1;
-            if (i + 1 < count && is_fenced_marker(tokens[i + 1].type))
-                adjacent = 1;
-            if (adjacent) {
-                prev_valid = 0;
-                continue;
-            }
+            input[tokens[i].offset] == '\n' &&
+            i + 1 < count && tokens[i + 1].type == HL_MARKUP_FENCED_CLOSE) {
+            /* \n before closing fence: part of the fence block, not
+             * a paragraph separator — suppress */
+            prev_valid = 0;
+            continue;
         }
         FlareStyleEntry entry = flare_style_get(style, tokens[i].type);
 
