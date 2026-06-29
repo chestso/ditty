@@ -1,39 +1,39 @@
 ---
 name: install
-description: Build, test, and install bloom-lisp and bloom-repl to ~/.local
+description: Build, test, and install ditty and ditty to ~/.local
 user-invocable: true
 disable-model-invocation: true
 allowed-tools: Bash(./*), Bash(make *), Bash(PKG_CONFIG_PATH=*), Bash(cd ~/git && make *)
 ---
 
-# Install bloom-lisp
+# Install ditty
 
-Build the static library and `bloom-repl` binary, run the test suite,
+Build the static library and `ditty` binary, run the test suite,
 and install everything to `~/.local`.
 
-bloom-lisp depends on **Boehm GC** (`bdw-gc`) and **PCRE2**, which must
-be installed via system packages. The optional **bloom-boba** dependency
+ditty depends on **Boehm GC** (`bdw-gc`) and **PCRE2**, which must
+be installed via system packages. The optional **boba** dependency
 enables the TUI REPL; without it, the REPL works in basic line mode.
 
 ## Option A: Monorepo build (recommended)
 
-From `~/git`, this builds bloom-boba → bloom-lisp in dependency
+From `~/git`, this builds boba → ditty in dependency
 order with matching ASan+UBSan flags:
 
 ```bash
-cd ~/git && make bloom-lisp
+cd ~/git && make ditty
 ```
 
 This also runs `make check` and `make install`.
 
 If the dependency projects are already installed and up-to-date, an
-incremental rebuild from within bloom-lisp is faster:
+incremental rebuild from within ditty is faster:
 
 ```bash
 cd build && make && make check && make install
 ```
 
-## Option B: Build from within bloom-lisp
+## Option B: Build from within ditty
 
 ### If already configured
 
@@ -65,7 +65,7 @@ make && make check && make install
 
 ## Build dependencies
 
-bloom-lisp requires Boehm GC and PCRE2, discovered via pkg-config:
+ditty requires Boehm GC and PCRE2, discovered via pkg-config:
 
 ```bash
 # Debian/Ubuntu
@@ -78,18 +78,18 @@ sudo dnf install gc-devel pcre2-devel
 brew install bdw-gc pcre2
 ```
 
-bloom-boba is optional. If installed, the REPL gets TUI support; if not,
+boba is optional. If installed, the REPL gets TUI support; if not,
 it compiles without it.
 
 ## What gets installed
 
 | Artifact | Destination |
 | -------- | --------------------------------------- |
-| `bloom-repl` | `~/.local/bin/bloom-repl` |
-| `libbloomlisp.a` | `~/.local/lib/libbloomlisp.a` |
+| `ditty` | `~/.local/bin/ditty` |
+| `libditty.a` | `~/.local/lib/libditty.a` |
 | `lisp.h` | `~/.local/include/lisp.h` |
 | `lisp_value.h` | `~/.local/include/lisp_value.h` |
-| `bloom-lisp.pc` | `~/.local/lib/pkgconfig/bloom-lisp.pc` |
+| `ditty.pc` | `~/.local/lib/pkgconfig/ditty.pc` |
 
 ## Other commands
 
@@ -108,7 +108,7 @@ it compiles without it.
 - **`configure: error: Package 'libpcre2-8' not found`** — Install PCRE2
   development headers.
 - **Linker errors about `__asan_*` / `__ubsan_*`** — The installed
-  `libbloomlisp.a` was built with ASan+UBSan, so downstream projects
+  `libditty.a` was built with ASan+UBSan, so downstream projects
   must be configured with matching `CFLAGS`/`LDFLAGS` containing
   `-fsanitize=address,undefined`.
 - **LeakSanitizer in the REPL** — This is expected (Boehm GC never

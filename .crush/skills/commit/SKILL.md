@@ -1,11 +1,11 @@
 ---
 name: commit
-description: Format, test, and commit changes in bloom-lisp
+description: Format, test, and commit changes in ditty
 user-invocable: true
 allowed-tools: Bash(make *), Bash(git *)
 ---
 
-# Commit Workflow for bloom-lisp
+# Commit Workflow for ditty
 
 Format, build, test, and commit all current changes. Stop on any
 failure.
