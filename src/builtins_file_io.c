@@ -622,7 +622,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
     return result;
 }
 
-/* Delete a file */
+/* Delete a file (not a directory — use delete-directory for directories). */
 static LispObject *builtin_delete_file(LispObject *args, Environment *env)
 {
     (void)env;
@@ -631,6 +631,14 @@ static LispObject *builtin_delete_file(LispObject *args, Environment *env)
     LispObject *filename_obj = lisp_car(args);
     if (LISP_TYPE(filename_obj) != LISP_STRING) {
         return lisp_make_error("delete-file requires a string filename");
+    }
+
+    if (file_is_directory(LISP_STR_VAL(filename_obj))) {
+        char errbuf[512];
+        snprintf(errbuf, sizeof(errbuf),
+                 "delete-file: '%s' is a directory; use delete-directory instead",
+                 LISP_STR_VAL(filename_obj));
+        return lisp_make_error(errbuf);
     }
 
     /* Attempt to delete the file */

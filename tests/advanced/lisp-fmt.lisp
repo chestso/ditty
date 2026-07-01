@@ -222,9 +222,10 @@
 ;; ============================================================
 ;; These tests exercise the C I/O layer's EOL awareness directly and
 ;; then confirm the round-trip through format-file-inplace.
+(define tmpdir (or (getenv "TEMP") (getenv "TMPDIR") "/tmp"))
 
 ;; stream-eol auto-detects CRLF on open.
-(let ((tmp "/tmp/ditty-fmt-detect-crlf.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-detect-crlf.lisp")))
   (let ((out (open tmp "w" "\r\n")))
     (write-string out "(foo)\n(bar)\n")
     (close out))
@@ -234,7 +235,7 @@
   (delete-file tmp))
 
 ;; stream-eol reports LF for LF files.
-(let ((tmp "/tmp/ditty-fmt-detect-lf.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-detect-lf.lisp")))
   (let ((out (open tmp "w")))
     (write-string out "(foo)\n(bar)\n")
     (close out))
@@ -244,14 +245,14 @@
   (delete-file tmp))
 
 ;; write-string translates embedded \n to the stream's EOL.
-(let ((tmp "/tmp/ditty-fmt-ws-crlf.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-ws-crlf.lisp")))
   (let ((out (open tmp "w" "\r\n")))
     (write-string out "line1\nline2\n")
     (close out))
   (assert-equal "line1\r\nline2\r\n" (read-file-raw tmp)
    "write-string translates \\n to \\r\\n on a CRLF stream")
   (delete-file tmp))
-(let ((tmp "/tmp/ditty-fmt-ws-lf.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-ws-lf.lisp")))
   (let ((out (open tmp "w")))
     (write-string out "line1\nline2\n")
     (close out))
@@ -260,7 +261,7 @@
   (delete-file tmp))
 
 ;; write-string does NOT add a trailing terminator.
-(let ((tmp "/tmp/ditty-fmt-ws-noterm.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-ws-noterm.lisp")))
   (let ((out (open tmp "w")))
     (write-string out "abc")
     (close out))
@@ -269,7 +270,7 @@
   (delete-file tmp))
 
 ;; File-level round-trip (LF): format-file-inplace preserves LF.
-(let ((tmp "/tmp/ditty-fmt-eol-lf.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-eol-lf.lisp")))
   (let ((file (open tmp "w")))
     (write-line file "(define  x  1)")
     (close file))
@@ -282,7 +283,7 @@
   (delete-file tmp))
 
 ;; File-level round-trip (CRLF): format-file-inplace preserves CRLF.
-(let ((tmp "/tmp/ditty-fmt-eol-crlf.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-eol-crlf.lisp")))
   (let ((out (open tmp "w" "\r\n")))
     (write-string out "(define  x  1)\n")
     (close out))
@@ -295,7 +296,7 @@
   (delete-file tmp))
 
 ;; Multi-trailing-newlines collapse to one (LF and CRLF).
-(let ((tmp "/tmp/ditty-fmt-multi-lf.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-multi-lf.lisp")))
   (let ((out (open tmp "w")))
     (write-string out "(define  x  1)\n\n\n")
     (close out))
@@ -303,7 +304,7 @@
   (assert-equal "(define x 1)\n" (read-file-raw tmp)
    "LF multiple trailing newlines collapse to one")
   (delete-file tmp))
-(let ((tmp "/tmp/ditty-fmt-multi-crlf.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-multi-crlf.lisp")))
   (let ((out (open tmp "w" "\r\n")))
     (write-string out "(define  x  1)\n\n\n")
     (close out))
@@ -313,7 +314,7 @@
   (delete-file tmp))
 
 ;; No trailing newline on source → formatter adds exactly one.
-(let ((tmp "/tmp/ditty-fmt-notrail.lisp"))
+(let ((tmp (string-append tmpdir "/ditty-fmt-notrail.lisp")))
   (let ((out (open tmp "w")))
     (write-string out "(define  x  1)")
     (close out))

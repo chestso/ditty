@@ -54,6 +54,19 @@ int file_mkdir(const char *utf8_path);
  */
 int file_exists(const char *path);
 
+/* Check if a path is a directory.
+ * Returns 1 if path exists and is a directory, 0 otherwise.
+ */
+int file_is_directory(const char *path);
+
+/* Remove a directory.
+ * If recursive is 0, only removes empty directories (like rmdir).
+ * If recursive is 1, removes the directory and all its contents.
+ *
+ * Returns 0 on success, -1 on failure.
+ */
+int file_remove_directory(const char *utf8_path, int recursive);
+
 /* Recursive directory creation (like mkdir -p).
  * Creates all missing parent directories along the path.
  * Succeeds silently if directory already exists.

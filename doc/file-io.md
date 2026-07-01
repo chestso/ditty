@@ -325,7 +325,7 @@ Returns error if file cannot be opened.
 
 ## `delete-file`
 
-Delete a file from filesystem.
+Delete a file from filesystem. Refuses to delete directories — use `delete-directory` instead.
 
 ### Parameters
 
@@ -345,10 +345,15 @@ Delete a file from filesystem.
 ### Notes
 
 Permanent operation - deleted files cannot be recovered.
+If the path is a directory, an error is raised directing you to `delete-directory`.
 
 ### Errors
 
-Returns error with system message if deletion fails (permission denied, file not found, etc.)
+Returns error with system message if deletion fails (permission denied, file not found, is a directory, etc.)
+
+### See Also
+
+- `delete-directory` - Delete a directory
 
 ## `load`
 
