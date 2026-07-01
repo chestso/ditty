@@ -7,9 +7,11 @@
 (assert-error (getenv) "getenv requires an argument")
 (assert-error (getenv 42) "getenv requires a string")
 
-;; HOME should be set on any Unix test environment
-(assert-true (string? (getenv "HOME")) "HOME is a string")
-(assert-true (> (length (getenv "HOME")) 0) "HOME is non-empty")
+;; HOME/USERPROFILE should be set on any test environment
+(define home-dir (or (getenv "HOME") (getenv "USERPROFILE")))
+
+(assert-true (string? home-dir) "home dir env is a string")
+(assert-true (> (length home-dir) 0) "home dir env is non-empty")
 
 ;; Nonexistent variable returns nil
 (assert-nil (getenv "DITTY_NONEXISTENT_VAR_12345")
@@ -26,8 +28,8 @@
 (assert-true (string? dd) "data-directory returns a string")
 (assert-true (string-contains? dd "test-app")
  "data-directory contains app name")
-(assert-true (string-prefix? (getenv "HOME") dd)
- "data-directory starts with HOME")
+(assert-true (string-prefix? home-dir dd)
+ "data-directory starts with home dir")
 
 ;; ============================================================================
 ;; config-directory Tests
@@ -40,8 +42,8 @@
 (assert-true (string? cd) "config-directory returns a string")
 (assert-true (string-contains? cd "test-app")
  "config-directory contains app name")
-(assert-true (string-prefix? (getenv "HOME") cd)
- "config-directory starts with HOME")
+(assert-true (string-prefix? home-dir cd)
+ "config-directory starts with home dir")
 
 ;; ============================================================================
 ;; file-exists? Tests
@@ -50,10 +52,10 @@
 (assert-error (file-exists? 42) "file-exists? requires a string")
 
 ;; Home directory exists
-(assert-true (file-exists? (getenv "HOME")) "home directory exists")
+(assert-true (file-exists? home-dir) "home directory exists")
 
 ;; Nonexistent path returns nil
-(assert-nil (file-exists? "/no/such/path/ditty-test-12345")
+(assert-nil (file-exists? (concat home-dir "/no/such/path/ditty-test-12345"))
  "nonexistent path returns nil")
 
 ;; ============================================================================
@@ -63,16 +65,36 @@
 (assert-error (mkdir 42) "mkdir requires a string")
 
 ;; Create a temp directory with nested subdirs
-(define test-dir (concat (getenv "HOME") "/.cache/ditty-test/nested/dir"))
+(define temp-base (or (getenv "TEMP") (getenv "TMPDIR") home-dir))
+
+(define test-dir (concat temp-base "/ditty-test/nested/dir"))
 
 (assert-true (mkdir test-dir) "mkdir creates nested directories")
 (assert-true (file-exists? test-dir) "created directory exists")
 ;; Idempotent — succeeds if directory already exists
 (assert-true (mkdir test-dir) "mkdir succeeds on existing directory")
 
+;; delete-directory tests
+(assert-error (delete-file test-dir) "delete-file refuses directories")
+
+(assert-true (eq? (delete-directory test-dir) nil)
+ "delete-directory removes empty dir")
+
+(assert-nil (file-exists? test-dir) "deleted directory no longer exists")
+
+;; delete-directory :recursive removes non-empty dirs
+(mkdir test-dir)
+(mkdir (concat temp-base "/ditty-test/nested/dir2"))
+
+(assert-true (file-exists? (concat temp-base "/ditty-test/nested/dir2"))
+ "subdir exists")
+
+(delete-directory (concat temp-base "/ditty-test/nested") :recursive)
+
+(assert-nil (file-exists? (concat temp-base "/ditty-test/nested"))
+ "recursive delete removed nested dir")
+
 ;; Clean up
-(delete-file (concat (getenv "HOME") "/.cache/ditty-test/nested/dir"))
-(delete-file (concat (getenv "HOME") "/.cache/ditty-test/nested"))
-(delete-file (concat (getenv "HOME") "/.cache/ditty-test"))
+(delete-directory (concat temp-base "/ditty-test") :recursive)
 
 (print "All tests passed!")

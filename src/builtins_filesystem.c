@@ -1,5 +1,7 @@
 #include "builtins_internal.h"
 
+static LispObject *g_recursive_kw = NULL;
+
 /* Get user's home directory path (cross-platform)
  * Unix/Linux/macOS: $HOME
  * Windows: %USERPROFILE% or %HOMEDRIVE%%HOMEPATH%
@@ -243,6 +245,64 @@ static LispObject *builtin_mkdir(LispObject *args, Environment *env)
     return LISP_TRUE;
 }
 
+/* Delete a directory.
+ * (delete-directory path)            — delete empty directory only
+ * (delete-directory path :recursive) — delete directory and all contents
+ * Like Emacs Lisp's delete-directory with :recursive keyword. */
+static LispObject *builtin_delete_directory(LispObject *args, Environment *env)
+{
+    (void)env;
+    if (args == NIL)
+        return lisp_make_error("delete-directory requires at least 1 argument");
+
+    LispObject *path = lisp_car(args);
+    if (LISP_TYPE(path) != LISP_STRING)
+        return lisp_make_error("delete-directory requires a string path");
+
+    int recursive = 0;
+    if (g_recursive_kw == NULL)
+        g_recursive_kw = lisp_make_keyword(":recursive");
+    LispObject *rest = lisp_cdr(args);
+    while (rest != NIL) {
+        LispObject *kw = lisp_car(rest);
+        if (kw == g_recursive_kw) {
+            recursive = 1;
+            break;
+        }
+        rest = lisp_cdr(rest);
+    }
+
+    if (!file_is_directory(LISP_STR_VAL(path))) {
+        char errbuf[512];
+        snprintf(errbuf, sizeof(errbuf),
+                 "delete-directory: '%s' is not a directory",
+                 LISP_STR_VAL(path));
+        return lisp_make_error(errbuf);
+    }
+
+    if (file_remove_directory(LISP_STR_VAL(path), recursive) != 0) {
+        char errbuf[512];
+        snprintf(errbuf, sizeof(errbuf),
+                 "delete-directory: failed to delete '%s': %s",
+                 LISP_STR_VAL(path), strerror(errno));
+        return lisp_make_error(errbuf);
+    }
+
+    return NIL;
+}
+
+static LispObject *builtin_file_is_directory_question(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("file-is-directory?");
+
+    LispObject *path = lisp_car(args);
+    if (LISP_TYPE(path) != LISP_STRING)
+        return lisp_make_error("file-is-directory? requires a string path");
+
+    return file_is_directory(LISP_STR_VAL(path)) ? LISP_TRUE : NIL;
+}
+
 void register_filesystem_builtins(Environment *env)
 {
     REGISTER("home-directory", builtin_home_directory);
@@ -252,4 +312,6 @@ void register_filesystem_builtins(Environment *env)
     REGISTER("config-directory", builtin_config_directory);
     REGISTER("file-exists?", builtin_file_exists_question);
     REGISTER("mkdir", builtin_mkdir);
+    REGISTER("delete-directory", builtin_delete_directory);
+    REGISTER("file-is-directory?", builtin_file_is_directory_question);
 }

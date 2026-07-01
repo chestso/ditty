@@ -221,3 +221,41 @@ Create a directory and all parent directories (like mkdir -p).
 - `data-directory` - Get platform data directory
 - `config-directory` - Get platform config directory
 - `file-exists?` - Check if path exists
+
+## `delete-directory`
+
+Delete a directory. Like Emacs Lisp's `delete-directory`.
+
+### Parameters
+
+- `path` - Directory path (string)
+- `:recursive` - Optional keyword; if present, delete directory and all its contents
+
+### Returns
+
+`nil` on success, error if deletion fails.
+
+### Examples
+
+```lisp
+(delete-directory "/tmp/empty-dir")                  ; remove empty directory
+(delete-directory "/tmp/parent-dir" :recursive)     ; remove directory and all contents
+```
+
+### Notes
+
+Without `:recursive`, only empty directories can be removed (like `rmdir`).
+With `:recursive`, the directory and all files and subdirectories inside it are deleted.
+Use `delete-file` for files — `delete-file` will refuse to delete directories.
+
+### Errors
+
+- Error if path is not a directory
+- Error if directory is not empty and `:recursive` is not specified
+- Error if deletion fails (permission denied, etc.)
+
+### See Also
+
+- `delete-file` - Delete a file
+- `mkdir` - Create a directory
+- `file-exists?` - Check if path exists

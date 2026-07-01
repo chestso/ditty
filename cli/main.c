@@ -17,6 +17,9 @@
 #include <boba/runtime.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <io.h>
+#endif
 #endif
 
 #include "ditty_version.h"
@@ -363,7 +366,11 @@ static void handle_line_submit(char *line)
 
     /* Capture stdout during eval */
     int pipefd[2];
+#ifdef _WIN32
+    _pipe(pipefd, 4096, O_BINARY);
+#else
     pipe(pipefd);
+#endif
     int saved_stdout = dup(STDOUT_FILENO);
     dup2(pipefd[1], STDOUT_FILENO);
 
@@ -376,7 +383,9 @@ static void handle_line_submit(char *line)
     close(pipefd[1]);
 
     /* Read captured output */
+#ifndef _WIN32
     fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
+#endif
     char captured[4096];
     ssize_t n;
     while ((n = read(pipefd[0], captured, sizeof(captured) - 1)) > 0) {

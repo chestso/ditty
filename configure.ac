@@ -28,6 +28,14 @@ AC_PROG_CC
 AC_PROG_RANLIB
 AM_PROG_AR
 
+# Detect cross-compilation target
+AC_CANONICAL_HOST
+case "$host_os" in
+  mingw*|msys*) host_windows=yes ;;
+  *)            host_windows=no ;;
+esac
+AM_CONDITIONAL([HOST_WINDOWS], [test "x$host_windows" = "xyes"])
+
 # Build mode selection (--enable-release > --enable-debug > default ASan)
 AC_ARG_ENABLE([debug],
   [AS_HELP_STRING([--enable-debug],
@@ -48,19 +56,18 @@ elif test "x$enable_debug" = "xyes"; then
   CFLAGS="-O0 -g3"
   AC_MSG_NOTICE([Debug mode: CFLAGS set to -O0 -g3])
 elif test "x$user_cflags" = "x"; then
-  # No user CFLAGS — default to ASan+UBSan (matches monorepo Makefile)
-  CFLAGS="-O1 -g3 -fno-omit-frame-pointer -fno-common -fsanitize=address,undefined -fno-sanitize-recover=undefined"
-  LDFLAGS="-fsanitize=address,undefined $LDFLAGS"
-  AC_MSG_NOTICE([ASan+UBSan mode (default): CFLAGS=$CFLAGS])
+  dnl ASan/UBSan is not available on Windows/MinGW. Fall back to
+  dnl unsanitized debug when building natively on Windows (MinGW
+  dnl does not ship libasan/libubsan).
+  if test "x$host_windows" = "xyes"; then
+    CFLAGS="-O1 -g3 -fno-omit-frame-pointer -fno-common"
+    AC_MSG_NOTICE([Debug mode (no ASan on Windows): CFLAGS=$CFLAGS])
+  else
+    CFLAGS="-O1 -g3 -fno-omit-frame-pointer -fno-common -fsanitize=address,undefined -fno-sanitize-recover=undefined"
+    LDFLAGS="-fsanitize=address,undefined $LDFLAGS"
+    AC_MSG_NOTICE([ASan+UBSan mode (default): CFLAGS=$CFLAGS])
+  fi
 fi
-
-# Detect cross-compilation target
-AC_CANONICAL_HOST
-case "$host_os" in
-  mingw*|msys*) host_windows=yes ;;
-  *)            host_windows=no ;;
-esac
-AM_CONDITIONAL([HOST_WINDOWS], [test "x$host_windows" = "xyes"])
 
 # Check for pkg-config
 PKG_PROG_PKG_CONFIG
