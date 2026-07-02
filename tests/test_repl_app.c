@@ -222,7 +222,7 @@ static void test_ctrl_c_aborts_edit(void)
 
     g_break_count = 0;
     TuiUpdateResult r = repl_app_update((TuiModel *)app,
-                                        tui_msg_key(TUI_KEY_NONE, 'c', TUI_MOD_CTRL));
+                                        tui_msg_interrupt());
     if (r.cmd)
         tui_cmd_free(r.cmd);
 
