@@ -104,8 +104,8 @@ AC_TYPE_SIZE_T
 # DITTY_VERSION comes from the compile-time-generated ditty_version.h
 # (see src/Makefile.am); MAJOR/MINOR/PATCH stay here as hardcoded constants.
 AC_DEFINE([DITTY_VERSION_MAJOR], [0], [Major version number])
-AC_DEFINE([DITTY_VERSION_MINOR], [0], [Minor version number])
-AC_DEFINE([DITTY_VERSION_PATCH], [1], [Patch version number])
+AC_DEFINE([DITTY_VERSION_MINOR], [1], [Minor version number])
+AC_DEFINE([DITTY_VERSION_PATCH], [0], [Patch version number])
 
 AC_CONFIG_FILES([
     Makefile
