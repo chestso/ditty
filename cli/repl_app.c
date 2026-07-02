@@ -76,11 +76,18 @@ TuiUpdateResult repl_app_update(TuiModel *model, TuiMsg msg)
             !(msg.data.key.mods & TUI_MOD_SHIFT) && app->is_complete) {
             const char *text = tui_textinput_text(app->textinput);
             if (text && !app->is_complete(text)) {
-                /* Incomplete — insert newline instead of submitting */
+                /* Incomplete — insert newline, then auto-indent */
                 TuiUpdateResult r = tui_textinput_update(app->textinput,
                                                          tui_msg_key(TUI_KEY_ENTER, 0, TUI_MOD_SHIFT));
                 if (r.cmd)
                     tui_cmd_free(r.cmd);
+                /* Compute and insert auto-indent spaces */
+                if (app->compute_indent) {
+                    const char *after = tui_textinput_text(app->textinput);
+                    int indent = app->compute_indent(after);
+                    for (int i = 0; i < indent; i++)
+                        tui_textinput_update(app->textinput, tui_msg_char(' ', 0));
+                }
                 return tui_update_result_none();
             }
             /* Complete — call on_submit with the text, then clear */

@@ -204,6 +204,11 @@ static int count_unclosed_parens(const char *text)
     return depth < 0 ? 0 : depth;
 }
 
+static int compute_auto_indent(const char *text)
+{
+    return count_unclosed_parens(text) * 2;
+}
+
 #endif /* HAVE_BOBA */
 
 /* --- Non-interactive helpers --- */
@@ -478,6 +483,7 @@ static void run_interactive_repl(Environment *env)
 
     /* Wire completeness check for Enter interception */
     g_app->is_complete = is_form_complete;
+    g_app->compute_indent = compute_auto_indent;
 
     atexit(cleanup);
 

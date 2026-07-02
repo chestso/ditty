@@ -32,6 +32,11 @@ typedef struct
      * Used to decide whether Enter evaluates or inserts a newline. */
     int (*is_complete)(const char *text);
 
+    /* Callback: returns the number of spaces to indent the new line
+     * after Enter is pressed on an incomplete form. Receives the text
+     * after the newline was inserted. */
+    int (*compute_indent)(const char *text);
+
     /* Callback: called when a complete form is submitted. Receives the
      * submitted text (malloc'd, callee frees). The textinput is already
      * cleared when this is called. */

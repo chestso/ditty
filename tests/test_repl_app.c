@@ -160,6 +160,48 @@ static void test_enter_complete_calls_submit(void)
     repl_app_free((TuiModel *)app);
 }
 
+/* Auto-indent: Enter on incomplete form inserts newline + indent spaces */
+static int compute_indent_2x(const char *text)
+{
+    int depth = 0;
+    for (const char *p = text; *p; p++) {
+        if (*p == '(')
+            depth++;
+        else if (*p == ')')
+            depth--;
+    }
+    return depth > 0 ? depth * 2 : 0;
+}
+
+static void test_enter_incomplete_auto_indents(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->is_complete = is_form_complete;
+    app->compute_indent = compute_indent_2x;
+
+    /* Type "((42" — 2 unclosed parens */
+    send_string(app->textinput, "((42");
+
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_key(TUI_KEY_ENTER, 0, 0));
+    if (r.cmd)
+        tui_cmd_free(r.cmd);
+
+    /* After Enter: text should be "((42\n  " (newline + 4 spaces) */
+    const char *text = tui_textinput_text(app->textinput);
+    ASSERT_TRUE(strstr(text, "\n") != NULL, "should have newline");
+    /* The line after \n should start with 4 spaces (2 parens * 2) */
+    const char *nl = strchr(text, '\n');
+    ASSERT_TRUE(nl != NULL, "newline found");
+    ASSERT_TRUE(nl[1] == ' ' && nl[2] == ' ' && nl[3] == ' ' && nl[4] == ' ',
+                "should have 4 spaces after newline");
+
+    repl_app_free((TuiModel *)app);
+}
+
 /* #5: on_submit path doesn't double-free submitted text.
  * The on_submit callback receives a malloc'd string and is responsible
  * for freeing it. The runtime must not also free it. This test verifies
@@ -238,6 +280,7 @@ int main(void)
     RUN_TEST(test_on_submit_invoked_with_text);
     RUN_TEST(test_enter_incomplete_inserts_newline);
     RUN_TEST(test_enter_complete_calls_submit);
+    RUN_TEST(test_enter_incomplete_auto_indents);
     RUN_TEST(test_on_submit_no_double_free);
     RUN_TEST(test_view_empty_after_submit);
 
