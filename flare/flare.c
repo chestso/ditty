@@ -72,7 +72,7 @@ static void usage(void)
         "\n"
         "Languages:\n"
         "  auto          detect from file extension (default)\n"
-        "  ditty    Bloom Lisp source\n"
+        "  ditty    Ditty Lisp source\n"
         "  commonmark    CommonMark/Markdown (highlights fenced lisp code blocks)\n"
         "  markdown      alias for commonmark\n",
         PROGNAME);

@@ -260,7 +260,7 @@ Does not include `:' so that package prefixes can be separated.")
 ;; ============================================================================
 
 ;;;###autoload
-(define-derived-mode ditty-mode lisp-mode "Bloom-Lisp"
+(define-derived-mode ditty-mode lisp-mode "Ditty Lisp"
   "Major mode for editing ditty source files."
   ;; Replace lisp-mode's font-lock-defaults wholesale so its
   ;; Common-Lisp-oriented keyword list (which can mis-highlight

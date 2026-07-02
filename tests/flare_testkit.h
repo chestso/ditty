@@ -1,11 +1,11 @@
-/* testkit.h - Reusable C test infrastructure for bloom-flare
+/* testkit.h - Reusable C test infrastructure for ditty-flare
  *
  * Provides RUN_TEST / TEST_SUMMARY macros and assertion helpers,
  * following the pattern from mudlark's testkit.h.
  */
 
-#ifndef BLOOM_FLARE_TESTKIT_H
-#define BLOOM_FLARE_TESTKIT_H
+#ifndef DITTY_FLARE_TESTKIT_H
+#define DITTY_FLARE_TESTKIT_H
 
 #include <assert.h>
 #include <stdio.h>
@@ -69,4 +69,4 @@ static int testkit_tests_passed = 0;
 #define ASSERT_NULL(p)     ASSERT_TRUE((p) == NULL)
 #define ASSERT_NOT_NULL(p) ASSERT_TRUE((p) != NULL)
 
-#endif /* BLOOM_FLARE_TESTKIT_H */
+#endif /* DITTY_FLARE_TESTKIT_H */

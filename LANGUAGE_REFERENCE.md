@@ -1,6 +1,6 @@
-# Bloom Lisp Language Reference
+# Ditty Lisp Language Reference
 
-A reference for Bloom Lisp, covering data types, special forms, built-in functions, and usage examples.
+A reference for Ditty Lisp, covering data types, special forms, built-in functions, and usage examples.
 
 ## Table of Contents
 
@@ -1738,7 +1738,7 @@ Create a directory and all missing parent directories (like `mkdir -p`).
 
 ## Naming Conventions
 
-Bloom Lisp follows modern Lisp naming conventions:
+Ditty Lisp follows modern Lisp naming conventions:
 
 - **Predicates** use `?` suffix: `null?`, `vector?`, `integer?`, `boolean?`, `string?`
 - **Mutating functions** use `!` suffix: `set!`, `vector-set!`, `vector-push!`, `hash-set!`
@@ -1779,7 +1779,7 @@ Examples:
 
 ## Error Handling
 
-Bloom Lisp implements an Emacs Lisp-style condition system with typed errors, catch/handle, and guaranteed cleanup. The system provides:
+Ditty Lisp implements an Emacs Lisp-style condition system with typed errors, catch/handle, and guaranteed cleanup. The system provides:
 
 - **Typed errors**: Errors have symbol-based types (e.g., `'division-by-zero`, `'file-error`)
 - **Error catching**: `condition-case` catches and handles specific error types
@@ -1986,7 +1986,7 @@ You can define custom error types using any symbol:
 
 ## Package System
 
-Bloom Lisp has a package system for organizing bindings into namespaces. Each binding is tagged with an owning package. The default packages are `core` (builtins and stdlib) and `user` (user-defined bindings).
+Ditty Lisp has a package system for organizing bindings into namespaces. Each binding is tagged with an owning package. The default packages are `core` (builtins and stdlib) and `user` (user-defined bindings).
 
 See [Package Functions](#package-functions) for the full function reference. All package functions have `package-` prefixed aliases (e.g., `package-set` for `in-package`).
 
@@ -2047,7 +2047,7 @@ The reader translates `pkg:sym` into the `(package-ref "pkg" sym)` special form.
 
 ## Tail Recursion Optimization
 
-Bloom Lisp implements **tail call optimization** (TCO) using a trampoline-based approach. This allows recursive functions to execute without growing the call stack, enabling efficient recursive algorithms that would otherwise cause stack overflow.
+Ditty Lisp implements **tail call optimization** (TCO) using a trampoline-based approach. This allows recursive functions to execute without growing the call stack, enabling efficient recursive algorithms that would otherwise cause stack overflow.
 
 ### What is Tail Position?
 

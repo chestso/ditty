@@ -232,7 +232,7 @@ static LispObject *argv_to_list(int start, int end, char **argv)
 
 static void print_help(void)
 {
-    printf("Bloom Lisp Interpreter v%s\n", DITTY_VERSION);
+    printf("Ditty Lisp Interpreter v%s\n", DITTY_VERSION);
     printf("\n");
     printf("Usage:\n");
     printf("  ditty                          Start interactive REPL\n");

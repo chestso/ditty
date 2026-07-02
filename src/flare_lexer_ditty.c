@@ -1,4 +1,4 @@
-/* lexer_ditty.c - Bloom Lisp scanner
+/* lexer_ditty.c - Ditty Lisp scanner
  *
  * Classification uses the ditty runtime as the single source of truth:
  *   - Special forms: lisp_sf_kind() from ditty (auto-generated from
@@ -22,9 +22,9 @@ extern FlareLexer *flare_lexer_alloc(const char *name, void *ctx,
 typedef struct
 {
     Environment *env;
-} BloomLispCtx;
+} DittyLispCtx;
 
-/* Map ditty's SfKind to bloom-flare's token subcategory */
+/* Map ditty's SfKind to ditty-flare's token subcategory */
 static FlareTokenType sf_kind_to_type(SfKind kind)
 {
     switch (kind) {
@@ -74,7 +74,7 @@ static void tv_push_text(TokenVec *v, size_t start, size_t end)
 }
 
 static FlareTokenType classify_atom(const char *input, size_t offset, size_t length,
-                                    const BloomLispCtx *ctx)
+                                    const DittyLispCtx *ctx)
 {
     const char *s = input + offset;
 
@@ -153,7 +153,7 @@ static FlareToken *ditty_scan(const char *input, size_t len,
 {
     TokenVec v = { NULL, 0, 0 };
     size_t pos = 0;
-    BloomLispCtx *lctx = ctx;
+    DittyLispCtx *lctx = ctx;
 
     while (pos < len) {
         char c = input[pos];
@@ -304,7 +304,7 @@ FlareLexer *flare_lexer_ditty(Environment *env)
     if (!env)
         return NULL;
 
-    BloomLispCtx *ctx = calloc(1, sizeof(BloomLispCtx));
+    DittyLispCtx *ctx = calloc(1, sizeof(DittyLispCtx));
     if (!ctx)
         return NULL;
 

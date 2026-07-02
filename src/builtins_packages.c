@@ -331,7 +331,7 @@ static LispObject *builtin_package_save(LispObject *args, Environment *env)
         return lisp_make_error(error);
     }
 
-    fprintf(f, ";; Bloom Lisp package saved by package-save\n");
+    fprintf(f, ";; Ditty Lisp package saved by package-save\n");
     fprintf(f, ";; Load with: (load \"%s\")\n", LISP_STR_VAL(filename_obj));
     fprintf(f, "(in-package \"%s\")\n\n", target_pkg->name);
 

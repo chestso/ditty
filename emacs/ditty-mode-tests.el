@@ -57,10 +57,10 @@
 ;; ============================================================================
 
 (ert-deftest ditty-test-mode-name ()
-  "Mode name should be Bloom-Lisp."
+  "Mode name should be Ditty Lisp."
   (with-temp-buffer
     (ditty-mode)
-    (should (equal mode-name "Bloom-Lisp"))))
+    (should (equal mode-name "Ditty Lisp"))))
 
 (ert-deftest ditty-test-derived-from-lisp-mode ()
   "Should derive from lisp-mode."

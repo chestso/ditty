@@ -4,8 +4,8 @@
  * ANSI terminal output at 16-color, 256-color, and truecolor depths.
  */
 
-#ifndef BLOOM_FLARE_HIGHLIGHT_H
-#define BLOOM_FLARE_HIGHLIGHT_H
+#ifndef DITTY_FLARE_HIGHLIGHT_H
+#define DITTY_FLARE_HIGHLIGHT_H
 
 #include "lisp.h"
 #include <stddef.h>
@@ -127,7 +127,7 @@ typedef struct
 
 /* ----- Lexer API -------------------------------------------------------- */
 
-/* Create a Bloom Lisp lexer. Requires a non-NULL Environment* (obtained
+/* Create a Ditty Lisp lexer. Requires a non-NULL Environment* (obtained
  * from lisp_init()) for semantic classification of symbols as
  * special forms, builtins, macros, or variables. Passing NULL
  * returns NULL. */
@@ -213,4 +213,4 @@ FlareResult flare_highlight(const char *input, size_t input_len,
 
 void flare_result_free(FlareResult result);
 
-#endif /* BLOOM_FLARE_HIGHLIGHT_H */
+#endif /* DITTY_FLARE_HIGHLIGHT_H */
