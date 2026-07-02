@@ -295,7 +295,7 @@ static int handle_command(const char *input, Environment *env)
 
         if (LISP_TYPE(result) == LISP_ERROR) {
             char *err_str = lisp_print(result);
-            printf("%sERROR: %s%s\n", color_error, err_str, SGR_RESET);
+            printf("%s%s%s\n", color_error, err_str, SGR_RESET);
         } else {
             char *output = lisp_print(result);
             const char *clr = color_for_type(LISP_TYPE(result));
@@ -353,7 +353,7 @@ static void handle_line_submit(char *line)
     /* Display result */
     if (LISP_TYPE(eval_result) == LISP_ERROR && !LISP_ERROR_CAUGHT(eval_result)) {
         char *err_str = lisp_print(eval_result);
-        printf("%sERROR: %s%s\n", color_error, err_str, SGR_RESET);
+        printf("%s%s%s\n", color_error, err_str, SGR_RESET);
     } else {
         char *output = lisp_print(eval_result);
         const char *clr = color_for_type(LISP_TYPE(eval_result));
