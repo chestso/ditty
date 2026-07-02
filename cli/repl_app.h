@@ -31,6 +31,11 @@ typedef struct
     /* Callback: returns 1 if text is a complete form, 0 if incomplete.
      * Used to decide whether Enter evaluates or inserts a newline. */
     int (*is_complete)(const char *text);
+
+    /* Callback: called when a complete form is submitted. Receives the
+     * submitted text (malloc'd, callee frees). The textinput is already
+     * cleared when this is called. */
+    void (*on_submit)(char *text);
 } ReplAppModel;
 
 /* TuiComponent interface */

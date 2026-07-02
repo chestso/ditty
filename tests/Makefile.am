@@ -10,7 +10,7 @@ FLARE_TESTS = \
     test_api \
     test_roundtrip
 
-check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent $(FLARE_TESTS)
+check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_repl_app $(FLARE_TESTS)
 
 test_sf_kind_SOURCES = test_sf_kind.c
 test_sf_kind_CPPFLAGS = \
@@ -93,10 +93,26 @@ test_auto_indent_LDADD = \
     $(GC_LIBS) \
     $(PCRE2_LIBS)
 
+test_repl_app_SOURCES = test_repl_app.c ../cli/repl_app.c
+test_repl_app_CPPFLAGS = \
+    -I$(top_srcdir)/include \
+    -I$(top_srcdir)/src \
+    -I$(top_builddir)/src \
+    -I$(top_srcdir)/cli \
+    $(GC_CFLAGS) \
+    $(PCRE2_CFLAGS) \
+    $(BOBA_CFLAGS)
+test_repl_app_LDADD = \
+    $(top_builddir)/src/libditty.a \
+    $(GC_LIBS) \
+    $(PCRE2_LIBS) \
+    $(BOBA_LIBS)
+
 # Force ditty_version.h to exist before test objects compile
 $(test_sf_kind_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_repl_completeness_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_auto_indent_OBJECTS): $(top_builddir)/src/ditty_version.h
+$(test_repl_app_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(FLARE_TESTS_OBJECTS): $(top_builddir)/src/ditty_version.h
 
 # Lisp script tests
@@ -150,6 +166,7 @@ TESTS = \
     test_sf_kind \
     test_repl_completeness \
     test_auto_indent \
+    test_repl_app \
     $(FLARE_TESTS)
 
 TEST_EXTENSIONS = .lisp
@@ -164,6 +181,7 @@ EXTRA_DIST = \
     test_sf_kind.c \
     test_repl_completeness.c \
     test_auto_indent.c \
+    test_repl_app.c \
     flare_testkit.h \
     test-helpers.lisp \
     snapshots/simple_expression_truecolor.txt \

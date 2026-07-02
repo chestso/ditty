@@ -70,8 +70,8 @@ TuiUpdateResult repl_app_update(TuiModel *model, TuiMsg msg)
 
     if (msg.type == TUI_MSG_KEY_PRESS) {
         /* Intercept Enter: if the form is incomplete, insert a newline
-         * instead of submitting. This enables multi-line editing where
-         * Enter evaluates only when the form is complete. */
+         * instead of submitting. If complete and on_submit is set,
+         * call on_submit instead of letting line_submit fire. */
         if (msg.data.key.key == TUI_KEY_ENTER &&
             !(msg.data.key.mods & TUI_MOD_SHIFT) && app->is_complete) {
             const char *text = tui_textinput_text(app->textinput);
@@ -81,6 +81,13 @@ TuiUpdateResult repl_app_update(TuiModel *model, TuiMsg msg)
                                                          tui_msg_key(TUI_KEY_ENTER, 0, TUI_MOD_SHIFT));
                 if (r.cmd)
                     tui_cmd_free(r.cmd);
+                return tui_update_result_none();
+            }
+            /* Complete — call on_submit with the text, then clear */
+            if (app->on_submit) {
+                char *saved = strdup(text ? text : "");
+                tui_textinput_clear(app->textinput);
+                app->on_submit(saved);
                 return tui_update_result_none();
             }
         }
