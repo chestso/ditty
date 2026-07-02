@@ -237,8 +237,8 @@ static void print_help(void)
     printf("  ditty -e \"(define x 10) (* x 5)\" # Multiple expressions\n");
     printf("\n");
     printf("REPL Commands:\n");
-    printf("  :quit             Exit the REPL\n");
-    printf("  :load <filename>  Load and execute a Lisp file\n");
+    printf("  /quit             Exit the REPL\n");
+    printf("  /load <filename>  Load and execute a Lisp file\n");
     printf("\n");
     printf("See LANGUAGE_REFERENCE.md for complete language documentation.\n");
 }
@@ -252,17 +252,17 @@ static int handle_command(const char *input, Environment *env)
     while (*input == ' ' || *input == '\t')
         input++;
 
-    if (strncmp(input, ":quit", 5) == 0) {
+    if (strncmp(input, "/quit", 5) == 0) {
         return 1;
     }
 
-    if (strncmp(input, ":load", 5) == 0) {
+    if (strncmp(input, "/load", 5) == 0) {
         const char *filename = input + 5;
         while (*filename == ' ' || *filename == '\t')
             filename++;
 
         if (*filename == '\0') {
-            printf("%sERROR: :load requires a filename%s\n",
+            printf("%sERROR: /load requires a filename%s\n",
                    color_error, SGR_RESET);
             return 0;
         }
@@ -294,8 +294,8 @@ static void handle_line_submit(char *line)
      * the form is complete (repl_app_update intercepts incomplete). */
     const char *full_text = line ? line : "";
 
-    /* Handle :quit / :load */
-    if (full_text[0] == ':') {
+    /* Handle /quit / /load */
+    if (full_text[0] == '/') {
         int cmd_result = handle_command(full_text, g_env);
         if (cmd_result == 1) {
             tui_runtime_schedule(g_runtime, tui_cmd_quit());
@@ -486,7 +486,7 @@ static void run_interactive_repl(Environment *env)
 
     /* Welcome message — printed before entering inline mode */
     printf("%sDitty Lisp Interpreter v%s\n"
-           "Type expressions to evaluate, :quit to exit, :load <file> to load a file\n"
+           "Type expressions to evaluate, /quit to exit, /load <file> to load a file\n"
            "Tab for completion, Up/Down for history%s\n\n",
            color_info, DITTY_VERSION, SGR_RESET);
 
@@ -630,7 +630,7 @@ int main(int argc, char **argv)
 #else
     /* Line-mode REPL fallback (no boba required) */
     printf("Ditty Lisp Interpreter v%s\n", DITTY_VERSION);
-    printf("Type expressions to evaluate, :quit to exit\n\n");
+    printf("Type expressions to evaluate, /quit to exit\n\n");
 
     char line[8192];
     char expr_buf[8192] = { 0 };
@@ -664,8 +664,8 @@ int main(int argc, char **argv)
                 continue;
         }
 
-        /* Handle :quit */
-        if (expr_len == 0 && strncmp(line, ":quit", 5) == 0)
+        /* Handle /quit */
+        if (expr_len == 0 && strncmp(line, "/quit", 5) == 0)
             break;
 
         /* Accumulate */
