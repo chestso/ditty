@@ -10,7 +10,7 @@ FLARE_TESTS = \
     test_api \
     test_roundtrip
 
-check_PROGRAMS = test_sf_kind $(FLARE_TESTS)
+check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent $(FLARE_TESTS)
 
 test_sf_kind_SOURCES = test_sf_kind.c
 test_sf_kind_CPPFLAGS = \
@@ -69,8 +69,34 @@ test_roundtrip_SOURCES = test_roundtrip.c
 test_roundtrip_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
 test_roundtrip_LDADD = $(AM_FLARE_LDADD)
 
+test_repl_completeness_SOURCES = test_repl_completeness.c
+test_repl_completeness_CPPFLAGS = \
+    -I$(top_srcdir)/include \
+    -I$(top_srcdir)/src \
+    -I$(top_builddir)/src \
+    $(GC_CFLAGS) \
+    $(PCRE2_CFLAGS)
+test_repl_completeness_LDADD = \
+    $(top_builddir)/src/libditty.a \
+    $(GC_LIBS) \
+    $(PCRE2_LIBS)
+
+test_auto_indent_SOURCES = test_auto_indent.c
+test_auto_indent_CPPFLAGS = \
+    -I$(top_srcdir)/include \
+    -I$(top_srcdir)/src \
+    -I$(top_builddir)/src \
+    $(GC_CFLAGS) \
+    $(PCRE2_CFLAGS)
+test_auto_indent_LDADD = \
+    $(top_builddir)/src/libditty.a \
+    $(GC_LIBS) \
+    $(PCRE2_LIBS)
+
 # Force ditty_version.h to exist before test objects compile
 $(test_sf_kind_OBJECTS): $(top_builddir)/src/ditty_version.h
+$(test_repl_completeness_OBJECTS): $(top_builddir)/src/ditty_version.h
+$(test_auto_indent_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(FLARE_TESTS_OBJECTS): $(top_builddir)/src/ditty_version.h
 
 # Lisp script tests
@@ -122,6 +148,8 @@ TESTS = \
     regression/nested-unknown-hash-syntax.lisp \
     regression/tail_call_unwrap.lisp \
     test_sf_kind \
+    test_repl_completeness \
+    test_auto_indent \
     $(FLARE_TESTS)
 
 TEST_EXTENSIONS = .lisp
@@ -134,6 +162,8 @@ AM_TESTS_ENVIRONMENT = \
 EXTRA_DIST = \
     run-test.sh \
     test_sf_kind.c \
+    test_repl_completeness.c \
+    test_auto_indent.c \
     flare_testkit.h \
     test-helpers.lisp \
     snapshots/simple_expression_truecolor.txt \

@@ -1,9 +1,8 @@
-/* repl_app.h - REPL TUI component: composes viewport + textinput
+/* repl_app.h - Inline REPL TUI component: textinput only, no alt screen
  *
- * Follows the same Elm Architecture composition pattern as telnet_app:
- * - Embeds child components (viewport, textinput) in its model
- * - Routes messages to children in update()
- * - Composes child views in view()
+ * Inline mode renders in the primary terminal buffer — no viewport,
+ * no borders. Output goes directly to stdout; the terminal's own
+ * scrollback is the output history.
  */
 
 #ifndef REPL_APP_H
@@ -13,8 +12,6 @@
 
 #include <boba/component.h>
 #include <boba/components/textinput.h>
-#include <boba/components/viewport.h>
-#include <boba/style.h>
 
 /* ReplApp configuration */
 typedef struct
@@ -23,53 +20,29 @@ typedef struct
     int terminal_height;
 } ReplAppConfig;
 
-/* ReplApp model - composes viewport + textinput */
+/* ReplApp model — just a textinput in inline mode */
 typedef struct
 {
     TuiModel base;
-
-    TuiViewport *viewport;
     TuiTextInput *textinput;
-
-    /* Style applied to the top + bottom border lines flanking the
-     * textinput. Set via tui_style_* builders; callers may swap it at
-     * any point to recolor the borders. */
-    TuiStyle border_style;
-
     int terminal_width;
     int terminal_height;
 
-    /* Computed in repl_app_set_terminal_size, consumed in repl_app_view. */
-    int top_border_row;
-    int bottom_border_row;
+    /* Callback: returns 1 if text is a complete form, 0 if incomplete.
+     * Used to decide whether Enter evaluates or inserts a newline. */
+    int (*is_complete)(const char *text);
 } ReplAppModel;
 
-/* TuiComponent interface — init/update/view/free.
- *
- * view() returns a TuiView that declares alt-screen + mouse mode +
- * cursor (delegated to textinput). The cursor is populated inside
- * view(); there is no separate cursor() slot in v2. */
+/* TuiComponent interface */
 TuiInitResult repl_app_init(void *config);
 TuiUpdateResult repl_app_update(TuiModel *model, TuiMsg msg);
 TuiView repl_app_view(const TuiModel *model, DynamicBuffer *out);
 void repl_app_free(TuiModel *model);
 
-/* Echo text to the viewport */
-void repl_app_echo(ReplAppModel *app, const char *text, size_t len);
-
-/* Set terminal size (call on window resize) */
-void repl_app_set_terminal_size(ReplAppModel *app, int width, int height);
-
 /* Set the prompt string */
 void repl_app_set_prompt(ReplAppModel *app, const char *prompt);
 
-/* Scrolling control */
-void repl_app_scroll_up(ReplAppModel *app, int lines);
-void repl_app_scroll_down(ReplAppModel *app, int lines);
-void repl_app_page_up(ReplAppModel *app);
-void repl_app_page_down(ReplAppModel *app);
-
-/* Get component interface for ReplApp (used by tui_runtime_create) */
+/* Get component interface for ReplApp */
 const TuiComponent *repl_app_component(void);
 
 #endif /* REPL_APP_H */

@@ -15,11 +15,7 @@
 #include <boba/ansi_sequences.h>
 #include <boba/cmd.h>
 #include <boba/runtime.h>
-#include <fcntl.h>
-#include <unistd.h>
-#ifdef _WIN32
-#include <io.h>
-#endif
+#include <ditty/highlight.h>
 #endif
 
 #include "ditty_version.h"
@@ -43,15 +39,15 @@ const char *__asan_default_options(void)
 static Environment *g_env = NULL;
 static ReplAppModel *g_app = NULL;
 static TuiRuntime *g_runtime = NULL;
+static FlareLexer *g_lexer = NULL; /* reused across highlight calls */
 
 /* ANSI color buffers */
 static char color_prompt[32];
-static char color_divider[32];
 static char color_error[32];
 static char color_info[32];
 static char color_nil[32];
 static char color_number[32];
-static char color_string[32];
+static char string_color[32];
 static char color_symbol[32];
 static char color_function[32];
 static char color_result[32];
@@ -60,8 +56,6 @@ static void init_colors(void)
 {
     ansi_format_fg_color_rgb(color_prompt, sizeof(color_prompt),
                              COLOR_PROMPT_R, COLOR_PROMPT_G, COLOR_PROMPT_B);
-    ansi_format_fg_color_rgb(color_divider, sizeof(color_divider),
-                             COLOR_DIVIDER_R, COLOR_DIVIDER_G, COLOR_DIVIDER_B);
     ansi_format_fg_color_rgb(color_error, sizeof(color_error),
                              COLOR_ERROR_R, COLOR_ERROR_G, COLOR_ERROR_B);
     ansi_format_fg_color_rgb(color_info, sizeof(color_info),
@@ -70,7 +64,7 @@ static void init_colors(void)
                              COLOR_NIL_R, COLOR_NIL_G, COLOR_NIL_B);
     ansi_format_fg_color_rgb(color_number, sizeof(color_number),
                              COLOR_NUMBER_R, COLOR_NUMBER_G, COLOR_NUMBER_B);
-    ansi_format_fg_color_rgb(color_string, sizeof(color_string),
+    ansi_format_fg_color_rgb(string_color, sizeof(string_color),
                              COLOR_STRING_R, COLOR_STRING_G, COLOR_STRING_B);
     ansi_format_fg_color_rgb(color_symbol, sizeof(color_symbol),
                              COLOR_SYMBOL_R, COLOR_SYMBOL_G, COLOR_SYMBOL_B);
@@ -90,7 +84,7 @@ static const char *color_for_type(LispType type)
     case LISP_CHAR:
         return color_number;
     case LISP_STRING:
-        return color_string;
+        return string_color;
     case LISP_SYMBOL:
         return color_symbol;
     case LISP_LAMBDA:
@@ -102,9 +96,21 @@ static const char *color_for_type(LispType type)
     }
 }
 
-/* Multi-line expression buffer */
-static char expr_buffer[8192] = { 0 };
-static int expr_pos = 0;
+/* --- Flare highlight callback for textinput --- */
+
+static char *highlight_lisp(const char *text, size_t len, void *userdata)
+{
+    (void)userdata;
+    FlareResult r = flare_highlight(text, len, g_lexer, NULL, NULL);
+    /* flare_highlight returns malloc'd data; textinput will free it.
+     * If highlighting fails, fall back to plain text. */
+    if (r.data)
+        return r.data;
+    char *fallback = malloc(len + 1);
+    memcpy(fallback, text, len);
+    fallback[len] = '\0';
+    return fallback;
+}
 
 /* --- Completion --- */
 
@@ -112,13 +118,11 @@ static LispCompleteContext detect_context(const char *buffer, int cursor_pos)
 {
     int i = cursor_pos - 1;
 
-    /* Skip current word */
     while (i >= 0 && buffer[i] != ' ' && buffer[i] != '\t' && buffer[i] != '(' && buffer[i] != ')' &&
            buffer[i] != '\'' && buffer[i] != '`') {
         i--;
     }
 
-    /* Skip whitespace */
     while (i >= 0 && (buffer[i] == ' ' || buffer[i] == '\t')) {
         i--;
     }
@@ -127,7 +131,6 @@ static LispCompleteContext detect_context(const char *buffer, int cursor_pos)
         return LISP_COMPLETE_CALLABLE;
     }
 
-    /* Check for (set! ...) pattern */
     int j = i;
     if (j >= 0) {
         int func_end = j + 1;
@@ -150,13 +153,55 @@ static LispCompleteContext detect_context(const char *buffer, int cursor_pos)
     return LISP_COMPLETE_ALL;
 }
 
-/* --- Echo helper for viewport --- */
+/* --- Completeness check for Enter interception --- */
 
-static void echo_to_viewport(const char *text)
+static int is_form_complete(const char *text)
 {
-    if (g_app && text) {
-        repl_app_echo(g_app, text, strlen(text));
+    const char *ptr = text;
+    LispObject *expr = lisp_read(&ptr);
+    if (expr == NULL)
+        return 1;
+    if (LISP_TYPE(expr) == LISP_ERROR &&
+        LISP_ERROR_TYPE(expr) == sym_unclosed_input)
+        return 0;
+    return 1;
+}
+
+/* --- Auto-indentation helper --- */
+
+static int count_unclosed_parens(const char *text)
+{
+    int depth = 0;
+    int in_string = 0;
+    int in_comment = 0;
+
+    for (const char *p = text; *p; p++) {
+        if (in_comment) {
+            if (p[0] == '\n')
+                in_comment = 0;
+            continue;
+        }
+        if (in_string) {
+            if (*p == '\\' && p[1])
+                p++;
+            else if (*p == '"')
+                in_string = 0;
+            continue;
+        }
+        if (*p == ';') {
+            in_comment = 1;
+            continue;
+        }
+        if (*p == '"') {
+            in_string = 1;
+            continue;
+        }
+        if (*p == '(')
+            depth++;
+        else if (*p == ')')
+            depth--;
     }
+    return depth < 0 ? 0 : depth;
 }
 
 #endif /* HAVE_BOBA */
@@ -200,6 +245,8 @@ static void print_help(void)
 
 #ifdef HAVE_BOBA
 
+/* --- REPL command handler --- */
+
 static int handle_command(const char *input, Environment *env)
 {
     while (*input == ' ' || *input == '\t')
@@ -215,10 +262,8 @@ static int handle_command(const char *input, Environment *env)
             filename++;
 
         if (*filename == '\0') {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "%sERROR: :load requires a filename%s\n",
-                     color_error, SGR_RESET);
-            echo_to_viewport(buf);
+            printf("%sERROR: :load requires a filename%s\n",
+                   color_error, SGR_RESET);
             return 0;
         }
 
@@ -227,16 +272,11 @@ static int handle_command(const char *input, Environment *env)
 
         if (LISP_TYPE(result) == LISP_ERROR) {
             char *err_str = lisp_print(result);
-            char buf[4096];
-            snprintf(buf, sizeof(buf), "%sERROR: %s%s\n",
-                     color_error, err_str, SGR_RESET);
-            echo_to_viewport(buf);
+            printf("%sERROR: %s%s\n", color_error, err_str, SGR_RESET);
         } else {
             char *output = lisp_print(result);
             const char *clr = color_for_type(LISP_TYPE(result));
-            char buf[4096];
-            snprintf(buf, sizeof(buf), "%s%s%s\n", clr, output, SGR_RESET);
-            echo_to_viewport(buf);
+            printf("%s%s%s\n", clr, output, SGR_RESET);
         }
 
         return 0;
@@ -249,50 +289,14 @@ static int handle_command(const char *input, Environment *env)
 
 static void handle_line_submit(char *line)
 {
-    /* Skip blank lines if not accumulating */
-    if (expr_pos == 0) {
-        int blank = !line || line[0] == '\0';
-        if (!blank) {
-            blank = 1;
-            for (const char *c = line; *c; c++) {
-                if (*c != ' ' && *c != '\t' && *c != '\n' && *c != '\r') {
-                    blank = 0;
-                    break;
-                }
-            }
-        }
-        if (blank) {
-            tui_runtime_flush(g_runtime);
-            return;
-        }
-    }
+    /* The textinput's line_submit() already cleared the buffer and
+     * passed us the submitted text. Enter only reaches submit when
+     * the form is complete (repl_app_update intercepts incomplete). */
+    const char *full_text = line ? line : "";
 
-    /* Echo the input line to viewport */
-    if (line && strchr(line, '\n')) {
-        const char *p = line;
-        int first = 1;
-        while (*p) {
-            const char *nl = strchr(p, '\n');
-            int len = nl ? (int)(nl - p) : (int)strlen(p);
-            const char *prompt = (first && expr_pos == 0) ? ">>> " : "... ";
-            char echo_buf[8320];
-            snprintf(echo_buf, sizeof(echo_buf), "%s%s%s%.*s\n",
-                     color_prompt, prompt, SGR_RESET, len, p);
-            echo_to_viewport(echo_buf);
-            first = 0;
-            p = nl ? nl + 1 : p + len;
-        }
-    } else {
-        const char *prompt = expr_pos > 0 ? "... " : ">>> ";
-        char echo_buf[8320];
-        snprintf(echo_buf, sizeof(echo_buf), "%s%s%s%s\n",
-                 color_prompt, prompt, SGR_RESET, line ? line : "");
-        echo_to_viewport(echo_buf);
-    }
-
-    /* Handle commands on first line */
-    if (expr_pos == 0 && line) {
-        int cmd_result = handle_command(line, g_env);
+    /* Handle :quit / :load */
+    if (full_text[0] == ':') {
+        int cmd_result = handle_command(full_text, g_env);
         if (cmd_result == 1) {
             tui_runtime_schedule(g_runtime, tui_cmd_quit());
             return;
@@ -302,118 +306,40 @@ static void handle_line_submit(char *line)
         }
     }
 
-    /* Add to history (first line only, non-empty) */
-    if (line && line[0] != '\0' && expr_pos == 0) {
-        tui_textinput_history_add(g_app->textinput, line);
-    }
-
-    /* Accumulate input for multi-line expressions */
-    size_t line_len = line ? strlen(line) : 0;
-    if (line_len > 0 && expr_pos + (int)line_len < (int)sizeof(expr_buffer) - 2) {
-        if (expr_pos > 0) {
-            expr_buffer[expr_pos++] = ' ';
-        }
-        strcpy(expr_buffer + expr_pos, line);
-        expr_pos += line_len;
-    }
-
-    /* Try to parse */
-    const char *input_ptr = expr_buffer;
+    /* Parse the submitted text */
+    const char *input_ptr = full_text;
     LispObject *expr = lisp_read(&input_ptr);
 
-    /* Unclosed expression → continue reading. The reader signals this with
-     * the pre-interned 'unclosed-input symbol (lisp.h: sym_unclosed_input). */
-    if (expr != NULL && LISP_TYPE(expr) == LISP_ERROR &&
-        LISP_ERROR_TYPE(expr) == sym_unclosed_input) {
-        repl_app_set_prompt(g_app, "... ");
+    if (expr == NULL || LISP_TYPE(expr) == LISP_ERROR) {
         tui_runtime_flush(g_runtime);
         return;
     }
 
-    if (expr == NULL) {
-        /* Check if buffer is only whitespace (nothing to continue) */
-        int all_ws = 1;
-        for (int i = 0; i < expr_pos; i++) {
-            if (expr_buffer[i] != ' ' && expr_buffer[i] != '\t' &&
-                expr_buffer[i] != '\n' && expr_buffer[i] != '\r') {
-                all_ws = 0;
-                break;
-            }
-        }
-        if (expr_pos == 0 || all_ws) {
-            expr_pos = 0;
-            expr_buffer[0] = '\0';
-            repl_app_set_prompt(g_app, ">>> ");
-            tui_runtime_flush(g_runtime);
-            return;
-        }
-        repl_app_set_prompt(g_app, "... ");
-        tui_runtime_flush(g_runtime);
-        return;
-    }
+    /* Complete form — evaluate it.
+     * Write \r\n to end the input line (preserving it in scrollback),
+     * then print output directly. The event loop's next flush will
+     * render the fresh prompt below the output. */
+    fputs("\r\n", stdout);
 
-    if (LISP_TYPE(expr) == LISP_ERROR) {
-        char err_buf[4096];
-        snprintf(err_buf, sizeof(err_buf), "%sERROR: %s%s\n",
-                 color_error, LISP_ERROR_MESSAGE(expr), SGR_RESET);
-        echo_to_viewport(err_buf);
-        expr_pos = 0;
-        expr_buffer[0] = '\0';
-        repl_app_set_prompt(g_app, ">>> ");
-        tui_runtime_flush(g_runtime);
-        return;
-    }
+    /* Reset inline line count so the event loop's flush doesn't
+     * cursor-up into the old input line (which we want to preserve). */
+    g_runtime->inline_lines_rendered = 0;
 
-    /* Capture stdout during eval */
-    int pipefd[2];
-#ifdef _WIN32
-    _pipe(pipefd, 4096, O_BINARY);
-#else
-    pipe(pipefd);
-#endif
-    int saved_stdout = dup(STDOUT_FILENO);
-    dup2(pipefd[1], STDOUT_FILENO);
+    /* Add to history */
+    tui_textinput_history_add(g_app->textinput, full_text);
 
     LispObject *eval_result = lisp_eval(expr, g_env);
-    fflush(stdout);
-
-    /* Restore stdout */
-    dup2(saved_stdout, STDOUT_FILENO);
-    close(saved_stdout);
-    close(pipefd[1]);
-
-    /* Read captured output */
-#ifndef _WIN32
-    fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
-#endif
-    char captured[4096];
-    ssize_t n;
-    while ((n = read(pipefd[0], captured, sizeof(captured) - 1)) > 0) {
-        captured[n] = '\0';
-        echo_to_viewport(captured);
-    }
-    close(pipefd[0]);
 
     /* Display result */
     if (LISP_TYPE(eval_result) == LISP_ERROR && !LISP_ERROR_CAUGHT(eval_result)) {
         char *err_str = lisp_print(eval_result);
-        char err_buf[4096];
-        snprintf(err_buf, sizeof(err_buf), "%sERROR: %s%s\n",
-                 color_error, err_str, SGR_RESET);
-        echo_to_viewport(err_buf);
+        printf("%sERROR: %s%s\n", color_error, err_str, SGR_RESET);
     } else {
         char *output = lisp_print(eval_result);
         const char *clr = color_for_type(LISP_TYPE(eval_result));
-        char out_buf[4096];
-        snprintf(out_buf, sizeof(out_buf), "%s%s%s\n", clr, output, SGR_RESET);
-        echo_to_viewport(out_buf);
+        printf("%s%s%s\n", clr, output, SGR_RESET);
     }
-
-    /* Reset buffer */
-    expr_pos = 0;
-    expr_buffer[0] = '\0';
-    repl_app_set_prompt(g_app, ">>> ");
-    tui_runtime_flush(g_runtime);
+    fflush(stdout);
 }
 
 static void handle_tab_complete(TuiCmd *cmd)
@@ -421,7 +347,6 @@ static void handle_tab_complete(TuiCmd *cmd)
     char *prefix = cmd->payload.tab_complete.prefix;
     int word_start = cmd->payload.tab_complete.word_start;
 
-    /* Get the full input buffer for context detection */
     const char *buffer = tui_textinput_text(g_app->textinput);
     int cursor_pos = (int)tui_textinput_cursor(g_app->textinput);
 
@@ -434,10 +359,8 @@ static void handle_tab_complete(TuiCmd *cmd)
             count++;
 
         if (count == 1) {
-            /* Single match — insert directly */
             tui_textinput_insert_completion(g_app->textinput, word_start, completions[0]);
         } else {
-            /* Compute longest common prefix */
             const char *first = completions[0];
             int common_len = (int)strlen(first);
             for (int c = 1; c < count; c++) {
@@ -449,7 +372,6 @@ static void handle_tab_complete(TuiCmd *cmd)
 
             int prefix_len = (int)strlen(prefix);
             if (common_len > prefix_len) {
-                /* Common prefix extends input — insert it */
                 char *common = malloc(common_len + 1);
                 if (common) {
                     memcpy(common, first, common_len);
@@ -458,7 +380,7 @@ static void handle_tab_complete(TuiCmd *cmd)
                     free(common);
                 }
             } else {
-                /* No extension — display tabular list */
+                /* Display tabular list */
                 int max_len = 0;
                 for (int c = 0; c < count; c++) {
                     int len = (int)strlen(completions[c]);
@@ -471,28 +393,20 @@ static void handle_tab_complete(TuiCmd *cmd)
                 if (cols < 1)
                     cols = 1;
 
-                char list_buf[8192];
-                int pos = 0;
-                pos += snprintf(list_buf, sizeof(list_buf), "%s", color_function);
+                /* Print completions directly to terminal */
+                tui_runtime_stop(g_runtime);
+                printf("\n");
                 for (int c = 0; c < count; c++) {
                     int last_in_row = ((c + 1) % cols == 0) || (c == count - 1);
-                    int sn;
-                    if (last_in_row) {
-                        sn = snprintf(list_buf + pos, sizeof(list_buf) - pos,
-                                      "%s%s\n%s", completions[c], SGR_RESET,
-                                      (c < count - 1) ? color_function : "");
-                    } else {
-                        sn = snprintf(list_buf + pos, sizeof(list_buf) - pos, "%-*s", col_width, completions[c]);
-                    }
-                    if (sn > 0 && pos + sn < (int)sizeof(list_buf))
-                        pos += sn;
+                    if (last_in_row)
+                        printf("%s\n", completions[c]);
+                    else
+                        printf("%-*s", col_width, completions[c]);
                 }
-                list_buf[pos] = '\0';
-                echo_to_viewport(list_buf);
+                tui_runtime_start(g_runtime);
             }
         }
 
-        /* Free completions */
         for (int c = 0; c < count; c++)
             free(completions[c]);
         free(completions);
@@ -516,8 +430,12 @@ static void handle_app_cmd(TuiCmd *cmd, void *user_data)
 
 static void cleanup(void)
 {
-    /* g_app is owned by the runtime — just null our pointer */
     g_app = NULL;
+
+    if (g_lexer) {
+        flare_lexer_free(g_lexer);
+        g_lexer = NULL;
+    }
 
     if (g_runtime) {
         tui_runtime_free(g_runtime);
@@ -529,16 +447,15 @@ static void cleanup(void)
 
 static void run_interactive_repl(Environment *env)
 {
-    (void)env;
-
     init_colors();
+
+    /* Create flare lexer for syntax highlighting (reused across keystrokes) */
+    g_lexer = flare_lexer_ditty(env);
 
     ReplAppConfig app_config = {
         .terminal_width = 80,
         .terminal_height = 24,
     };
-    /* alt-screen and mouse mode are now declared on TuiView (see
-     * repl_app_view) — no longer runtime-config fields. */
     TuiRuntimeConfig runtime_config = {
         .raw_mode = 1,
         .output = stdout,
@@ -552,33 +469,27 @@ static void run_interactive_repl(Environment *env)
     }
     g_app = (ReplAppModel *)tui_runtime_model(g_runtime);
 
-    /* Set REPL colors via TuiStyle. Same style for focused/blurred — the
-     * legacy setters didn't distinguish, and the REPL has only one input. */
+    /* Set prompt style */
     TuiStyle prompt_style = tui_style_foreground(
         tui_style_new(),
         tui_color_rgb(COLOR_PROMPT_R, COLOR_PROMPT_G, COLOR_PROMPT_B));
     tui_textinput_set_focused_prompt_style(g_app->textinput, prompt_style);
     tui_textinput_set_blurred_prompt_style(g_app->textinput, prompt_style);
 
-    /* Borders flanking the textinput are owned by ReplAppModel.border_style.
-     * Override the faint default with the REPL's configured divider color. */
-    g_app->border_style = tui_style_foreground(
-        tui_style_new(),
-        tui_color_rgb(COLOR_DIVIDER_R, COLOR_DIVIDER_G, COLOR_DIVIDER_B));
+    /* Wire flare syntax highlighting into the textinput */
+    tui_textinput_set_text_renderer(g_app->textinput, highlight_lisp, NULL);
 
-    /* Register cleanup */
+    /* Wire completeness check for Enter interception */
+    g_app->is_complete = is_form_complete;
+
     atexit(cleanup);
 
-    /* Welcome message */
-    char welcome[512];
-    snprintf(welcome, sizeof(welcome),
-             "%sBloom Lisp Interpreter v%s\n"
-             "Type expressions to evaluate, :quit to exit, :load <file> to load a file\n"
-             "Tab for completion, Up/Down for history, PageUp/PageDown to scroll%s\n\n",
-             color_info, DITTY_VERSION, SGR_RESET);
-    repl_app_echo(g_app, welcome, strlen(welcome));
+    /* Welcome message — printed before entering inline mode */
+    printf("%sDitty Lisp Interpreter v%s\n"
+           "Type expressions to evaluate, :quit to exit, :load <file> to load a file\n"
+           "Tab for completion, Up/Down for history%s\n\n",
+           color_info, DITTY_VERSION, SGR_RESET);
 
-    /* Blocking event loop — runtime owns raw mode, signals, select() */
     tui_runtime_run(g_runtime);
 }
 
@@ -717,9 +628,94 @@ int main(int argc, char **argv)
 
     return 0;
 #else
-    fprintf(stderr, "Interactive REPL requires boba (batch mode only)\n");
-    fprintf(stderr, "Usage: ditty -e \"CODE\" or ditty FILE\n");
+    /* Line-mode REPL fallback (no boba required) */
+    printf("Ditty Lisp Interpreter v%s\n", DITTY_VERSION);
+    printf("Type expressions to evaluate, :quit to exit\n\n");
+
+    char line[8192];
+    char expr_buf[8192] = { 0 };
+    int expr_len = 0;
+
+    while (1) {
+        const char *prompt = expr_len > 0 ? "... " : ">>> ";
+        printf("%s", prompt);
+        fflush(stdout);
+
+        if (!fgets(line, sizeof(line), stdin)) {
+            printf("\n");
+            break;
+        }
+
+        /* Strip trailing newline */
+        size_t line_len = strlen(line);
+        while (line_len > 0 && (line[line_len - 1] == '\n' || line[line_len - 1] == '\r'))
+            line[--line_len] = '\0';
+
+        /* Skip blank lines when not accumulating */
+        if (expr_len == 0) {
+            int blank = 1;
+            for (size_t i = 0; i < line_len; i++) {
+                if (line[i] != ' ' && line[i] != '\t') {
+                    blank = 0;
+                    break;
+                }
+            }
+            if (blank)
+                continue;
+        }
+
+        /* Handle :quit */
+        if (expr_len == 0 && strncmp(line, ":quit", 5) == 0)
+            break;
+
+        /* Accumulate */
+        if (expr_len > 0 && expr_len < (int)sizeof(expr_buf) - 2)
+            expr_buf[expr_len++] = ' ';
+        if (expr_len + (int)line_len < (int)sizeof(expr_buf) - 1) {
+            strcpy(expr_buf + expr_len, line);
+            expr_len += line_len;
+        }
+
+        /* Try to parse */
+        const char *input_ptr = expr_buf;
+        LispObject *expr = lisp_read(&input_ptr);
+
+        if (expr != NULL && LISP_TYPE(expr) == LISP_ERROR &&
+            LISP_ERROR_TYPE(expr) == sym_unclosed_input) {
+            /* Incomplete — keep reading */
+            continue;
+        }
+
+        if (expr == NULL) {
+            expr_len = 0;
+            expr_buf[0] = '\0';
+            continue;
+        }
+
+        if (LISP_TYPE(expr) == LISP_ERROR) {
+            char *err_str = lisp_print(expr);
+            printf("ERROR: %s\n", err_str);
+            expr_len = 0;
+            expr_buf[0] = '\0';
+            continue;
+        }
+
+        /* Evaluate */
+        LispObject *result = lisp_eval(expr, env);
+
+        if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
+            char *err_str = lisp_print(result);
+            printf("ERROR: %s\n", err_str);
+        } else {
+            char *output = lisp_print(result);
+            printf("%s\n", output);
+        }
+
+        expr_len = 0;
+        expr_buf[0] = '\0';
+    }
+
     lisp_cleanup();
-    return 1;
+    return 0;
 #endif
 }

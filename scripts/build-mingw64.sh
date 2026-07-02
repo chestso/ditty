@@ -124,6 +124,39 @@ else
 	echo "Using cached Boehm GC: ${GC_PREFIX}/lib/libgc.a"
 fi
 
+# --- Cross-compile boba from sibling repo ---
+BOBA_SRC="${PROJECT_ROOT}/../boba"
+BOBA_PREFIX="${PROJECT_ROOT}/${DEPS_DIR}/boba-mingw64-prefix"
+if [ -d "$BOBA_SRC" ]; then
+	if [ ! -f "${BOBA_PREFIX}/lib/libboba.a" ]; then
+		echo "Cross-compiling boba for mingw64..."
+		BOBA_BUILD="${BOBA_SRC}/build-mingw64"
+		rm -rf "$BOBA_BUILD"
+		mkdir -p "$BOBA_BUILD"
+		(
+			cd "$BOBA_SRC"
+			[ -f configure ] || ./autogen.sh
+		)
+		(
+			cd "$BOBA_BUILD"
+			"${BOBA_SRC}/configure" \
+				--host="${HOST}" \
+				--prefix="${BOBA_PREFIX}" \
+				--disable-shared \
+				--enable-static \
+				CFLAGS="-O2"
+			make -j"$PARALLEL_JOBS"
+			make install
+		)
+		echo "boba cross-compiled: ${BOBA_PREFIX}/lib/libboba.a"
+	else
+		echo "Using cached boba: ${BOBA_PREFIX}/lib/libboba.a"
+	fi
+else
+	echo "WARN: boba source not found at ${BOBA_SRC}, building without REPL" >&2
+	BOBA_PREFIX=""
+fi
+
 ./autogen.sh
 
 rm -rf "$BUILD_DIR"
@@ -134,13 +167,18 @@ CFLAGS_OPT="-O2"
 
 (
 	cd "$BUILD_DIR"
+	BOBA_PKG_FLAGS=""
+	if [ -n "$BOBA_PREFIX" ] && [ -f "${BOBA_PREFIX}/lib/pkgconfig/boba.pc" ]; then
+		BOBA_PKG_FLAGS="PKG_CONFIG_PATH=${BOBA_PREFIX}/lib/pkgconfig:${GC_PREFIX}/lib/pkgconfig"
+	fi
 	../configure \
 		--host="${HOST}" \
 		--prefix="${SYSROOT}" \
 		PKG_CONFIG="${PKG_CONFIG_BIN}" \
 		GC_CFLAGS="-I${GC_PREFIX}/include" \
 		GC_LIBS="-L${GC_PREFIX}/lib -lgc" \
-		CFLAGS="$CFLAGS_OPT"
+		CFLAGS="$CFLAGS_OPT" \
+		$BOBA_PKG_FLAGS
 	make -j"$PARALLEL_JOBS"
 )
 
