@@ -110,12 +110,17 @@ Cross-compiles using the Fedora mingw64 toolchain. Boehm GC is downloaded and ca
 
 ```bash
 sudo dnf install mingw64-gcc mingw64-pcre2   # One-time setup
-scripts/build-mingw64.sh                     # Build ditty.exe
+scripts/build-mingw64.sh                     # Build ditty.exe (includes boba REPL)
 ```
 
-Output: `build-mingw64/cli/ditty.exe` with DLLs (`libpcre2-8-0.dll`, `libgcc_s_seh-1.dll`, `libwinpthread-1.dll`).
+Output: `build-mingw64/cli/ditty.exe` with DLLs (`libpcre2-8-0.dll`,
+`libgcc_s_seh-1.dll`, `libwinpthread-1.dll`). The build script
+cross-compiles boba from `../boba` automatically.
 
-The Windows build includes file execution and `-e` eval modes but not the interactive TUI REPL, which requires [boba](https://codeberg.org/thomasc/boba) (a Windows port of boba is planned).
+The Windows build includes the interactive REPL (via boba, which is
+cross-compiled automatically), file execution, and `-e` eval modes.
+When running inside [portty](https://codeberg.org/thomasc/portty)
+(ConPTY passthrough), VT escape sequences work natively.
 
 Test with wine64:
 
@@ -169,16 +174,26 @@ Options: `-f`/`--format` (`truecolor`, `256`, `16`, `8`), `-s`/`--style` (`dracu
 ./cli/ditty
 ```
 
+The REPL uses [boba](https://codeberg.org/thomasc/boba) for inline terminal
+rendering — no alternate screen, output flows into the terminal's own
+scrollback. Syntax highlighting is applied to the input as you type via
+the Flare highlighting engine.
+
 Features:
 
-- **Input history** - Arrow keys navigate previous inputs (persisted across sessions)
-- **Multiline editing** - Automatically continues incomplete expressions
+- **Live syntax highlighting** - Input is highlighted as you type using Flare
+- **Inline rendering** - No alt-screen takeover; output appears in normal scrollback
+- **Multi-line editing** - Incomplete forms get continuation lines with auto-indent
+- **Eval on Enter** - Enter evaluates when the form is complete; inserts a newline otherwise
+- **Input history** - Arrow keys navigate previous inputs
 - **Tab completion** - Completes symbol names from the environment
+- **Ctrl+C** - Aborts the current edit and starts a fresh prompt
+- **Ctrl+D** - Exits the REPL on empty input; deletes char under cursor otherwise
 
 REPL Commands:
 
-- `:quit` - Exit the REPL
-- `:load <filename>` - Load and execute a Lisp file
+- `/quit` - Exit the REPL
+- `/load <filename>` - Load and execute a Lisp file
 
 ### Command-Line Execution
 
