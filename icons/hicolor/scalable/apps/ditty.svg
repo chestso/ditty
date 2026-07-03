@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Cylinder body -->
+  <path d="M 144 250 L 144 370 A 112 60 0 0 0 368 370 L 368 250 Z"
+        fill="#e8d5a8"/>
+
+  <!-- Bottom curve (full ellipse to match lid) -->
+  <ellipse cx="256" cy="370" rx="112" ry="60" fill="#e8d5a8"/>
+
+  <!-- Lid cylinder (half height) -->
+  <path d="M 144 230 L 144 250 A 112 60 0 0 0 368 250 L 368 230 Z"
+        fill="#2a8a8a"/>
+
+  <!-- Lid top -->
+  <ellipse cx="256" cy="230" rx="112" ry="60" fill="#3aa0a0"/>
+
+  <!-- Lambda on lid top, perspective-skewed to match viewing angle -->
+  <g transform="matrix(1 0 0 0.38 0 142.6)">
+    <text x="256" y="230" text-anchor="middle" dominant-baseline="central"
+          font-family="Georgia, serif" font-size="200" font-weight="bold"
+          fill="#e8f0e8">λ</text>
+  </g>
+
+  <!-- Clasp at front, spanning lid and box -->
+  <rect x="240" y="300" width="32" height="24" rx="4" fill="#8a6a3a"/>
+</svg>

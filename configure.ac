@@ -116,6 +116,7 @@ AC_CONFIG_FILES([
     emacs/Makefile
     tests/Makefile
     ditty.pc
+    ditty.desktop
 ])
 
 AC_OUTPUT

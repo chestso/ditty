@@ -8,11 +8,19 @@ pkgconfig_DATA = ditty.pc
 dittydatadir = $(datadir)/ditty/lisp
 dittydata_DATA = lisp/lisp-fmt.lisp
 
+# App icon and desktop entry
+icondir = $(datadir)/icons/hicolor/scalable/apps
+icon_DATA = icons/hicolor/scalable/apps/ditty.svg
+
+applicationsdir = $(datadir)/applications
+applications_DATA = ditty.desktop
+
 EXTRA_DIST = \
     autogen.sh \
     build-aux/git-version.sh \
     version \
     ditty.pc.in \
+    ditty.desktop.in \
     README.md \
     LANGUAGE_REFERENCE.md \
     COPYING \
@@ -20,6 +28,7 @@ EXTRA_DIST = \
     lisp/lisp-fmt.lisp \
     scripts/gen-docstrings.sh \
     scripts/make-dist-zip.sh \
+    icons/hicolor/scalable/apps/ditty.svg \
     doc/arithmetic.md \
     doc/characters.md \
     doc/comparison.md \

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ditty
+GenericName=Lisp REPL
+Comment=A compact Lisp dialect and REPL
+Exec=@bindir@/ditty
+Terminal=true
+Icon=ditty
+Categories=Development;Interpreter;
