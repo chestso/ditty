@@ -31,6 +31,7 @@
 ;; On Windows, data-directory uses LOCALAPPDATA/APPDATA which may use
 ;; different path style than HOME, so check the appropriate base dir.
 (define dd-base (or (getenv "LOCALAPPDATA") (getenv "APPDATA") home-dir))
+
 (assert-true (string-prefix? dd-base dd)
  "data-directory starts with expected base dir")
 
@@ -45,7 +46,9 @@
 (assert-true (string? cd) "config-directory returns a string")
 (assert-true (string-contains? cd "test-app")
  "config-directory contains app name")
+
 (define cd-base (or (getenv "APPDATA") home-dir))
+
 (assert-true (string-prefix? cd-base cd)
  "config-directory starts with expected base dir")
 
