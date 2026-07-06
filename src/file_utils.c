@@ -315,6 +315,13 @@ static const char *file_resolve_one(const char *filename, char *resolved, size_t
         return filename;
 
 #ifdef _WIN32
+    /* Try XDG_DATA_HOME/ditty/ (power user override) */
+    const char *xdg_data = getenv("XDG_DATA_HOME");
+    if (xdg_data && xdg_data[0]) {
+        snprintf(resolved, resolved_size, "%s\\ditty\\%s", xdg_data, filename);
+        if (file_exists(resolved))
+            return resolved;
+    }
     /* Try %APPDATA%/ditty/ on Windows */
     const char *appdata = getenv("APPDATA");
     if (appdata && appdata[0]) {

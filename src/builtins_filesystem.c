@@ -125,7 +125,7 @@ static LispObject *builtin_getenv(LispObject *args, Environment *env)
  * Takes: String (app name)
  * Returns: String (path, not created) or error
  * Unix: $XDG_DATA_HOME/app or ~/.local/share/app
- * Windows: %LOCALAPPDATA%\app or %APPDATA%\app
+ * Windows: %LOCALAPPDATA%\app or %APPDATA%\app (or XDG_DATA_HOME if set)
  */
 static LispObject *builtin_data_directory(LispObject *args, Environment *env)
 {
@@ -141,12 +141,17 @@ static LispObject *builtin_data_directory(LispObject *args, Environment *env)
     char path[PATH_MAX];
 
 #if defined(_WIN32) || defined(_WIN64)
-    const char *dir = getenv("LOCALAPPDATA");
-    if (!dir)
-        dir = getenv("APPDATA");
-    if (!dir)
-        return lisp_make_error("data-directory: cannot determine data directory");
-    snprintf(path, sizeof(path), "%s\\%s", dir, app_name);
+    const char *xdg_data = getenv("XDG_DATA_HOME");
+    if (xdg_data && xdg_data[0]) {
+        snprintf(path, sizeof(path), "%s\\%s", xdg_data, app_name);
+    } else {
+        const char *dir = getenv("LOCALAPPDATA");
+        if (!dir)
+            dir = getenv("APPDATA");
+        if (!dir)
+            return lisp_make_error("data-directory: cannot determine data directory");
+        snprintf(path, sizeof(path), "%s\\%s", dir, app_name);
+    }
 #else
     const char *dir = getenv("XDG_DATA_HOME");
     if (dir && dir[0]) {
@@ -166,7 +171,7 @@ static LispObject *builtin_data_directory(LispObject *args, Environment *env)
  * Takes: String (app name)
  * Returns: String (path, not created) or error
  * Unix: $XDG_CONFIG_HOME/app or ~/.config/app
- * Windows: %APPDATA%\app
+ * Windows: %APPDATA%\app (or XDG_CONFIG_HOME if set)
  */
 static LispObject *builtin_config_directory(LispObject *args, Environment *env)
 {
@@ -182,10 +187,15 @@ static LispObject *builtin_config_directory(LispObject *args, Environment *env)
     char path[PATH_MAX];
 
 #if defined(_WIN32) || defined(_WIN64)
-    const char *dir = getenv("APPDATA");
-    if (!dir)
-        return lisp_make_error("config-directory: cannot determine config directory");
-    snprintf(path, sizeof(path), "%s\\%s", dir, app_name);
+    const char *xdg = getenv("XDG_CONFIG_HOME");
+    if (xdg && xdg[0]) {
+        snprintf(path, sizeof(path), "%s\\%s", xdg, app_name);
+    } else {
+        const char *dir = getenv("APPDATA");
+        if (!dir)
+            return lisp_make_error("config-directory: cannot determine config directory");
+        snprintf(path, sizeof(path), "%s\\%s", dir, app_name);
+    }
 #else
     const char *dir = getenv("XDG_CONFIG_HOME");
     if (dir && dir[0]) {
