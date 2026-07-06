@@ -176,11 +176,29 @@ echo "==> Creating ZIP: $(basename "$ZIP_FILE")"
 rm -f "$ZIP_FILE"
 # 7z is a native Windows binary — it needs Windows-style paths. zip (if
 # present) is an MSYS2 binary and prefers POSIX paths. Convert as needed.
+#
+# On MSYS2, /usr/bin/7z is a shell-script wrapper that execs the real
+# binary at /usr/lib/p7zip/7z. Some non-MSYS2 shells (e.g. mvdan/sh) can't
+# execute those wrappers, so resolve to the .exe directly when needed.
+_7z_bin=""
 if command -v 7z >/dev/null 2>&1; then
+	_7z_bin="7z"
+	# Test if 7z is actually runnable; if not, try the real binary
+	if ! 7z >/dev/null 2>&1; then
+		for _candidate in /usr/lib/p7zip/7z.exe /usr/lib/p7zip/7z; do
+			if [ -f "$_candidate" ] && "$_candidate" >/dev/null 2>&1; then
+				_7z_bin="$_candidate"
+				break
+			fi
+		done
+		[ -z "$_7z_bin" ] && _7z_bin=""
+	fi
+fi
+if [ -n "$_7z_bin" ]; then
 	win_zip="$(cygpath -w "$ZIP_FILE" 2>/dev/null || echo "$ZIP_FILE")"
 	# cd to SRC_DIR so 7z stores relative paths (just the pkg name)
 	win_pkg="$(cygpath -w "$PKG_NAME" 2>/dev/null || echo "$PKG_NAME")"
-	(cd "$SRC_DIR" && 7z a -tzip -mx=9 "$win_zip" "$win_pkg" >/dev/null)
+	(cd "$SRC_DIR" && "$_7z_bin" a -tzip -mx=9 "$win_zip" "$win_pkg" >/dev/null)
 elif command -v zip >/dev/null 2>&1; then
 	(cd "$SRC_DIR" && zip -r -9 "$ZIP_FILE" "$PKG_NAME" >/dev/null)
 else

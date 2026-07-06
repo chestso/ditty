@@ -89,6 +89,16 @@ if test "x$have_boba" = "xyes"; then
     AC_DEFINE([HAVE_BOBA], [1], [Define if boba TUI library is available])
 fi
 
+# Check for Windows resource compiler (windres) — used to embed icons
+# and version metadata into the .exe on MinGW/MSYS2 builds.
+if test "x$host_windows" = "xyes"; then
+  AC_CHECK_TOOL([WINDRES], [windres], [no])
+  if test "x$WINDRES" = "xno"; then
+    AC_MSG_WARN([windres not found — .exe will not have an embedded icon])
+  fi
+fi
+AM_CONDITIONAL([HAVE_WINDRES], [test "x$host_windows" = "xyes" && test "x$WINDRES" != "xno"])
+
 # Check for math library (not needed on Windows — math is in the CRT)
 if test "x$host_windows" != "xyes"; then
   AC_SEARCH_LIBS([floor], [m], [],

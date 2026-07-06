@@ -25,6 +25,21 @@ ditty_LDADD = \
     $(GC_LIBS) \
     $(PCRE2_LIBS)
 
+# Windows resource file — embed application icon into the .exe via windres.
+# The .rc file lives in $(srcdir) and references icons/ditty.ico relative
+# to the top source directory, so we pass --preprocessor defines for that.
+if HAVE_WINDRES
+noinst_DATA = ditty-res.o
+ditty_LDADD += ditty-res.o
+
+ditty-res.o: $(srcdir)/ditty.rc $(top_srcdir)/icons/ditty.ico
+	$(WINDRES) \
+	    --define _UNICODE --define UNICODE \
+	    -I$(top_srcdir) \
+	    -I$(srcdir) \
+	    $(srcdir)/ditty.rc -O coff -o $@
+endif
+
 if HAVE_BOBA
 ditty_CPPFLAGS += $(BOBA_CFLAGS)
 ditty_LDADD += $(BOBA_LIBS)

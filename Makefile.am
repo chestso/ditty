@@ -29,6 +29,8 @@ EXTRA_DIST = \
     scripts/gen-docstrings.sh \
     scripts/make-dist-zip.sh \
     icons/hicolor/scalable/apps/ditty.svg \
+    icons/ditty.ico \
+    cli/ditty.rc \
     doc/arithmetic.md \
     doc/characters.md \
     doc/comparison.md \
