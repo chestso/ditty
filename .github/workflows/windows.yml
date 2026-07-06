@@ -90,12 +90,12 @@ jobs:
         run: make -C build dist-portable
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v5
         with:
           name: ditty-windows-${{ matrix.label }}
           path: ditty-*-windows-*.zip
           if-no-files-found: error
-          retention-days: 30
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 1 || 30 }}
 
   release:
     name: Publish release
@@ -104,15 +104,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download all artifacts
+      - name: Download x86_64 artifact
         uses: actions/download-artifact@v5
         with:
-          pattern: ditty-windows-*
-          merge-multiple: true
+          name: ditty-windows-x86_64
+          path: artifacts/x86_64
+
+      - name: Download aarch64 artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: ditty-windows-aarch64
+          path: artifacts/aarch64
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          files: ditty-*-windows-*.zip
-          generate_release_notes: true
+          files: |
+            artifacts/x86_64/ditty-*-windows-*.zip
+            artifacts/aarch64/ditty-*-windows-*.zip
+          generate_release_notes: false
           fail_on_unmatched_files: true
