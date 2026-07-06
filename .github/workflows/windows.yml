@@ -21,10 +21,6 @@ jobs:
             runner: windows-latest
             msystem: UCRT64
             arch: ucrt-x86_64
-          - label: aarch64
-            runner: windows-11-arm
-            msystem: CLANGARM64
-            arch: clang-aarch64
     runs-on: ${{ matrix.runner }}
     defaults:
       run:
@@ -110,17 +106,10 @@ jobs:
           name: ditty-windows-x86_64
           path: artifacts/x86_64
 
-      - name: Download aarch64 artifact
-        uses: actions/download-artifact@v5
-        with:
-          name: ditty-windows-aarch64
-          path: artifacts/aarch64
-
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/x86_64/ditty-*-windows-*.zip
-            artifacts/aarch64/ditty-*-windows-*.zip
           generate_release_notes: false
           fail_on_unmatched_files: true
