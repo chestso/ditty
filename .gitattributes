@@ -10,3 +10,11 @@
 #   - build-aux/git-version.sh no longer appends -dirty
 
 * text=auto eol=lf
+
+# Windows-only files: keep CRLF line endings
+*.rc  text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files: no line-ending conversion
+*.ico binary
