@@ -12,6 +12,7 @@
 
 #include "repl_app.h"
 #include <boba/ansi_sequences.h>
+#include <boba/charmtones.h>
 #include <boba/cmd.h>
 #include <boba/msg.h>
 #include <boba/runtime.h>
@@ -68,6 +69,13 @@ TuiInitResult repl_app_init(void *config)
     tui_list_popup_set_terminal_size(app->popup,
                                      app->terminal_width, app->terminal_height);
     tui_list_popup_set_title(app->popup, "completions");
+    tui_list_popup_set_colors(app->popup,
+                              tui_ct_oyster(), /* border */
+                              tui_ct_squid(),  /* title */
+                              tui_ct_pepper(), /* selected bg */
+                              tui_ct_butter(), /* selected fg */
+                              tui_ct_coral(),  /* selected marker */
+                              tui_ct_smoke()); /* item text */
 
     return tui_init_result_none((TuiModel *)app);
 }
