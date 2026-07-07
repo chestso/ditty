@@ -99,6 +99,10 @@ if test "x$host_windows" = "xyes"; then
 fi
 AM_CONDITIONAL([HAVE_WINDRES], [test "x$host_windows" = "xyes" && test "x$WINDRES" != "xno"])
 
+# Record the C compiler version for --version output
+BUILD_CC_VERSION=$($CC --version 2>/dev/null | head -1 || echo "$CC")
+AC_DEFINE_UNQUOTED([BUILD_CC], ["$BUILD_CC_VERSION"], [C compiler version string])
+
 # Check for math library (not needed on Windows — math is in the CRT)
 if test "x$host_windows" != "xyes"; then
   AC_SEARCH_LIBS([floor], [m], [],

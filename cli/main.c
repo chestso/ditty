@@ -251,6 +251,17 @@ static LispObject *argv_to_list(int start, int end, char **argv)
     return result;
 }
 
+static void print_version(void)
+{
+    printf("ditty %s\n", DITTY_VERSION);
+    printf("Copyright (C) 2026 Thomas Christensen\n");
+    printf("License MIT: <https://opensource.org/licenses/MIT>\n");
+    printf("This is free software: you are free to change and redistribute it.\n");
+    printf("There is NO WARRANTY, to the extent permitted by law.\n");
+    printf("\n");
+    printf("Built with: %s\n", BUILD_CC);
+}
+
 static void print_help(void)
 {
     printf("Ditty Lisp Interpreter v%s\n", DITTY_VERSION);
@@ -261,6 +272,7 @@ static void print_help(void)
     printf("  ditty FILE [FILE...]           Execute FILE(s) and exit\n");
     printf("  ditty FILE -- [ARG...]         Run FILE with script arguments\n");
     printf("  ditty -h, --help               Show this help message\n");
+    printf("  ditty -V, --version            Show version information\n");
     printf("\n");
     printf("Examples:\n");
     printf("  ditty                            # Start REPL\n");
@@ -517,10 +529,17 @@ static void run_interactive_repl(Environment *env)
     atexit(cleanup);
 
     /* Welcome message — printed before entering inline mode */
-    printf("%sDitty Lisp Interpreter v%s\n"
-           "Type expressions to evaluate, /quit to exit, /load <file> to load a file\n"
-           "Tab for completion, Up/Down for history%s\n\n",
-           color_info, DITTY_VERSION, SGR_RESET);
+    printf("%sDitty Lisp %s%s\n"
+           "Copyright (C) 2026 Thomas Christensen\n"
+           "License MIT: <https://opensource.org/licenses/MIT>\n"
+           "This is free software: you are free to change and redistribute it.\n"
+           "There is NO WARRANTY, to the extent permitted by law.\n"
+           "\n"
+           "%sType expressions to evaluate%s, %s/quit to exit%s, %s/load <file> to load a file\n"
+           "%sTab for completion%s, %sUp/Down for history%s\n\n",
+           color_function, DITTY_VERSION, SGR_RESET,
+           color_info, SGR_RESET, color_info, SGR_RESET, color_info, SGR_RESET,
+           color_info, SGR_RESET, color_info, SGR_RESET);
 
     tui_runtime_run(g_runtime);
 }
@@ -536,6 +555,12 @@ int main(int argc, char **argv)
     /* Handle help flag */
     if (argc > 1 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0)) {
         print_help();
+        return 0;
+    }
+
+    /* Handle version flag */
+    if (argc > 1 && (strcmp(argv[1], "-V") == 0 || strcmp(argv[1], "--version") == 0)) {
+        print_version();
         return 0;
     }
 
@@ -661,7 +686,12 @@ int main(int argc, char **argv)
     return 0;
 #else
     /* Line-mode REPL fallback (no boba required) */
-    printf("Ditty Lisp Interpreter v%s\n", DITTY_VERSION);
+    printf("Ditty Lisp %s\n", DITTY_VERSION);
+    printf("Copyright (C) 2026 Thomas Christensen\n");
+    printf("License MIT: <https://opensource.org/licenses/MIT>\n");
+    printf("This is free software: you are free to change and redistribute it.\n");
+    printf("There is NO WARRANTY, to the extent permitted by law.\n");
+    printf("\n");
     printf("Type expressions to evaluate, /quit to exit\n\n");
 
     char line[8192];
