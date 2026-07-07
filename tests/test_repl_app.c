@@ -304,6 +304,655 @@ static void test_view_empty_after_submit(void)
     repl_app_free((TuiModel *)app);
 }
 
+/* ======================================================================
+ * Completion popup integration tests
+ * ====================================================================== */
+
+/* Completion provider that returns a fixed set of strings */
+static char **mock_completions(const char *prefix, int word_start,
+                               const char *buffer, int cursor_pos)
+{
+    (void)word_start;
+    (void)buffer;
+    (void)cursor_pos;
+    /* Return completions matching "str" prefix for testing */
+    if (strcmp(prefix, "str") == 0) {
+        char **comps = malloc(4 * sizeof(char *));
+        comps[0] = strdup("string-length");
+        comps[1] = strdup("string-append");
+        comps[2] = strdup("string-contains");
+        comps[3] = NULL;
+        return comps;
+    }
+    if (strcmp(prefix, "st") == 0) {
+        char **comps = malloc(4 * sizeof(char *));
+        comps[0] = strdup("string-length");
+        comps[1] = strdup("string-append");
+        comps[2] = strdup("starts-with");
+        comps[3] = NULL;
+        return comps;
+    }
+    return NULL;
+}
+
+static void mock_free_completions(char **comps)
+{
+    if (!comps)
+        return;
+    for (int i = 0; comps[i]; i++)
+        free(comps[i]);
+    free(comps);
+}
+
+static void free_completions_data(ReplCompletionsData *data)
+{
+    if (!data)
+        return;
+    if (data->texts) {
+        for (int i = 0; i < data->count; i++)
+            free(data->texts[i]);
+        free(data->texts);
+    }
+    free(data->prefix);
+    free(data);
+}
+
+/* Tab triggers TUI_CMD_TAB_COMPLETE from textinput — verify the cmd
+ * bubbles up so main.c can fetch completions and post them back. */
+static void test_tab_emits_tab_complete_cmd(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    send_string(app->textinput, "str");
+
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_key(TUI_KEY_TAB, 0, 0));
+    ASSERT_TRUE(r.cmd != NULL, "Tab should emit a command");
+    ASSERT_TRUE(r.cmd->type == TUI_CMD_TAB_COMPLETE,
+                "command should be TUI_CMD_TAB_COMPLETE");
+    ASSERT_TRUE(strcmp(r.cmd->payload.tab_complete.prefix, "str") == 0,
+                "prefix should be 'str'");
+
+    tui_cmd_free(r.cmd);
+    repl_app_free((TuiModel *)app);
+}
+
+/* REPL_MSG_COMPLETIONS_READY with single match inserts directly, no popup */
+static void test_single_completion_inserts_no_popup(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->free_completions = mock_free_completions;
+
+    /* Simulate a completions-ready message with 1 match */
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(2 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = NULL;
+    data->count = 1;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r.cmd)
+        tui_cmd_free(r.cmd);
+
+    ASSERT_TRUE(!tui_list_popup_is_visible(app->popup),
+                "popup should NOT be visible for single match");
+    ASSERT_TRUE(strcmp(tui_textinput_text(app->textinput), "string-length") == 0,
+                "text should be the single completion");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* REPL_MSG_COMPLETIONS_READY with multiple matches shows popup */
+static void test_multiple_completions_shows_popup(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->free_completions = mock_free_completions;
+
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(4 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = strdup("string-contains");
+    data->texts[3] = NULL;
+    data->count = 3;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r.cmd)
+        tui_cmd_free(r.cmd);
+
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup),
+                "popup should be visible for multiple matches");
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 0,
+                "first item should be selected");
+    ASSERT_TRUE(strcmp(tui_list_popup_selected_text(app->popup), "string-length") == 0,
+                "selected text should be first completion");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* When popup is visible, Tab cycles selection down */
+static void test_popup_tab_cycles_down(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->free_completions = mock_free_completions;
+
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(4 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = strdup("string-contains");
+    data->texts[3] = NULL;
+    data->count = 3;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r0 = repl_app_update((TuiModel *)app,
+                                         tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r0.cmd)
+        tui_cmd_free(r0.cmd);
+
+    /* Tab should cycle down, not emit TAB_COMPLETE */
+    TuiUpdateResult r1 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_TAB, 0, 0));
+    ASSERT_TRUE(r1.cmd == NULL, "Tab should not emit cmd when popup visible");
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 1,
+                "selection should be at index 1");
+
+    /* Tab again → index 2 */
+    TuiUpdateResult r2 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_TAB, 0, 0));
+    if (r2.cmd)
+        tui_cmd_free(r2.cmd);
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 2,
+                "selection should be at index 2");
+
+    /* Tab again → wraps to 0 */
+    TuiUpdateResult r3 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_TAB, 0, 0));
+    if (r3.cmd)
+        tui_cmd_free(r3.cmd);
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 0,
+                "selection should wrap to 0");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* Enter on popup inserts selected completion and hides popup */
+static void test_popup_enter_inserts_and_hides(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->free_completions = mock_free_completions;
+
+    /* Set up initial text */
+    send_string(app->textinput, "str");
+
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(4 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = strdup("string-contains");
+    data->texts[3] = NULL;
+    data->count = 3;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r0 = repl_app_update((TuiModel *)app,
+                                         tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r0.cmd)
+        tui_cmd_free(r0.cmd);
+
+    /* Move to second item */
+    TuiUpdateResult r1 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_TAB, 0, 0));
+    if (r1.cmd)
+        tui_cmd_free(r1.cmd);
+
+    /* Enter should insert "string-append" and hide popup */
+    TuiUpdateResult r2 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_ENTER, 0, 0));
+    if (r2.cmd)
+        tui_cmd_free(r2.cmd);
+
+    ASSERT_TRUE(!tui_list_popup_is_visible(app->popup),
+                "popup should be hidden after Enter");
+    ASSERT_TRUE(strcmp(tui_textinput_text(app->textinput), "string-append") == 0,
+                "text should be the selected completion");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* Escape dismisses popup without inserting */
+static void test_popup_escape_dismisses(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->free_completions = mock_free_completions;
+
+    send_string(app->textinput, "str");
+
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(3 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = NULL;
+    data->count = 2;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r0 = repl_app_update((TuiModel *)app,
+                                         tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r0.cmd)
+        tui_cmd_free(r0.cmd);
+
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup), "popup should be visible");
+
+    /* Escape should dismiss */
+    TuiUpdateResult r1 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_ESCAPE, 0, 0));
+    if (r1.cmd)
+        tui_cmd_free(r1.cmd);
+
+    ASSERT_TRUE(!tui_list_popup_is_visible(app->popup),
+                "popup should be hidden after Escape");
+    /* Text should remain "str" (not inserted) */
+    ASSERT_TRUE(strcmp(tui_textinput_text(app->textinput), "str") == 0,
+                "text should remain unchanged after Escape");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* Ctrl+C dismisses popup and calls on_break */
+static void test_popup_ctrl_c_dismisses_and_breaks(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->free_completions = mock_free_completions;
+    app->on_break = on_break_test;
+
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(3 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = NULL;
+    data->count = 2;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r0 = repl_app_update((TuiModel *)app,
+                                         tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r0.cmd)
+        tui_cmd_free(r0.cmd);
+
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup), "popup should be visible");
+
+    g_break_count = 0;
+    TuiUpdateResult r1 = repl_app_update((TuiModel *)app,
+                                         tui_msg_interrupt());
+    if (r1.cmd)
+        tui_cmd_free(r1.cmd);
+
+    ASSERT_TRUE(!tui_list_popup_is_visible(app->popup),
+                "popup should be hidden after Ctrl+C");
+    ASSERT_TRUE(g_break_count == 1, "on_break should be called");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* Arrow Up/Down navigate popup */
+static void test_popup_arrow_keys_navigate(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->free_completions = mock_free_completions;
+
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(4 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = strdup("string-contains");
+    data->texts[3] = NULL;
+    data->count = 3;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r0 = repl_app_update((TuiModel *)app,
+                                         tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r0.cmd)
+        tui_cmd_free(r0.cmd);
+
+    /* Down → index 1 */
+    TuiUpdateResult r1 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_DOWN, 0, 0));
+    if (r1.cmd)
+        tui_cmd_free(r1.cmd);
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 1,
+                "Down should move to index 1");
+
+    /* Down → index 2 */
+    TuiUpdateResult r2 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_DOWN, 0, 0));
+    if (r2.cmd)
+        tui_cmd_free(r2.cmd);
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 2,
+                "Down should move to index 2");
+
+    /* Up → index 1 */
+    TuiUpdateResult r3 = repl_app_update((TuiModel *)app,
+                                         tui_msg_key(TUI_KEY_UP, 0, 0));
+    if (r3.cmd)
+        tui_cmd_free(r3.cmd);
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 1,
+                "Up should move to index 1");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* Popup view renders border and items */
+static void test_popup_view_renders_content(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    app->free_completions = mock_free_completions;
+
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(4 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = strdup("string-contains");
+    data->texts[3] = NULL;
+    data->count = 3;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r0 = repl_app_update((TuiModel *)app,
+                                         tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r0.cmd)
+        tui_cmd_free(r0.cmd);
+
+    /* Render view */
+    DynamicBuffer *buf = dynamic_buffer_create(0);
+    repl_app_view((const TuiModel *)app, buf);
+    const char *view_data = dynamic_buffer_data(buf);
+
+    /* Should contain popup items */
+    ASSERT_TRUE(strstr(view_data, "string-length") != NULL,
+                "view should contain first completion");
+    ASSERT_TRUE(strstr(view_data, "string-append") != NULL,
+                "view should contain second completion");
+    /* Should contain border characters */
+    ASSERT_TRUE(strstr(view_data, "\xe2\x95\xad") != NULL ||
+                    strstr(view_data, ">") != NULL,
+                "view should contain border or selection marker");
+
+    dynamic_buffer_destroy(buf);
+    repl_app_free((TuiModel *)app);
+}
+
+/* View without popup doesn't render popup content */
+static void test_view_no_popup_when_hidden(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    DynamicBuffer *buf = dynamic_buffer_create(0);
+    repl_app_view((const TuiModel *)app, buf);
+    const char *view_data = dynamic_buffer_data(buf);
+
+    /* Should NOT contain popup border */
+    ASSERT_TRUE(strstr(view_data, "completions") == NULL,
+                "view should not contain popup title when hidden");
+
+    dynamic_buffer_destroy(buf);
+    repl_app_free((TuiModel *)app);
+}
+
+/* ======================================================================
+ * Live filtering tests — typing while popup visible updates the list
+ * instead of dismissing it.
+ * ====================================================================== */
+
+/* Helper: show popup with 3 items so we can test live filtering */
+static void setup_popup_with_items(ReplAppModel *app)
+{
+    app->free_completions = mock_free_completions;
+
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(4 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = strdup("string-contains");
+    data->texts[3] = NULL;
+    data->count = 3;
+    data->word_start = 0;
+    data->prefix = strdup("str");
+
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r.cmd)
+        tui_cmd_free(r.cmd);
+}
+
+/* Typing a char while popup is visible emits TAB_COMPLETE, doesn't dismiss */
+static void test_live_filter_typing_emits_tab_complete(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    send_string(app->textinput, "str");
+    setup_popup_with_items(app);
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup), "popup should be visible");
+
+    /* Type 'i' — should forward to textinput AND emit TAB_COMPLETE */
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_char('i', 0));
+    ASSERT_TRUE(r.cmd != NULL, "typing should emit TAB_COMPLETE cmd");
+    ASSERT_TRUE(r.cmd->type == TUI_CMD_TAB_COMPLETE,
+                "cmd should be TAB_COMPLETE");
+    ASSERT_TRUE(strcmp(r.cmd->payload.tab_complete.prefix, "stri") == 0,
+                "prefix should be 'stri'");
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup),
+                "popup should still be visible (not dismissed)");
+    ASSERT_TRUE(strcmp(tui_textinput_text(app->textinput), "stri") == 0,
+                "textinput should have 'stri'");
+
+    tui_cmd_free(r.cmd);
+    repl_app_free((TuiModel *)app);
+}
+
+/* Backspace while popup is visible emits TAB_COMPLETE with shorter prefix */
+static void test_live_filter_backspace_emits_tab_complete(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    send_string(app->textinput, "str");
+    setup_popup_with_items(app);
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup), "popup should be visible");
+
+    /* Backspace — should emit TAB_COMPLETE with prefix "st" */
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_key(TUI_KEY_BACKSPACE, 0, 0));
+    ASSERT_TRUE(r.cmd != NULL, "backspace should emit TAB_COMPLETE cmd");
+    ASSERT_TRUE(strcmp(r.cmd->payload.tab_complete.prefix, "st") == 0,
+                "prefix should be 'st'");
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup),
+                "popup should still be visible");
+
+    tui_cmd_free(r.cmd);
+    repl_app_free((TuiModel *)app);
+}
+
+/* Backspace to empty word returns NULL prefix — popup hides */
+static void test_live_filter_empty_prefix_hides_popup(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    send_string(app->textinput, "s");
+    setup_popup_with_items(app);
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup), "popup should be visible");
+
+    /* Backspace to empty — no word at cursor, popup should hide */
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_key(TUI_KEY_BACKSPACE, 0, 0));
+    /* No TAB_COMPLETE cmd (word_at_cursor returns NULL) */
+    ASSERT_TRUE(r.cmd == NULL, "no cmd when cursor leaves word");
+    ASSERT_TRUE(!tui_list_popup_is_visible(app->popup),
+                "popup should be hidden when prefix is empty");
+    ASSERT_TRUE(strcmp(tui_textinput_text(app->textinput), "") == 0,
+                "textinput should be empty");
+
+    if (r.cmd)
+        tui_cmd_free(r.cmd);
+    repl_app_free((TuiModel *)app);
+}
+
+/* COMPLETIONS_READY with popup already visible updates items (not show) */
+static void test_completions_ready_updates_existing_popup(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    send_string(app->textinput, "str");
+    setup_popup_with_items(app);
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup), "popup visible");
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 0,
+                "first item selected");
+
+    /* Move selection to index 2 */
+    tui_list_popup_move_down(app->popup);
+    tui_list_popup_move_down(app->popup);
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 2,
+                "selection at index 2");
+
+    /* Simulate a refresh: COMPLETIONS_READY arrives while popup visible */
+    app->free_completions = mock_free_completions;
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(3 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = strdup("string-append");
+    data->texts[2] = NULL;
+    data->count = 2;
+    data->word_start = 0;
+    data->prefix = strdup("stri");
+
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r.cmd)
+        tui_cmd_free(r.cmd);
+
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup),
+                "popup should still be visible after refresh");
+    /* Selection should reset to 0 (new list) */
+    ASSERT_TRUE(tui_list_popup_selected_index(app->popup) == 0,
+                "selection should reset to 0 on refresh");
+    ASSERT_TRUE(strcmp(tui_list_popup_selected_text(app->popup), "string-length") == 0,
+                "first item should be 'string-length'");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* COMPLETIONS_READY with 0 matches hides popup */
+static void test_completions_ready_zero_matches_hides_popup(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    send_string(app->textinput, "str");
+    setup_popup_with_items(app);
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup), "popup visible");
+
+    /* Simulate 0 matches */
+    app->free_completions = mock_free_completions;
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = NULL;
+    data->count = 0;
+    data->word_start = 0;
+    data->prefix = strdup("strxyz");
+
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r.cmd)
+        tui_cmd_free(r.cmd);
+
+    ASSERT_TRUE(!tui_list_popup_is_visible(app->popup),
+                "popup should hide on 0 matches");
+
+    repl_app_free((TuiModel *)app);
+}
+
+/* COMPLETIONS_READY with 1 match during refresh shows in popup (no auto-insert) */
+static void test_completions_ready_single_match_refresh_keeps_popup(void)
+{
+    ReplAppConfig cfg = { .terminal_width = 80, .terminal_height = 24 };
+    TuiInitResult ir = repl_app_init(&cfg);
+    ReplAppModel *app = (ReplAppModel *)ir.model;
+
+    send_string(app->textinput, "str");
+    setup_popup_with_items(app);
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup), "popup visible");
+
+    /* Simulate 1 match during refresh */
+    app->free_completions = mock_free_completions;
+    ReplCompletionsData *data = calloc(1, sizeof(ReplCompletionsData));
+    data->texts = malloc(2 * sizeof(char *));
+    data->texts[0] = strdup("string-length");
+    data->texts[1] = NULL;
+    data->count = 1;
+    data->word_start = 0;
+    data->prefix = strdup("string-l");
+
+    TuiUpdateResult r = repl_app_update((TuiModel *)app,
+                                        tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data));
+    if (r.cmd)
+        tui_cmd_free(r.cmd);
+
+    /* During refresh, 1 match shows in popup — no auto-insert */
+    ASSERT_TRUE(tui_list_popup_is_visible(app->popup),
+                "popup should stay visible for single match during refresh");
+    ASSERT_TRUE(strcmp(tui_list_popup_selected_text(app->popup), "string-length") == 0,
+                "popup should show the single match");
+    /* Text should NOT be auto-inserted */
+    ASSERT_TRUE(strcmp(tui_textinput_text(app->textinput), "str") == 0,
+                "text should not change during refresh single match");
+
+    repl_app_free((TuiModel *)app);
+}
+
 int main(void)
 {
     lisp_init();
@@ -317,6 +966,26 @@ int main(void)
     RUN_TEST(test_ctrl_c_aborts_edit);
     RUN_TEST(test_on_submit_no_double_free);
     RUN_TEST(test_view_empty_after_submit);
+
+    /* Completion popup tests */
+    RUN_TEST(test_tab_emits_tab_complete_cmd);
+    RUN_TEST(test_single_completion_inserts_no_popup);
+    RUN_TEST(test_multiple_completions_shows_popup);
+    RUN_TEST(test_popup_tab_cycles_down);
+    RUN_TEST(test_popup_enter_inserts_and_hides);
+    RUN_TEST(test_popup_escape_dismisses);
+    RUN_TEST(test_popup_ctrl_c_dismisses_and_breaks);
+    RUN_TEST(test_popup_arrow_keys_navigate);
+    RUN_TEST(test_popup_view_renders_content);
+    RUN_TEST(test_view_no_popup_when_hidden);
+
+    /* Live filtering tests */
+    RUN_TEST(test_live_filter_typing_emits_tab_complete);
+    RUN_TEST(test_live_filter_backspace_emits_tab_complete);
+    RUN_TEST(test_live_filter_empty_prefix_hides_popup);
+    RUN_TEST(test_completions_ready_updates_existing_popup);
+    RUN_TEST(test_completions_ready_zero_matches_hides_popup);
+    RUN_TEST(test_completions_ready_single_match_refresh_keeps_popup);
 
     lisp_cleanup();
 

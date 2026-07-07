@@ -11,7 +11,24 @@
 #include <stddef.h>
 
 #include <boba/component.h>
+#include <boba/components/list_popup.h>
 #include <boba/components/textinput.h>
+
+/* Forward declaration — full type in boba/runtime.h */
+typedef struct TuiRuntime TuiRuntime;
+
+/* Custom message types for Elm Architecture completion flow */
+#define REPL_MSG_COMPLETIONS_READY (TUI_MSG_CUSTOM_BASE + 1)
+
+/* Payload for REPL_MSG_COMPLETIONS_READY — owned by the message.
+ * The update handler must free texts/prefix after processing. */
+typedef struct
+{
+    char **texts; /* NULL-terminated array of completion strings (owned) */
+    int count;
+    int word_start;
+    char *prefix; /* the prefix that was completed (owned) */
+} ReplCompletionsData;
 
 /* ReplApp configuration */
 typedef struct
@@ -20,11 +37,12 @@ typedef struct
     int terminal_height;
 } ReplAppConfig;
 
-/* ReplApp model — just a textinput in inline mode */
+/* ReplApp model — textinput + completion popup in inline mode */
 typedef struct
 {
     TuiModel base;
     TuiTextInput *textinput;
+    TuiListPopup *popup;
     int terminal_width;
     int terminal_height;
 
@@ -42,6 +60,13 @@ typedef struct
     void (*on_break)(void);
 
     void (*on_submit)(char *text);
+
+    /* Completion provider: fetches completions for a prefix.
+     * Returns a NULL-terminated array of strings (caller frees via
+     * free_completions). May return NULL. */
+    char **(*on_tab_complete)(const char *prefix, int word_start,
+                              const char *buffer, int cursor_pos);
+    void (*free_completions)(char **completions);
 } ReplAppModel;
 
 /* TuiComponent interface */
@@ -52,6 +77,10 @@ void repl_app_free(TuiModel *model);
 
 /* Set the prompt string */
 void repl_app_set_prompt(ReplAppModel *app, const char *prompt);
+
+/* Set runtime handle — needed for posting completion messages back
+ * to the update loop. Call after runtime creation. */
+void repl_app_set_runtime(TuiRuntime *rt);
 
 /* Get component interface for ReplApp */
 const TuiComponent *repl_app_component(void);

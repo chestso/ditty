@@ -14,6 +14,7 @@
 #include "repl_app.h"
 #include <boba/ansi_sequences.h>
 #include <boba/cmd.h>
+#include <boba/msg.h>
 #include <boba/runtime.h>
 #include <ditty/highlight.h>
 #endif
@@ -162,6 +163,15 @@ static LispCompleteContext detect_context(const char *buffer, int cursor_pos)
     }
 
     return LISP_COMPLETE_ALL;
+}
+
+/* Completion provider — bridges repl_app to the lisp completion API */
+static char **repl_tab_complete(const char *prefix, int word_start,
+                                const char *buffer, int cursor_pos)
+{
+    (void)word_start;
+    LispCompleteContext ctx = detect_context(buffer, cursor_pos);
+    return lisp_get_completions(g_env, prefix, ctx);
 }
 
 /* --- Completeness check for Enter interception --- */
@@ -370,66 +380,59 @@ static void handle_tab_complete(TuiCmd *cmd)
     const char *buffer = tui_textinput_text(g_app->textinput);
     int cursor_pos = (int)tui_textinput_cursor(g_app->textinput);
 
-    LispCompleteContext ctx = detect_context(buffer, cursor_pos);
-    char **completions = lisp_get_completions(g_env, prefix, ctx);
+    char **completions = NULL;
+    if (g_app->on_tab_complete)
+        completions = g_app->on_tab_complete(prefix, word_start, buffer, cursor_pos);
 
-    if (completions && completions[0]) {
-        int count = 0;
-        while (completions[count])
-            count++;
+    if (!completions || !completions[0]) {
+        /* No completions — nothing to do */
+        if (completions && g_app->free_completions)
+            g_app->free_completions(completions);
+        return;
+    }
 
-        if (count == 1) {
-            tui_textinput_insert_completion(g_app->textinput, word_start, completions[0]);
-        } else {
-            const char *first = completions[0];
-            int common_len = (int)strlen(first);
-            for (int c = 1; c < count; c++) {
-                int j = 0;
-                while (j < common_len && completions[c][j] == first[j])
-                    j++;
-                common_len = j;
-            }
+    int count = 0;
+    while (completions[count])
+        count++;
 
-            int prefix_len = (int)strlen(prefix);
-            if (common_len > prefix_len) {
-                char *common = malloc(common_len + 1);
-                if (common) {
-                    memcpy(common, first, common_len);
-                    common[common_len] = '\0';
-                    tui_textinput_insert_completion(g_app->textinput, word_start, common);
-                    free(common);
-                }
-            } else {
-                /* Display tabular list */
-                int max_len = 0;
-                for (int c = 0; c < count; c++) {
-                    int len = (int)strlen(completions[c]);
-                    if (len > max_len)
-                        max_len = len;
-                }
-                int col_width = max_len + 2;
-                int term_cols = tui_runtime_get_width(g_runtime);
-                int cols = term_cols / col_width;
-                if (cols < 1)
-                    cols = 1;
-
-                /* Print completions directly to terminal */
-                tui_runtime_stop(g_runtime);
-                printf("\n");
-                for (int c = 0; c < count; c++) {
-                    int last_in_row = ((c + 1) % cols == 0) || (c == count - 1);
-                    if (last_in_row)
-                        printf("%s\n", completions[c]);
-                    else
-                        printf("%-*s", col_width, completions[c]);
-                }
-                tui_runtime_start(g_runtime);
+    /* Compute common prefix for multiple matches — only on initial Tab.
+     * During live filtering (popup already visible), just update the list
+     * without modifying the text. */
+    if (count > 1 && !tui_list_popup_is_visible(g_app->popup)) {
+        const char *first = completions[0];
+        int common_len = (int)strlen(first);
+        for (int c = 1; c < count; c++) {
+            int j = 0;
+            while (j < common_len && completions[c][j] == first[j])
+                j++;
+            common_len = j;
+        }
+        int prefix_len = (int)strlen(prefix);
+        if (common_len > prefix_len) {
+            /* Insert the common prefix, then show popup with all matches */
+            char *common = malloc(common_len + 1);
+            if (common) {
+                memcpy(common, first, common_len);
+                common[common_len] = '\0';
+                tui_textinput_insert_completion(g_app->textinput, word_start, common);
+                free(common);
             }
         }
+    }
 
-        for (int c = 0; c < count; c++)
-            free(completions[c]);
-        free(completions);
+    /* Package completions into a message and post back to repl_app_update */
+    ReplCompletionsData *data = malloc(sizeof(ReplCompletionsData));
+    if (data) {
+        data->texts = completions;
+        data->count = count;
+        data->word_start = word_start;
+        data->prefix = strdup(prefix);
+        TuiMsg reply = tui_msg_custom(REPL_MSG_COMPLETIONS_READY, data);
+        tui_runtime_post(g_runtime, reply);
+    } else {
+        /* Allocation failed — fall back to freeing completions */
+        if (g_app->free_completions)
+            g_app->free_completions(completions);
     }
 }
 
@@ -499,10 +502,17 @@ static void run_interactive_repl(Environment *env)
     /* Wire flare syntax highlighting into the textinput */
     tui_textinput_set_text_renderer(g_app->textinput, highlight_lisp, NULL);
 
+    /* Wire completion provider */
+    g_app->on_tab_complete = repl_tab_complete;
+    g_app->free_completions = lisp_free_completions;
+
     /* Wire completeness check for Enter interception */
     g_app->is_complete = is_form_complete;
     g_app->compute_indent = compute_auto_indent;
     g_app->on_break = handle_break;
+
+    /* Give repl_app the runtime handle for posting messages */
+    repl_app_set_runtime(g_runtime);
 
     atexit(cleanup);
 
