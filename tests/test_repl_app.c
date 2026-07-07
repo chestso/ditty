@@ -707,10 +707,9 @@ static void test_popup_view_renders_content(void)
                 "view should contain first completion");
     ASSERT_TRUE(strstr(view_data, "string-append") != NULL,
                 "view should contain second completion");
-    /* Should contain border characters */
-    ASSERT_TRUE(strstr(view_data, "\xe2\x95\xad") != NULL ||
-                    strstr(view_data, ">") != NULL,
-                "view should contain border or selection marker");
+    /* Should contain SGR styling for the selected row */
+    ASSERT_TRUE(strstr(view_data, "\033[") != NULL,
+                "view should contain ANSI styling");
 
     dynamic_buffer_destroy(buf);
     repl_app_free((TuiModel *)app);
