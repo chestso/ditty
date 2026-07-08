@@ -734,9 +734,13 @@ static LispObject *builtin_use_package(LispObject *args, Environment *env)
         return lisp_make_error(msg);
     }
 
-    /* Import all bindings from src_pkg into the current package.
+    /* Import exported bindings from src_pkg into the current package.
      * If an explicit export list exists, only import exported symbols.
-     * If no export list exists, import all bindings (default = all exported). */
+     * If no export list exists, import all bindings (default = all exported).
+     * Only import bindings that don't already exist (in any package) to avoid
+     * re-tagging bindings from other packages. Since env_lookup finds bindings
+     * regardless of package, imported symbols are accessible unqualified
+     * immediately after use-package. */
     Symbol *cur_pkg = env_current_package(env);
     e = env;
     while (e != NULL) {
@@ -745,7 +749,14 @@ static LispObject *builtin_use_package(LispObject *args, Environment *env)
             if (binding->package == src_pkg) {
                 LispObject *sym = lisp_intern(binding->symbol->name);
                 if (is_symbol_exported(src_pkg->name, sym)) {
-                    env_define(env, binding->symbol, binding->value, cur_pkg);
+                    /* Only define if no binding exists yet (any package).
+                     * If a binding already exists, the value is already
+                     * accessible via env_lookup (unqualified) and
+                     * env_lookup_in_package (qualified). */
+                    LispObject *existing = env_lookup(env, binding->symbol);
+                    if (existing == NULL) {
+                        env_define(env, binding->symbol, binding->value, cur_pkg);
+                    }
                 }
             }
         }

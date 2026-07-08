@@ -112,6 +112,7 @@ void env_define(Environment *env, Symbol *sym, LispObject *value, Symbol *packag
     while (binding != NULL) {
         if (binding->symbol == sym) {
             binding->value = value;
+            binding->package = package;
             return;
         }
         binding = binding->next;
