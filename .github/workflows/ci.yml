@@ -1,4 +1,4 @@
-name: Windows
+name: CI
 
 on:
   push:
@@ -11,8 +11,50 @@ permissions:
   contents: write
 
 jobs:
-  build-and-test:
-    name: Build & Test (${{ matrix.label }})
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout ditty
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake libtool make pkg-config \
+            libgc-dev libpcre2-dev
+
+      - name: Build ditty
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            ../configure --enable-release
+          else
+            ../configure
+          fi
+          make -j"$(nproc)"
+
+      - name: Run tests
+        run: make -C build check
+
+      - name: Build dist tarball
+        run: make -C build dist
+
+      - name: Upload dist tarball
+        uses: actions/upload-artifact@v7
+        with:
+          name: ditty-linux-dist
+          path: build/ditty-*.tar.gz
+          if-no-files-found: error
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 1 || 30 }}
+
+  windows:
+    name: Windows (${{ matrix.label }})
     strategy:
       fail-fast: false
       matrix:
@@ -85,7 +127,7 @@ jobs:
       - name: Build portable ZIP
         run: make -C build dist-portable
 
-      - name: Upload build artifact
+      - name: Upload portable ZIP
         uses: actions/upload-artifact@v7
         with:
           name: ditty-windows-${{ matrix.label }}
@@ -96,20 +138,27 @@ jobs:
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-and-test
+    needs: [linux, windows]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download x86_64 artifact
+      - name: Download Linux dist tarball
+        uses: actions/download-artifact@v5
+        with:
+          name: ditty-linux-dist
+          path: artifacts/linux
+
+      - name: Download Windows portable ZIP
         uses: actions/download-artifact@v5
         with:
           name: ditty-windows-x86_64
-          path: artifacts/x86_64
+          path: artifacts/windows
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            artifacts/x86_64/ditty-*-windows-*.zip
+            artifacts/linux/ditty-*.tar.gz
+            artifacts/windows/ditty-*-windows-*.zip
           generate_release_notes: false
           fail_on_unmatched_files: true
