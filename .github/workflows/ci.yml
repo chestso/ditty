@@ -117,6 +117,7 @@ jobs:
           ./autogen.sh
           mkdir build && cd build
           ../configure
+          make -j"$(nproc)"
           make dist
 
       - name: Download Windows portable ZIP
