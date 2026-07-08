@@ -15,6 +15,12 @@
 #endif
 
 #ifdef _WIN32
+#define PATH_SEP '\\'
+#else
+#define PATH_SEP '/'
+#endif
+
+#ifdef _WIN32
 /* Convert UTF-8 string to UTF-16 (wide char) for Windows APIs.
  * Caller must free the returned buffer with free().
  *
@@ -314,14 +320,33 @@ static const char *file_resolve_one(const char *filename, char *resolved, size_t
     if (file_exists(filename))
         return filename;
 
+    /* Try DITTY_LISP_PATH directories */
+    const char *lisp_path = getenv("DITTY_LISP_PATH");
+    if (lisp_path && lisp_path[0]) {
+        size_t path_len = strlen(lisp_path);
+        char *path_copy = malloc(path_len + 1);
+        if (path_copy) {
+            memcpy(path_copy, lisp_path, path_len + 1);
+            char *saveptr = NULL;
 #ifdef _WIN32
-    /* Try XDG_DATA_HOME/ditty/ (power user override) */
-    const char *xdg_data = getenv("XDG_DATA_HOME");
-    if (xdg_data && xdg_data[0]) {
-        snprintf(resolved, resolved_size, "%s\\ditty\\%s", xdg_data, filename);
-        if (file_exists(resolved))
-            return resolved;
+            const char *sep = ";";
+#else
+            const char *sep = ":";
+#endif
+            char *dir = strtok_r(path_copy, sep, &saveptr);
+            while (dir) {
+                snprintf(resolved, resolved_size, "%s%c%s", dir, PATH_SEP, filename);
+                if (file_exists(resolved)) {
+                    free(path_copy);
+                    return resolved;
+                }
+                dir = strtok_r(NULL, sep, &saveptr);
+            }
+            free(path_copy);
+        }
     }
+
+#ifdef _WIN32
     /* Try %APPDATA%/ditty/ on Windows */
     const char *appdata = getenv("APPDATA");
     if (appdata && appdata[0]) {
@@ -329,12 +354,18 @@ static const char *file_resolve_one(const char *filename, char *resolved, size_t
         if (file_exists(resolved))
             return resolved;
     }
-    /* Try %MINGW_PREFIX%/share/ditty/ */
-    const char *mingw_prefix = getenv("MINGW_PREFIX");
-    if (mingw_prefix && mingw_prefix[0]) {
-        snprintf(resolved, resolved_size, "%s\\share\\ditty\\%s", mingw_prefix, filename);
-        if (file_exists(resolved))
-            return resolved;
+    /* Try exe-relative ..\share\ditty\ */
+    wchar_t wpath[MAX_PATH];
+    if (GetModuleFileNameW(NULL, wpath, MAX_PATH) > 0) {
+        char exe_path[MAX_PATH];
+        WideCharToMultiByte(CP_UTF8, 0, wpath, -1, exe_path, MAX_PATH, NULL, NULL);
+        char *last_sep = strrchr(exe_path, '\\');
+        if (last_sep) {
+            *last_sep = '\0';
+            snprintf(resolved, resolved_size, "%s\\share\\ditty\\%s", exe_path, filename);
+            if (file_exists(resolved))
+                return resolved;
+        }
     }
 #else
     /* Try XDG_DATA_HOME/ditty/ */
@@ -434,6 +465,127 @@ const char *file_resolve(const char *filename, char *resolved, size_t resolved_s
 
     /* Not found anywhere, return original (will fail at open) */
     return filename;
+}
+
+/* Try to find a library file in a single directory.
+ * Tries <dir>/<name>.lisp, then <dir>/<name>/<name>.lisp.
+ * Returns resolved path on success, NULL on failure.
+ */
+static const char *try_library_in_dir(const char *dir, const char *name,
+                                      char *resolved, size_t resolved_size)
+{
+    /* Try <dir>/<name>.lisp */
+    snprintf(resolved, resolved_size, "%s%c%s.lisp", dir, PATH_SEP, name);
+    if (file_exists(resolved))
+        return resolved;
+
+    /* Try <dir>/<name>/<name>.lisp */
+    snprintf(resolved, resolved_size, "%s%c%s%c%s.lisp", dir, PATH_SEP, name, PATH_SEP, name);
+    if (file_exists(resolved))
+        return resolved;
+
+    return NULL;
+}
+
+const char *file_resolve_library(const char *name, char *resolved, size_t resolved_size)
+{
+    if (!name || !name[0] || !resolved || resolved_size == 0)
+        return NULL;
+
+    char path_buf[4096];
+
+    /* 1. Try current working directory */
+    if (try_library_in_dir(".", name, resolved, resolved_size))
+        return resolved;
+
+    /* 2. Try DITTY_LISP_PATH directories */
+    const char *lisp_path = getenv("DITTY_LISP_PATH");
+    if (lisp_path && lisp_path[0]) {
+        size_t path_len = strlen(lisp_path);
+        char *path_copy = malloc(path_len + 1);
+        if (path_copy) {
+            memcpy(path_copy, lisp_path, path_len + 1);
+            char *saveptr = NULL;
+#ifdef _WIN32
+            const char *sep = ";";
+#else
+            const char *sep = ":";
+#endif
+            char *dir = strtok_r(path_copy, sep, &saveptr);
+            while (dir) {
+                if (try_library_in_dir(dir, name, resolved, resolved_size)) {
+                    free(path_copy);
+                    return resolved;
+                }
+                dir = strtok_r(NULL, sep, &saveptr);
+            }
+            free(path_copy);
+        }
+    }
+
+#ifdef _WIN32
+    /* 3. Try %APPDATA%\ditty\lisp\ */
+    const char *appdata = getenv("APPDATA");
+    if (appdata && appdata[0]) {
+        snprintf(path_buf, sizeof(path_buf), "%s\\ditty\\lisp", appdata);
+        if (try_library_in_dir(path_buf, name, resolved, resolved_size))
+            return resolved;
+    }
+
+    /* 4. Try exe-relative ..\share\ditty\lisp\ */
+    wchar_t wpath[MAX_PATH];
+    if (GetModuleFileNameW(NULL, wpath, MAX_PATH) > 0) {
+        char exe_path[MAX_PATH];
+        WideCharToMultiByte(CP_UTF8, 0, wpath, -1, exe_path, MAX_PATH, NULL, NULL);
+        /* Strip filename to get exe directory */
+        char *last_sep = strrchr(exe_path, '\\');
+        if (last_sep) {
+            *last_sep = '\0';
+            snprintf(path_buf, sizeof(path_buf), "%s\\share\\ditty\\lisp", exe_path);
+            if (try_library_in_dir(path_buf, name, resolved, resolved_size))
+                return resolved;
+        }
+    }
+#else
+    /* 3. Try XDG_DATA_HOME/ditty/lisp/ */
+    const char *data_home = getenv("XDG_DATA_HOME");
+    if (data_home && data_home[0]) {
+        snprintf(path_buf, sizeof(path_buf), "%s/ditty/lisp", data_home);
+        if (try_library_in_dir(path_buf, name, resolved, resolved_size))
+            return resolved;
+    } else {
+        const char *home = getenv("HOME");
+        if (home) {
+            snprintf(path_buf, sizeof(path_buf), "%s/.local/share/ditty/lisp", home);
+            if (try_library_in_dir(path_buf, name, resolved, resolved_size))
+                return resolved;
+        }
+    }
+
+    /* 4. Try each dir in XDG_DATA_DIRS/ditty/lisp/ */
+    const char *data_dirs = getenv("XDG_DATA_DIRS");
+    if (!data_dirs || !data_dirs[0])
+        data_dirs = "/usr/local/share:/usr/share";
+
+    size_t dirs_len = strlen(data_dirs);
+    char *dirs_copy = malloc(dirs_len + 1);
+    if (dirs_copy) {
+        memcpy(dirs_copy, data_dirs, dirs_len + 1);
+        char *saveptr = NULL;
+        char *dir = strtok_r(dirs_copy, ":", &saveptr);
+        while (dir) {
+            snprintf(path_buf, sizeof(path_buf), "%s/ditty/lisp", dir);
+            if (try_library_in_dir(path_buf, name, resolved, resolved_size)) {
+                free(dirs_copy);
+                return resolved;
+            }
+            dir = strtok_r(NULL, ":", &saveptr);
+        }
+        free(dirs_copy);
+    }
+#endif
+
+    return NULL;
 }
 
 int file_mkdir(const char *utf8_path)

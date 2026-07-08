@@ -1,5 +1,64 @@
 #include "builtins_internal.h"
 
+/* ---- Package export registry ---- */
+/* A static hash table mapping package name (string) -> list of exported symbols.
+ * If a package has no entry, all its bindings are considered exported (default). */
+static LispObject *export_table = NULL;
+
+static LispObject *get_export_table(void)
+{
+    if (export_table == NULL)
+        export_table = lisp_make_hash_table();
+    return export_table;
+}
+
+/* Check if a symbol is in the export list for a package.
+ * Returns 1 if exported (or if no export list exists = all exported), 0 if not. */
+static int is_symbol_exported(const char *pkg_name, LispObject *sym)
+{
+    LispObject *table = get_export_table();
+    LispObject *key = lisp_make_string(pkg_name);
+    struct HashEntry *entry = hash_table_get_entry(table, key);
+    if (entry == NULL)
+        return 1; /* No export list = all bindings exported (default) */
+
+    LispObject *exports = entry->value;
+    while (exports != NIL && LISP_TYPE(exports) == LISP_CONS) {
+        if (LISP_TYPE(lisp_car(exports)) == LISP_SYMBOL &&
+            LISP_SYM_VAL(lisp_car(exports)) == LISP_SYM_VAL(sym))
+            return 1;
+        exports = lisp_cdr(exports);
+    }
+    return 0;
+}
+
+/* ---- Feature list (*features*) helpers ---- */
+
+/* Check if a feature symbol is already in *features*. */
+static int feature_provided(Environment *env, Symbol *feature_sym)
+{
+    LispObject *features = env_lookup(env, LISP_SYM_VAL(sym_star_features_star));
+    while (features != NULL && features != NIL && LISP_TYPE(features) == LISP_CONS) {
+        if (LISP_TYPE(lisp_car(features)) == LISP_SYMBOL &&
+            LISP_SYM_VAL(lisp_car(features)) == feature_sym)
+            return 1;
+        features = lisp_cdr(features);
+    }
+    return 0;
+}
+
+/* Add a feature to *features* if not already present (idempotent). */
+static void add_feature(Environment *env, LispObject *feature_sym)
+{
+    Symbol *feature_s = LISP_SYM_VAL(feature_sym);
+    if (feature_provided(env, feature_s))
+        return;
+
+    LispObject *features = env_lookup(env, LISP_SYM_VAL(sym_star_features_star));
+    LispObject *new_list = lisp_make_cons(feature_sym, features ? features : NIL);
+    env_set(env, LISP_SYM_VAL(sym_star_features_star), new_list);
+}
+
 /* Check if a value needs constructor forms (not just lisp_print + quote) */
 static int needs_constructor(LispObject *obj)
 {
@@ -460,6 +519,242 @@ static LispObject *builtin_current_package(LispObject *args, Environment *env)
     return lisp_intern(pkg->name);
 }
 
+/* ---- provide: add a feature to *features* ---- */
+static LispObject *builtin_provide(LispObject *args, Environment *env)
+{
+    CHECK_ARGS_1("provide");
+
+    LispObject *arg = lisp_car(args);
+    LispObject *feature_sym;
+
+    if (LISP_TYPE(arg) == LISP_STRING) {
+        feature_sym = lisp_intern(LISP_STR_VAL(arg));
+    } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
+        feature_sym = arg;
+    } else {
+        return lisp_make_error("provide requires a string or symbol argument");
+    }
+
+    add_feature(env, feature_sym);
+    return feature_sym;
+}
+
+/* ---- provided?: check if a feature is in *features* ---- */
+static LispObject *builtin_provided_question(LispObject *args, Environment *env)
+{
+    CHECK_ARGS_1("provided?");
+
+    LispObject *arg = lisp_car(args);
+    Symbol *feature_s;
+
+    if (LISP_TYPE(arg) == LISP_STRING) {
+        feature_s = LISP_SYM_VAL(lisp_intern(LISP_STR_VAL(arg)));
+    } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
+        feature_s = LISP_SYM_VAL(arg);
+    } else {
+        return lisp_make_error("provided? requires a string or symbol argument");
+    }
+
+    return feature_provided(env, feature_s) ? LISP_TRUE : NIL;
+}
+
+/* ---- require: load a library if not already loaded ---- */
+static LispObject *builtin_require(LispObject *args, Environment *env)
+{
+    CHECK_ARGS_1("require");
+
+    LispObject *arg = lisp_car(args);
+    LispObject *feature_sym;
+    const char *name_str;
+
+    if (LISP_TYPE(arg) == LISP_STRING) {
+        name_str = LISP_STR_VAL(arg);
+        feature_sym = lisp_intern(name_str);
+    } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
+        feature_sym = arg;
+        name_str = LISP_SYM_VAL(arg)->name;
+    } else {
+        return lisp_make_error("require requires a string or symbol argument");
+    }
+
+    /* Already loaded? Return immediately. */
+    if (feature_provided(env, LISP_SYM_VAL(feature_sym)))
+        return feature_sym;
+
+    /* Resolve library file via load-path search. */
+    char resolved[4096];
+    const char *path = file_resolve_library(name_str, resolved, sizeof(resolved));
+    if (path == NULL) {
+        char msg[512];
+        snprintf(msg, sizeof(msg), "require: cannot find library '%s'", name_str);
+        return lisp_make_error_with_stack(msg, env);
+    }
+
+    /* Save *package* to restore after load. */
+    LispObject *saved_pkg = env_lookup(env, LISP_SYM_VAL(sym_star_package_star));
+    Symbol *feature_s = LISP_SYM_VAL(feature_sym);
+
+    /* Load the library file. */
+    LispObject *result = lisp_load_file(path, env);
+
+    /* Restore *package* (like load does). */
+    if (saved_pkg)
+        env_set(env, LISP_SYM_VAL(sym_star_package_star), saved_pkg);
+
+    /* Check for load error. */
+    if (result != NULL && LISP_TYPE(result) == LISP_ERROR)
+        return result;
+
+    /* Verify the file called provide for this feature. */
+    if (!feature_provided(env, feature_s)) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "require: file for '%s' did not call (provide '%s)",
+                 name_str, name_str);
+        return lisp_make_error_with_stack(msg, env);
+    }
+
+    return feature_sym;
+}
+
+/* ---- export: mark symbols as exported in the current package ---- */
+static LispObject *builtin_export(LispObject *args, Environment *env)
+{
+    if (args == NIL)
+        return lisp_make_error("export requires at least one argument");
+
+    Symbol *pkg = env_current_package(env);
+    LispObject *table = get_export_table();
+    LispObject *key = lisp_make_string(pkg->name);
+
+    /* Get or create the export list for this package. */
+    struct HashEntry *entry = hash_table_get_entry(table, key);
+    LispObject *exports;
+    if (entry == NULL) {
+        exports = NIL;
+    } else {
+        exports = entry->value;
+    }
+
+    /* Add each argument symbol to the export list (avoiding duplicates). */
+    LispObject *cur = args;
+    while (cur != NIL && LISP_TYPE(cur) == LISP_CONS) {
+        LispObject *sym = lisp_car(cur);
+        if (LISP_TYPE(sym) != LISP_SYMBOL) {
+            return lisp_make_error("export requires symbol arguments");
+        }
+
+        /* Check if already in export list. */
+        int found = 0;
+        LispObject *scan = exports;
+        while (scan != NIL && LISP_TYPE(scan) == LISP_CONS) {
+            if (LISP_TYPE(lisp_car(scan)) == LISP_SYMBOL &&
+                LISP_SYM_VAL(lisp_car(scan)) == LISP_SYM_VAL(sym)) {
+                found = 1;
+                break;
+            }
+            scan = lisp_cdr(scan);
+        }
+
+        if (!found) {
+            exports = lisp_make_cons(sym, exports);
+        }
+
+        cur = lisp_cdr(cur);
+    }
+
+    /* Store the updated export list. */
+    hash_table_set_entry(table, key, exports);
+
+    return LISP_TRUE;
+}
+
+/* ---- package-exports: return the list of exported symbols for a package ---- */
+static LispObject *builtin_package_exports(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("package-exports");
+
+    LispObject *arg = lisp_car(args);
+    const char *pkg_name;
+
+    if (LISP_TYPE(arg) == LISP_STRING) {
+        pkg_name = LISP_STR_VAL(arg);
+    } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
+        pkg_name = LISP_SYM_VAL(arg)->name;
+    } else {
+        return lisp_make_error("package-exports requires a string or symbol argument");
+    }
+
+    LispObject *table = get_export_table();
+    LispObject *key = lisp_make_string(pkg_name);
+    struct HashEntry *entry = hash_table_get_entry(table, key);
+
+    if (entry == NULL)
+        return NIL; /* No explicit exports = nil (but use-package imports all) */
+
+    return entry->value;
+}
+
+/* ---- use-package: import exported symbols from one package into current ---- */
+static LispObject *builtin_use_package(LispObject *args, Environment *env)
+{
+    CHECK_ARGS_1("use-package");
+
+    LispObject *arg = lisp_car(args);
+    Symbol *src_pkg;
+
+    if (LISP_TYPE(arg) == LISP_STRING) {
+        src_pkg = LISP_SYM_VAL(lisp_intern(LISP_STR_VAL(arg)));
+    } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
+        src_pkg = LISP_SYM_VAL(arg);
+    } else {
+        return lisp_make_error("use-package requires a string or symbol argument");
+    }
+
+    /* Check if the package exists by looking for any bindings. */
+    int pkg_exists = 0;
+    Environment *e = env;
+    while (e != NULL) {
+        ENV_FOR_EACH_BINDING(e, binding)
+        {
+            if (binding->package == src_pkg) {
+                pkg_exists = 1;
+                break;
+            }
+        }
+        if (pkg_exists)
+            break;
+        e = e->parent;
+    }
+
+    if (!pkg_exists) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "use-package: unknown package '%s'", src_pkg->name);
+        return lisp_make_error(msg);
+    }
+
+    /* Import all bindings from src_pkg into the current package.
+     * If an explicit export list exists, only import exported symbols.
+     * If no export list exists, import all bindings (default = all exported). */
+    Symbol *cur_pkg = env_current_package(env);
+    e = env;
+    while (e != NULL) {
+        ENV_FOR_EACH_BINDING(e, binding)
+        {
+            if (binding->package == src_pkg) {
+                LispObject *sym = lisp_intern(binding->symbol->name);
+                if (is_symbol_exported(src_pkg->name, sym)) {
+                    env_define(env, binding->symbol, binding->value, cur_pkg);
+                }
+            }
+        }
+        e = e->parent;
+    }
+
+    return LISP_TRUE;
+}
+
 static LispObject *builtin_package_symbols(LispObject *args, Environment *env)
 {
     CHECK_ARGS_1("package-symbols");
@@ -530,4 +825,10 @@ void register_packages_builtins(Environment *env)
     REGISTER("package-symbols", builtin_package_symbols);
     REGISTER("list-packages", builtin_list_packages);
     REGISTER("package-save", builtin_package_save);
+    REGISTER("provide", builtin_provide);
+    REGISTER("require", builtin_require);
+    REGISTER("provided?", builtin_provided_question);
+    REGISTER("export", builtin_export);
+    REGISTER("package-exports", builtin_package_exports);
+    REGISTER("use-package", builtin_use_package);
 }

@@ -364,6 +364,12 @@ LABEL identifies the builtin for the test name."
 ;; Packages
 (ditty--deftest-builtin in-package "(in-package foo)"     2)
 (ditty--deftest-builtin current-package "(current-package)" 2)
+(ditty--deftest-builtin require-b   "(require 'foo)"      2)
+(ditty--deftest-builtin provide-b   "(provide 'foo)"      2)
+(ditty--deftest-builtin provided-b  "(provided? 'foo)"    2)
+(ditty--deftest-builtin export-b    "(export 'foo)"       2)
+(ditty--deftest-builtin use-package "(use-package foo)"   2)
+(ditty--deftest-builtin pkg-exports "(package-exports 'foo)" 2)
 ;; Functions / meta
 (ditty--deftest-builtin eval-m     "(eval x)"             2)
 (ditty--deftest-builtin documentation-m "(documentation f)" 2)

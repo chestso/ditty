@@ -21,6 +21,7 @@ See **[LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md)** for complete function lis
 ### Advanced Features
 
 - **Package System**: Symbol-based namespace management with `in-package`, `current-package`, and `pkg:symbol` qualified access syntax
+- **Library System**: Load-once library loading with `require`/`provide`, `export`/`use-package` for selective imports, and `DITTY_LISP_PATH` + XDG-based search paths
 - **Condition System**: Emacs Lisp-style error handling with `signal`, `condition-case`, `unwind-protect`, and error introspection
 - **Tail Call Optimization**: Trampoline-based tail recursion enables efficient recursive algorithms without stack overflow
 - **Lexical Scoping**: First-class functions and closures with captured environments

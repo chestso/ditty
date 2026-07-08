@@ -620,6 +620,105 @@ int main(int argc, char **argv)
 
     env_define(env, LISP_SYM_VAL(lisp_intern("*command-line-args*")), NIL, pkg_user);
 
+    /* Populate *load-path* from DITTY_LISP_PATH + XDG data directories */
+    {
+        LispObject *load_path = NIL;
+        const char *lisp_path = getenv("DITTY_LISP_PATH");
+        if (lisp_path && lisp_path[0]) {
+            char *copy = strdup(lisp_path);
+            char *saveptr = NULL;
+#ifdef _WIN32
+            const char *sep = ";";
+#else
+            const char *sep = ":";
+#endif
+            char *dir = strtok_r(copy, sep, &saveptr);
+            while (dir) {
+                LispObject *node = lisp_make_cons(lisp_make_string(dir), NIL);
+                if (load_path == NIL) {
+                    load_path = node;
+                } else {
+                    LispObject *t = load_path;
+                    while (LISP_CDR(t) != NIL)
+                        t = LISP_CDR(t);
+                    LISP_CDR(t) = node;
+                }
+                dir = strtok_r(NULL, sep, &saveptr);
+            }
+            free(copy);
+        }
+#ifndef _WIN32
+        const char *data_home = getenv("XDG_DATA_HOME");
+        if (data_home && data_home[0]) {
+            char buf[4096];
+            snprintf(buf, sizeof(buf), "%s/ditty/lisp", data_home);
+            LispObject *node = lisp_make_cons(lisp_make_string(buf), NIL);
+            if (load_path == NIL) {
+                load_path = node;
+            } else {
+                LispObject *t = load_path;
+                while (LISP_CDR(t) != NIL)
+                    t = LISP_CDR(t);
+                LISP_CDR(t) = node;
+            }
+        } else {
+            const char *home = getenv("HOME");
+            if (home) {
+                char buf[4096];
+                snprintf(buf, sizeof(buf), "%s/.local/share/ditty/lisp", home);
+                LispObject *node = lisp_make_cons(lisp_make_string(buf), NIL);
+                if (load_path == NIL) {
+                    load_path = node;
+                } else {
+                    LispObject *t = load_path;
+                    while (LISP_CDR(t) != NIL)
+                        t = LISP_CDR(t);
+                    LISP_CDR(t) = node;
+                }
+            }
+        }
+        const char *data_dirs = getenv("XDG_DATA_DIRS");
+        if (!data_dirs || !data_dirs[0])
+            data_dirs = "/usr/local/share:/usr/share";
+        {
+            char *copy = strdup(data_dirs);
+            char *saveptr = NULL;
+            char *dir = strtok_r(copy, ":", &saveptr);
+            while (dir) {
+                char buf[4096];
+                snprintf(buf, sizeof(buf), "%s/ditty/lisp", dir);
+                LispObject *node = lisp_make_cons(lisp_make_string(buf), NIL);
+                if (load_path == NIL) {
+                    load_path = node;
+                } else {
+                    LispObject *t = load_path;
+                    while (LISP_CDR(t) != NIL)
+                        t = LISP_CDR(t);
+                    LISP_CDR(t) = node;
+                }
+                dir = strtok_r(NULL, ":", &saveptr);
+            }
+            free(copy);
+        }
+#else
+        const char *appdata = getenv("APPDATA");
+        if (appdata && appdata[0]) {
+            char buf[4096];
+            snprintf(buf, sizeof(buf), "%s\\ditty\\lisp", appdata);
+            LispObject *node = lisp_make_cons(lisp_make_string(buf), NIL);
+            if (load_path == NIL) {
+                load_path = node;
+            } else {
+                LispObject *t = load_path;
+                while (LISP_CDR(t) != NIL)
+                    t = LISP_CDR(t);
+                LISP_CDR(t) = node;
+            }
+        }
+#endif
+        env_define(env, LISP_SYM_VAL(lisp_intern("*load-path*")), load_path, pkg_core);
+    }
+
     /* Handle -e/--eval/-c flag */
     if (argc > 2 && (strcmp(argv[1], "-e") == 0 || strcmp(argv[1], "--eval") == 0 || strcmp(argv[1], "-c") == 0)) {
         const char *code = argv[2];

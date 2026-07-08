@@ -1278,6 +1278,22 @@ A list of command-line arguments passed to the script after the `--` separator.
 lisp-repl script.lisp -- arg1 arg2 arg3
 ```
 
+#### `*features*`
+
+A list of loaded feature symbols. Updated by `provide` and checked by `require`. Initially `nil`.
+
+```lisp
+*features* ; => (mylib utils lisp-fmt)
+```
+
+#### `*load-path*`
+
+A read-only list of directory strings where `require` searches for libraries. Populated at startup from `DITTY_LISP_PATH` and XDG data directories.
+
+```lisp
+*load-path* ; => ("/home/me/.local/share/ditty/lisp" "/usr/local/share/ditty/lisp" ...)
+```
+
 **In script:**
 
 ```lisp
@@ -1403,6 +1419,12 @@ Functions for managing the package system. All functions also have `package-` pr
 - `list-packages` - Return a list of all package names as symbols. Alias: `package-list`
 - `package-symbols` - Return an alist of `(symbol . value)` pairs for a named package (symbol)
 - `package-save` - Save package bindings to a file as valid Lisp source. Takes a filename and optional package name symbol (defaults to current package). The output file can be loaded with `(load filename)`.
+- `provide` - Register a feature as loaded by adding it to `*features*`. Idempotent.
+- `require` - Load a library if not already loaded. Searches load paths for the library file, loads it, and verifies `provide` was called for the feature.
+- `provided?` - Check if a feature has been provided (is in `*features*`).
+- `export` - Mark symbols as exported from the current package (takes quoted symbols).
+- `package-exports` - Return the list of exported symbols for a package, or nil if no explicit exports.
+- `use-package` - Import exported symbols from a package into the current package.
 
 All package functions accept symbols as package names. Strings are also accepted for convenience and are converted to symbols internally.
 
@@ -2044,6 +2066,66 @@ The reader translates `pkg:sym` into the `(package-ref "pkg" sym)` special form.
 (package-save "session.lisp")          ; save current package
 (load "math-lib.lisp")                 ; restore later
 ```
+
+## Library System
+
+Ditty Lisp has a library system built on top of the package system, using `require`/`provide` for load-once semantics (similar to Emacs Lisp). This is orthogonal to packages (namespaces) — a library file defines bindings in a package and calls `provide` to register itself as loaded.
+
+### `require` / `provide`
+
+`provide` adds a feature symbol to `*features*`. `require` checks if a feature is already loaded; if not, it searches load paths for the library file, loads it, and verifies `provide` was called.
+
+```lisp
+;; mylib.lisp — a library file
+(in-package 'mylib)
+(export 'greet 'farewell)
+(defun greet (name) (concat "Hello, " name))
+(provide 'mylib)
+
+;; main.lisp — using the library
+(require 'mylib)
+(mylib:greet "World")          ; qualified access
+(use-package 'mylib)           ; or import for unqualified access
+(greet "World")
+```
+
+`require` saves and restores `*package*`, so a library's `in-package` does not leak to the caller. Transitive dependencies work naturally — if `mylib` calls `(require 'utils)` at its top, loading `mylib` automatically pulls in `utils`.
+
+### Library Search Path
+
+`require` searches these locations in order (first match wins):
+
+1. Current directory (`name.lisp`, then `name/name.lisp`)
+2. Directories in `DITTY_LISP_PATH` (colon-separated on Unix, semicolon on Windows)
+3. `$XDG_DATA_HOME/ditty/lisp/` (default: `~/.local/share/ditty/lisp/`)
+4. Each dir in `$XDG_DATA_DIRS/ditty/lisp/` (default: `/usr/local/share:/usr/share`)
+
+On Windows: `%APPDATA%\ditty\lisp\` (user) and exe-relative `..\share\ditty\lisp\` (system).
+
+`DITTY_LISP_PATH` is analogous to Emacs' `load-path` and Common Lisp's `CL_SOURCE_REGISTRY`.
+
+### Export and use-package
+
+`export` marks which symbols in a package are public. Non-exported symbols remain accessible only via `pkg:symbol` qualified syntax. If `export` is never called for a package, `use-package` imports all bindings (default = all exported, Emacs Lisp convention).
+
+```lisp
+(in-package 'mylib)
+(export 'greet 'farewell)
+(defun greet (name) ...)
+(defun internal-helper () ...)  ; not exported
+
+(in-package 'user)
+(use-package 'mylib)            ; imports greet, farewell (not internal-helper)
+(greet "World")                 ; accessible unqualified
+mylib:internal-helper            ; still accessible via qualified access
+```
+
+### Introspection
+
+- `*features*` — list of loaded feature symbols
+- `*load-path*` — list of library search directory strings
+- `provided?` — check if a feature is loaded
+- `package-exports` — return a package's exported symbols
 
 ## Tail Recursion Optimization
 

@@ -344,6 +344,7 @@ extern LispObject *sym_error;
 extern LispObject *sym_unclosed_input; /* reader signals incomplete input with this type */
 extern LispObject *sym_package_ref;
 extern LispObject *sym_star_package_star;
+extern LispObject *sym_star_features_star;
 
 /* Name array for completion API */
 extern const char *lisp_special_forms[];

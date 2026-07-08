@@ -165,6 +165,7 @@ TESTS = \
     advanced/progn.lisp \
     advanced/quasiquote.lisp \
     advanced/regex.lisp \
+    advanced/require_provide.lisp \
     advanced/introspection.lisp \
     advanced/tail_recursion.lisp \
     advanced/utf8.lisp \
@@ -232,6 +233,7 @@ EXTRA_DIST = \
     advanced/progn.lisp \
     advanced/quasiquote.lisp \
     advanced/regex.lisp \
+    advanced/require_provide.lisp \
     advanced/introspection.lisp \
     advanced/tail_recursion.lisp \
     advanced/utf8.lisp \

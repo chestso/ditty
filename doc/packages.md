@@ -1,6 +1,6 @@
 # Packages
 
-Package (namespace) management.
+Package (namespace) and library management.
 
 ## `in-package`
 
@@ -95,3 +95,188 @@ are extracted into separate defun forms referenced by name.
 
 With `:format`, the output is pretty-printed using `format-file` from lisp-fmt.lisp.
 Load lisp-fmt.lisp first: `(load "lisp/lisp-fmt.lisp")`.
+
+## `provide`
+
+Register a feature as loaded by adding it to `*features*`.
+
+Calling `provide` multiple times with the same feature is idempotent —
+the feature is only added once.
+
+### Parameters
+
+- `feature` - Feature name (symbol). Strings also accepted.
+
+### Returns
+
+The feature symbol.
+
+### Examples
+
+```lisp
+(provide 'mylib)
+(provide "mylib") ; string also accepted
+```
+
+## `require`
+
+Load a library if it has not already been loaded.
+
+Checks if the feature is already in `*features*`. If so, returns immediately.
+Otherwise, searches load paths for the library file, loads it (which should
+call `provide`), and verifies the feature was provided.
+
+### Load Path Search Order
+
+1. Current directory (`name.lisp`, then `name/name.lisp`)
+2. Directories in `DITTY_LISP_PATH` (colon-separated on Unix, semicolon on Windows)
+3. `$XDG_DATA_HOME/ditty/lisp/` (default: `~/.local/share/ditty/lisp/`)
+4. Each dir in `$XDG_DATA_DIRS/ditty/lisp/` (default: `/usr/local/share:/usr/share`)
+
+On Windows: `%APPDATA%\ditty\lisp\` (user) and exe-relative `..\share\ditty\lisp\` (system).
+
+### Parameters
+
+- `feature` - Feature name (symbol). Strings also accepted.
+
+### Returns
+
+The feature symbol on success.
+
+### Errors
+
+- If the library file cannot be found.
+- If the file loads but does not call `(provide 'feature)` for the expected feature.
+
+### Examples
+
+```lisp
+(require 'mylib)
+(require "mylib") ; string also accepted
+```
+
+### Notes
+
+`require` saves and restores `*package*`, so a library's `in-package` does not
+leak to the caller. Transitive dependencies work naturally: if `mylib` calls
+`(require 'utils)` at its top, loading `mylib` automatically pulls in `utils`.
+
+## `provided?`
+
+Check if a feature has been provided (is in `*features*`).
+
+### Parameters
+
+- `feature` - Feature name (symbol). Strings also accepted.
+
+### Returns
+
+`#t` if the feature is loaded, `nil` otherwise.
+
+### Examples
+
+```lisp
+(provided? 'mylib) ; => #t if (provide 'mylib) or (require 'mylib) was called
+(provided? 'nonexistent) ; => nil
+```
+
+## `export`
+
+Mark symbols as exported from the current package.
+
+Exported symbols are the public API of a package. Non-exported symbols are
+internal and only accessible via `pkg:symbol` qualified access.
+
+If `export` is never called for a package, `use-package` imports all bindings
+(default = all exported).
+
+### Parameters
+
+- `symbol` ... - One or more quoted symbols to export.
+
+### Returns
+
+`#t` on success.
+
+### Examples
+
+```lisp
+(in-package 'mylib)
+(export 'greet 'farewell)
+(defun greet (name) (concat "Hello, " name))
+(defun farewell (name) (concat "Goodbye, " name))
+(defun internal-helper () "secret") ; not exported
+(provide 'mylib)
+```
+
+## `package-exports`
+
+Return the list of exported symbols for a package.
+
+### Parameters
+
+- `name` - Package name (symbol). Strings also accepted.
+
+### Returns
+
+A list of exported symbols, or `nil` if no explicit exports were set.
+
+### Examples
+
+```lisp
+(package-exports 'mylib) ; => (greet farewell)
+(package-exports 'core) ; => nil (no explicit exports)
+```
+
+### Notes
+
+Returns `nil` when no `export` has been called for the package. In this case,
+`use-package` treats all bindings as exported (Emacs Lisp convention).
+
+## `use-package`
+
+Import exported symbols from a package into the current package.
+
+After `use-package`, exported symbols from the source package are accessible
+unqualified in the current package. Non-exported symbols remain accessible
+only via `pkg:symbol` qualified syntax.
+
+If the source package has no explicit `export` list, all bindings are imported.
+
+### Parameters
+
+- `name` - Package name (symbol). Strings also accepted.
+
+### Returns
+
+`#t` on success.
+
+### Errors
+
+- If the named package does not exist (has no bindings).
+
+### Examples
+
+```lisp
+(require 'mylib)
+(use-package 'mylib)
+(greet "World") ; now accessible unqualified
+```
+
+## `*features*`
+
+A list of loaded feature symbols. Updated by `provide` and checked by `require`.
+Initially `nil`.
+
+```lisp
+*features* ; => (mylib utils lisp-fmt)
+```
+
+## `*load-path*`
+
+A read-only list of directory strings where `require` searches for libraries.
+Populated at startup from `DITTY_LISP_PATH` and XDG data directories.
+
+```lisp
+*load-path* ; => ("/home/me/.local/share/ditty/lisp" "/usr/local/share/ditty/lisp" ...)
+```

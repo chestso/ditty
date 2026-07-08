@@ -160,7 +160,8 @@ in the X-macro; it is listed here for correct font-lock.")
     "get-output-string"
     ;; --- Filesystem (src/builtins_filesystem.c) ---
     "home-directory" "expand-path" "getenv" "data-directory"
-    "config-directory" "file-exists?" "mkdir"
+    "config-directory" "file-exists?" "mkdir" "delete-directory"
+    "file-is-directory?" "system-type"
     ;; --- Time / profiling (src/builtins_time_profiling.c) ---
     "current-time-ms" "profile-start" "profile-stop"
     "profile-report" "profile-reset"
@@ -169,7 +170,8 @@ in the X-macro; it is listed here for correct font-lock.")
     "signal" "error"
     ;; --- Packages (src/builtins_packages.c) ---
     "in-package" "current-package" "package-symbols"
-    "list-packages" "package-save"
+    "list-packages" "package-save" "provide" "require" "provided?"
+    "export" "use-package" "package-exports"
     ;; --- Aliases created via defalias in src/lisp.c ---
     "doc" "doc-set!" "string-append" "string-split" "string-join"
     "string-length" "package-set" "package-current" "package-list")

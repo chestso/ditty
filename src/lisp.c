@@ -28,6 +28,7 @@ LispObject *sym_error = NULL;
 LispObject *sym_unclosed_input = NULL;
 LispObject *sym_package_ref = NULL;
 LispObject *sym_star_package_star = NULL;
+LispObject *sym_star_features_star = NULL;
 
 /* Name array for completion API (third column ignored) */
 const char *lisp_special_forms[] = {
@@ -692,6 +693,7 @@ Environment *lisp_init(void)
     sym_unclosed_input = lisp_intern("unclosed-input");
     sym_package_ref = lisp_intern("package-ref");
     sym_star_package_star = lisp_intern("*package*");
+    sym_star_features_star = lisp_intern("*features*");
     pkg_core = LISP_SYM_VAL(lisp_intern("core"));
     pkg_user = LISP_SYM_VAL(lisp_intern("user"));
 
@@ -700,6 +702,10 @@ Environment *lisp_init(void)
 
     /* Set *package* to core for builtin and stdlib registration */
     env_define(env, LISP_SYM_VAL(sym_star_package_star), lisp_intern("core"), pkg_core);
+
+    /* Initialize *features* to nil (empty list) */
+    env_define(env, LISP_SYM_VAL(sym_star_features_star), NIL, pkg_core);
+
     register_builtins(env);
 
     /* Load standard library (defun, defvar, defconst, defalias, aliases) */
