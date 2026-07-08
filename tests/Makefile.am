@@ -184,10 +184,4 @@ EXTRA_DIST = \
     test_repl_app.c \
     flare_testkit.h \
     test-helpers.lisp \
-    snapshots/simple_expression_truecolor.txt \
-    snapshots/simple_expression_256.txt \
-    snapshots/simple_expression_16.txt \
-    snapshots/define_lambda_truecolor.txt \
-    snapshots/quasiquote_truecolor.txt \
-    snapshots/comment_and_string_truecolor.txt \
     $(TESTS)

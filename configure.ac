@@ -87,6 +87,8 @@ PKG_CHECK_MODULES([BOBA], [boba],
 AM_CONDITIONAL([HAVE_BOBA], [test "x$have_boba" = "xyes"])
 if test "x$have_boba" = "xyes"; then
     AC_DEFINE([HAVE_BOBA], [1], [Define if boba TUI library is available])
+    BOBA_VERSION_STRING=$($PKG_CONFIG --modversion boba)
+    AC_DEFINE_UNQUOTED([BOBA_VERSION], ["$BOBA_VERSION_STRING"], [boba library version])
 fi
 
 # Check for Windows resource compiler (windres) — used to embed icons
@@ -115,11 +117,6 @@ AC_CHECK_HEADERS([stdlib.h string.h unistd.h termios.h sys/ioctl.h])
 # Checks for typedefs, structures, and compiler characteristics
 AC_TYPE_SIZE_T
 
-# DITTY_VERSION comes from the compile-time-generated ditty_version.h
-# (see src/Makefile.am); MAJOR/MINOR/PATCH stay here as hardcoded constants.
-AC_DEFINE([DITTY_VERSION_MAJOR], [0], [Major version number])
-AC_DEFINE([DITTY_VERSION_MINOR], [1], [Minor version number])
-AC_DEFINE([DITTY_VERSION_PATCH], [0], [Patch version number])
 
 AC_CONFIG_FILES([
     Makefile

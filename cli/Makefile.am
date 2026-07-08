@@ -44,3 +44,5 @@ if HAVE_BOBA
 ditty_CPPFLAGS += $(BOBA_CFLAGS)
 ditty_LDADD += $(BOBA_LIBS)
 endif
+
+EXTRA_DIST = colors.h repl_app.h

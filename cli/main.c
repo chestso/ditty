@@ -4,7 +4,9 @@
 
 #include "file_utils.h"
 #include "lisp.h"
+#include <gc.h>
 #include <locale.h>
+#include <pcre2.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -251,6 +253,27 @@ static LispObject *argv_to_list(int start, int end, char **argv)
     return result;
 }
 
+static void print_library_versions(void)
+{
+    unsigned gc_v = GC_get_version();
+    char gc_buf[32];
+    snprintf(gc_buf, sizeof(gc_buf), "%u.%u.%u", gc_v >> 16, (gc_v >> 8) & 0xff,
+             gc_v & 0xff);
+
+    char pcre2_buf[64];
+    pcre2_config(PCRE2_CONFIG_VERSION, pcre2_buf);
+    char *sp = strchr(pcre2_buf, ' ');
+    if (sp)
+        *sp = '\0';
+
+    printf("Libraries:\n");
+    printf("  bdw-gc  %s\n", gc_buf);
+    printf("  pcre2   %s\n", pcre2_buf);
+#ifdef BOBA_VERSION
+    printf("  boba    %s\n", BOBA_VERSION);
+#endif
+}
+
 static void print_version(void)
 {
     printf("ditty %s\n", DITTY_VERSION);
@@ -258,6 +281,8 @@ static void print_version(void)
     printf("License MIT: <https://opensource.org/licenses/MIT>\n");
     printf("This is free software: you are free to change and redistribute it.\n");
     printf("There is NO WARRANTY, to the extent permitted by law.\n");
+    printf("\n");
+    print_library_versions();
     printf("\n");
     printf("Built with: %s\n", BUILD_CC);
 }

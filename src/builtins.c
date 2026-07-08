@@ -1,22 +1,12 @@
 #include "builtins_internal.h"
 #include "ditty_version.h"
+#include <gc.h>
+#include <pcre2.h>
 
-/* DITTY_VERSION comes from ditty_version.h (regenerated each build
- * from git state). MAJOR/MINOR/PATCH still come from config.h. */
+/* DITTY_VERSION, DITTY_VERSION_MAJOR/MINOR/PATCH come from
+ * ditty_version.h (regenerated each build from git state). */
 #ifndef DITTY_VERSION
 #define DITTY_VERSION "unknown"
-#endif
-
-#ifndef DITTY_VERSION_MAJOR
-#define DITTY_VERSION_MAJOR 0
-#endif
-
-#ifndef DITTY_VERSION_MINOR
-#define DITTY_VERSION_MINOR 0
-#endif
-
-#ifndef DITTY_VERSION_PATCH
-#define DITTY_VERSION_PATCH 0
 #endif
 
 /* Create ditty-version alist with version information.
@@ -49,6 +39,23 @@ static LispObject *create_ditty_version_alist(void)
     ADD_VERSION_PAIR("major", lisp_make_integer(DITTY_VERSION_MAJOR));
     ADD_VERSION_PAIR("minor", lisp_make_integer(DITTY_VERSION_MINOR));
     ADD_VERSION_PAIR("patch", lisp_make_integer(DITTY_VERSION_PATCH));
+
+    /* Library versions (runtime queries) */
+    unsigned gc_v = GC_get_version();
+    char gc_buf[32];
+    snprintf(gc_buf, sizeof(gc_buf), "%u.%u.%u", gc_v >> 16, (gc_v >> 8) & 0xff, gc_v & 0xff);
+    ADD_VERSION_PAIR("bdw-gc", lisp_make_string(gc_buf));
+
+    char pcre2_buf[64];
+    pcre2_config(PCRE2_CONFIG_VERSION, pcre2_buf);
+    char *sp = strchr(pcre2_buf, ' ');
+    if (sp)
+        *sp = '\0';
+    ADD_VERSION_PAIR("pcre2", lisp_make_string(pcre2_buf));
+
+#ifdef BOBA_VERSION
+    ADD_VERSION_PAIR("boba", lisp_make_string(BOBA_VERSION));
+#endif
 
 #undef ADD_VERSION_PAIR
 

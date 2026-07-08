@@ -9,13 +9,19 @@ lib_LIBRARIES = libditty.a
 # .o files stay cached when nothing changed.
 BUILT_SOURCES = docstrings.gen.h ditty_version.h
 CLEANFILES = docstrings.gen.h ditty_version.h
+nodist_libditty_a_SOURCES = docstrings.gen.h ditty_version.h
+EXTRA_DIST = builtins_internal.h
 
 .PHONY: ditty_version_force
 ditty_version.h: ditty_version_force
 	@v=`"$(top_srcdir)/build-aux/git-version.sh" "$(top_srcdir)" 2>/dev/null`; \
 	test -n "$$v" || v="$(DITTY_VERSION)"; \
 	test -n "$$v" || v="unknown"; \
-	printf '#ifndef DITTY_VERSION_H\n#define DITTY_VERSION_H\n#define DITTY_VERSION "%s"\n#endif\n' "$$v" > $@.tmp; \
+	base=`echo "$$v" | sed 's/-.*//'`; \
+	major=`echo "$$base" | cut -d. -f1`; \
+	minor=`echo "$$base" | cut -d. -f2`; \
+	patch=`echo "$$base" | cut -d. -f3`; \
+	printf '#ifndef DITTY_VERSION_H\n#define DITTY_VERSION_H\n#define DITTY_VERSION "%s"\n#define DITTY_VERSION_MAJOR %s\n#define DITTY_VERSION_MINOR %s\n#define DITTY_VERSION_PATCH %s\n#endif\n' "$$v" "$$major" "$$minor" "$$patch" > $@.tmp; \
 	if cmp -s $@.tmp $@ 2>/dev/null; then \
 	  rm -f $@.tmp; \
 	else \
