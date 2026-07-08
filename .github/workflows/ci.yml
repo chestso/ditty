@@ -120,7 +120,7 @@ jobs:
           make dist
 
       - name: Download Windows portable ZIP
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: ditty-windows-x86_64
           path: artifacts/windows
