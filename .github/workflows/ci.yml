@@ -11,48 +11,6 @@ permissions:
   contents: write
 
 jobs:
-  linux:
-    name: Linux
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout ditty
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf automake libtool make pkg-config \
-            libgc-dev libpcre2-dev
-
-      - name: Build ditty
-        run: |
-          ./autogen.sh
-          mkdir build && cd build
-          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
-            ../configure --enable-release
-          else
-            ../configure
-          fi
-          make -j"$(nproc)"
-
-      - name: Run tests
-        run: make -C build check
-
-      - name: Build dist tarball
-        run: make -C build dist
-
-      - name: Upload dist tarball
-        uses: actions/upload-artifact@v7
-        with:
-          name: ditty-source-dist
-          path: build/ditty-*.tar.gz
-          if-no-files-found: error
-          retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 1 || 30 }}
-
   windows:
     name: Windows (${{ matrix.label }})
     strategy:
@@ -138,15 +96,27 @@ jobs:
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, windows]
+    needs: [windows]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download source tarball
-        uses: actions/download-artifact@v5
+      - name: Checkout ditty
+        uses: actions/checkout@v5
         with:
-          name: ditty-source-dist
-          path: artifacts/source
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake libtool make pkg-config
+
+      - name: Build dist tarball
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          ../configure
+          make dist
 
       - name: Download Windows portable ZIP
         uses: actions/download-artifact@v5
@@ -158,7 +128,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            artifacts/source/ditty-*.tar.gz
+            build/ditty-*.tar.gz
             artifacts/windows/ditty-*-windows-*.zip
           generate_release_notes: false
           fail_on_unmatched_files: true
