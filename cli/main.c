@@ -384,6 +384,7 @@ static void handle_line_submit(char *line)
 
     /* Handle /quit / /load */
     if (full_text[0] == '/') {
+        tui_runtime_finish_inline(g_runtime);
         int cmd_result = handle_command(full_text, g_env);
         if (cmd_result == 1) {
             tui_runtime_schedule(g_runtime, tui_cmd_quit());
