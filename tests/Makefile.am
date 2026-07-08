@@ -10,7 +10,10 @@ FLARE_TESTS = \
     test_api \
     test_roundtrip
 
-check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_repl_app $(FLARE_TESTS)
+check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent $(FLARE_TESTS)
+if HAVE_BOBA
+check_PROGRAMS += test_repl_app
+endif
 
 test_sf_kind_SOURCES = test_sf_kind.c
 test_sf_kind_CPPFLAGS = \
@@ -112,8 +115,15 @@ test_repl_app_LDADD = \
 $(test_sf_kind_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_repl_completeness_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_auto_indent_OBJECTS): $(top_builddir)/src/ditty_version.h
+if HAVE_BOBA
 $(test_repl_app_OBJECTS): $(top_builddir)/src/ditty_version.h
+endif
 $(FLARE_TESTS_OBJECTS): $(top_builddir)/src/ditty_version.h
+
+BOBA_TESTS =
+if HAVE_BOBA
+BOBA_TESTS += test_repl_app
+endif
 
 # Lisp script tests
 TESTS = \
@@ -166,8 +176,8 @@ TESTS = \
     test_sf_kind \
     test_repl_completeness \
     test_auto_indent \
-    test_repl_app \
-    $(FLARE_TESTS)
+    $(FLARE_TESTS) \
+    $(BOBA_TESTS)
 
 TEST_EXTENSIONS = .lisp
 LISP_LOG_COMPILER = $(srcdir)/run-test.sh
