@@ -194,4 +194,49 @@ EXTRA_DIST = \
     test_repl_app.c \
     flare_testkit.h \
     test-helpers.lisp \
-    $(TESTS)
+    basic/alists.lisp \
+    basic/apply.lisp \
+    basic/and_or_list.lisp \
+    basic/characters.lisp \
+    basic/filesystem.lisp \
+    basic/format.lisp \
+    basic/hash_tables.lisp \
+    basic/integer_ops.lisp \
+    basic/integers.lisp \
+    basic/keywords.lisp \
+    basic/length.lisp \
+    basic/list_reverse.lisp \
+    basic/path_expansion.lisp \
+    basic/printing.lisp \
+    basic/recursion.lisp \
+    basic/string-index.lisp \
+    basic/string_number_conversion.lisp \
+    basic/string_ports.lisp \
+    basic/strings.lisp \
+    basic/symbols.lisp \
+    basic/packages.lisp \
+    basic/vectors.lisp \
+    advanced/collection_iteration.lisp \
+    advanced/cond_case.lisp \
+    advanced/condition-system.lisp \
+    advanced/do_loop.lisp \
+    advanced/docstrings.lisp \
+    advanced/equality.lisp \
+    advanced/file_io.lisp \
+    advanced/let_star.lisp \
+    advanced/lisp-fmt.lisp \
+    advanced/load.lisp \
+    advanced/macros.lisp \
+    advanced/named_functions.lisp \
+    advanced/optional-parameters.lisp \
+    advanced/progn.lisp \
+    advanced/quasiquote.lisp \
+    advanced/regex.lisp \
+    advanced/introspection.lisp \
+    advanced/tail_recursion.lisp \
+    advanced/utf8.lisp \
+    regression/cond_case_multi_expr.lisp \
+    regression/list_ref_type_check.lisp \
+    regression/multiline_parsing.lisp \
+    regression/nested-unknown-hash-syntax.lisp \
+    regression/tail_call_unwrap.lisp
