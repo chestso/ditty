@@ -95,8 +95,10 @@
 (defconst ditty--special-forms
   '("quote" "quasiquote" "if" "define" "set!" "lambda" "defmacro"
     "let" "let*" "progn" "do" "cond" "case" "and" "or"
-    "condition-case" "unwind-protect")
-  "Ditty special forms (from `SPECIAL_FORMS' in include/lisp.h).")
+    "condition-case" "unwind-protect" "package-ref")
+  "Ditty special forms (from `SPECIAL_FORMS' in include/lisp.h).
+`package-ref' is dispatched as a special form in eval.c but is not
+in the X-macro; it is listed here for correct font-lock.")
 
 (defconst ditty--stdlib-macros
   '("defun" "when" "unless" "defvar" "defconst" "defalias"
