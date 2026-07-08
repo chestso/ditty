@@ -241,6 +241,24 @@ static void handle_break(void)
 
 #endif /* HAVE_BOBA */
 
+/* --- Output helpers --- */
+
+/* In raw mode (boba TUI), the terminal does not translate \n to \r\n.
+ * Multi-line output from lisp_print() contains bare \n which causes
+ * a staircase effect. Write \r\n explicitly for correct display. */
+static void print_raw_output(const char *color, const char *text, const char *reset)
+{
+    fputs(color, stdout);
+    for (const char *p = text; *p; p++) {
+        if (*p == '\n')
+            fputs("\r\n", stdout);
+        else
+            fputc(*p, stdout);
+    }
+    fputs(reset, stdout);
+    fputs("\r\n", stdout);
+}
+
 /* --- Non-interactive helpers --- */
 
 static LispObject *argv_to_list(int start, int end, char **argv)
@@ -342,11 +360,11 @@ static int handle_command(const char *input, Environment *env)
 
         if (LISP_TYPE(result) == LISP_ERROR) {
             char *err_str = lisp_print(result);
-            printf("%s%s%s\n", color_error, err_str, SGR_RESET);
+            print_raw_output(color_error, err_str, SGR_RESET);
         } else {
             char *output = lisp_print(result);
             const char *clr = color_for_type(LISP_TYPE(result));
-            printf("%s%s%s\n", clr, output, SGR_RESET);
+            print_raw_output(clr, output, SGR_RESET);
         }
 
         return 0;
@@ -400,11 +418,11 @@ static void handle_line_submit(char *line)
     /* Display result */
     if (LISP_TYPE(eval_result) == LISP_ERROR && !LISP_ERROR_CAUGHT(eval_result)) {
         char *err_str = lisp_print(eval_result);
-        printf("%s%s%s\n", color_error, err_str, SGR_RESET);
+        print_raw_output(color_error, err_str, SGR_RESET);
     } else {
         char *output = lisp_print(eval_result);
         const char *clr = color_for_type(LISP_TYPE(eval_result));
-        printf("%s%s%s\n", clr, output, SGR_RESET);
+        print_raw_output(clr, output, SGR_RESET);
     }
     fflush(stdout);
 }
@@ -615,7 +633,7 @@ int main(int argc, char **argv)
 
             if (LISP_TYPE(expr) == LISP_ERROR) {
                 char *err_str = lisp_print(expr);
-                fprintf(stderr, "ERROR: %s\n", err_str);
+                fprintf(stderr, "%s\n", err_str);
                 lisp_cleanup();
                 return 1;
             }
@@ -624,7 +642,7 @@ int main(int argc, char **argv)
 
             if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
                 char *err_str = lisp_print(result);
-                fprintf(stderr, "ERROR: %s\n", err_str);
+                fprintf(stderr, "%s\n", err_str);
                 lisp_cleanup();
                 return 1;
             }
@@ -683,7 +701,7 @@ int main(int argc, char **argv)
 
                 if (LISP_TYPE(expr) == LISP_ERROR) {
                     char *err_str = lisp_print(expr);
-                    fprintf(stderr, "ERROR in %s: %s\n", argv[i], err_str);
+                    fprintf(stderr, "%s: %s\n", argv[i], err_str);
                     return 1;
                 }
 
@@ -691,7 +709,7 @@ int main(int argc, char **argv)
 
                 if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
                     char *err_str = lisp_print(result);
-                    fprintf(stderr, "ERROR in %s: %s\n", argv[i], err_str);
+                    fprintf(stderr, "%s: %s\n", argv[i], err_str);
                     return 1;
                 }
             }
@@ -781,7 +799,7 @@ int main(int argc, char **argv)
 
         if (LISP_TYPE(expr) == LISP_ERROR) {
             char *err_str = lisp_print(expr);
-            printf("ERROR: %s\n", err_str);
+            printf("%s\n", err_str);
             expr_len = 0;
             expr_buf[0] = '\0';
             continue;
@@ -792,7 +810,7 @@ int main(int argc, char **argv)
 
         if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
             char *err_str = lisp_print(result);
-            printf("ERROR: %s\n", err_str);
+            printf("%s\n", err_str);
         } else {
             char *output = lisp_print(result);
             printf("%s\n", output);
