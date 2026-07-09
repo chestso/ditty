@@ -25,7 +25,11 @@ Before diving into the language details, it helps to understand how Lisp evaluat
 
 ### What Is a "Form"?
 
-Lisp documentation uses the word **form** a lot. In Lisp, a form is simply any expression that can be evaluated. The term comes from early Lisp literature (particularly McCarthy's 1960 paper and the Lisp 1.5 manual), where "form" was shorthand for "**S-expression**" — any syntactically valid expression, whether a literal, a symbol, or a list.
+Lisp documentation uses the word **form** a lot. In Lisp, a form is simply any expression that can be evaluated.
+
+The term originates not in Lisp itself but in **Alonzo Church's lambda calculus** (1930s). Church distinguished between **functions** (which can be applied to arguments) and **forms** — expressions with free variables, like `y² + x`, that are not yet functions until those variables are bound. McCarthy borrowed this distinction directly in his 1960 paper ("Recursive Functions of Symbolic Expressions and Their Computation by Machine"), crediting Church in Section 2e: "This distinction and a notation for describing it, from which we deviate trivially, is given by Church."
+
+When McCarthy designed Lisp, every M-expression "form" (a function application like `cons[car[x]; cdr[x]]`) was translated into an **S-expression** (a parenthesized list like `(CONS (CAR X) (CDR X))`). Since all Lisp code is represented as S-expressions, and `eval` recurses through them, "form" naturally came to mean "an S-expression that can be evaluated." The Common Lisp HyperSpec formalizes this: a form is "any object meant to be evaluated."
 
 You'll see "form" used throughout this guide and in error messages:
 
