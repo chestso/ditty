@@ -4847,7 +4847,7 @@ The following aliases are defined in the standard library for naming consistency
 
 Symbol and keyword operations.
 
-See also: `symbol?` in [Type Predicates](type-predicates.md), `documentation` and `set-documentation!` in [Functions](functions.md).
+See also: `symbol?` in [Type Predicates](doc/type-predicates.md), `documentation` and `set-documentation!` in [Functions](doc/functions.md).
 
 ### `symbol->string`
 

@@ -83,5 +83,5 @@ for md_file in $md_files; do
         }
         print line
     }
-    ' "$md_file"
+    ' "$md_file" | sed 's/\](\([a-zA-Z0-9_-]*\.md\))/](doc\/\1)/g'
 done
