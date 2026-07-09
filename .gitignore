@@ -33,7 +33,6 @@ Makefile.in
 /src/docstrings.gen.h
 /src/bloom_version.h
 /version
-/BUILTIN_REFERENCE.md
 
 # Executables
 /repl/bloom-repl
