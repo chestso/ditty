@@ -21,6 +21,16 @@ For per-function documentation with parameters, return values, and examples, see
 
 ## Understanding Lisp Evaluation
 
+**Evaluation** is the process of computing a value from an expression. You write expressions (forms), and the interpreter walks through them recursively, reducing each one to a single result. When you type `(+ 1 2)` at the REPL, the evaluator reads the list `(+ 1 2)`, looks up the function bound to `+`, evaluates the arguments `1` and `2` (which are self-evaluating literals), applies the function, and returns `3`.
+
+At its core, evaluation is a recursive descent through a tree of expressions:
+
+- **Atoms** (numbers, strings, keywords, etc.) evaluate to themselves — they are self-evaluating.
+- **Symbols** evaluate to whatever value is bound to them in the current environment. If `x` is bound to `42`, evaluating `x` returns `42`.
+- **Lists** are where the interesting work happens. The evaluator looks at the first element (the **operator**) to decide what to do with the rest. That decision — _how_ to process the remaining elements — is what the rest of this section is about.
+
+The result of evaluation is always another Lisp object: a number, a string, a list, a symbol, nil, a lambda, etc. Evaluation never produces a "statement" or "side effect" as a separate category — even functions called purely for side effects (like `print`) return a value.
+
 Before diving into the language details, it helps to understand how Lisp evaluates code. When you write `(foo x y)`, Lisp evaluates this as a function call—but _how_ that call works depends on what `foo` is.
 
 ### What Is a "Form"?
