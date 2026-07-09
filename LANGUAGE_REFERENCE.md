@@ -2089,6 +2089,14 @@ Ditty Lisp has a library system built on top of the package system, using `requi
 (greet "World")
 ```
 
+Both `require` and `provide` accept a string or a symbol. The name may contain slashes for relative paths (e.g., `(require "mylib/foo")` looks for `<dir>/mylib/foo.lisp`).
+
+```lisp
+(require "mylib/foo")   ; string with relative path
+(require 'mylib)        ; symbol (bare name)
+(provide "mylib/foo")   ; must match the name used with require
+```
+
 `require` saves and restores `*package*`, so a library's `in-package` does not leak to the caller. Transitive dependencies work naturally — if `mylib` calls `(require 'utils)` at its top, loading `mylib` automatically pulls in `utils`.
 
 ### Library Search Path
