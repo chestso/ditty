@@ -52,38 +52,12 @@ When we say **special form**, we mean a form whose evaluation rules are special 
 
 There are four main categories of forms:
 
-### M-Expressions and S-Expressions
+1. **Special forms** — hard-coded in the interpreter, with special evaluation rules
+2. **Built-in functions** — implemented in C, following normal evaluation rules
+3. **Macros** — code transformers written in Lisp
+4. **User-defined functions** (lambdas) — regular functions written in Lisp
 
-The parenthesized syntax you write in Ditty Lisp — and in every Lisp since the early 1960s — was not McCarthy's original design. It was an accident of history that became one of the most powerful ideas in programming.
-
-**M-expressions** (meta-expressions) were McCarthy's intended notation for writing Lisp programs. They looked like algebra: function applications used brackets and semicolons, and lower-case function names:
-
-```text
-cons[car[x]; cdr[x]]
-conditional[p₁ → e₁; p₂ → e₂]
-```
-
-M-expressions were meant to be the **programmer-facing language** — concise and mathematical. They would be compiled into a machine-friendly internal representation called **S-expressions** (symbolic expressions), which were nested parenthesized lists using upper-case atoms:
-
-```text
-(CONS (CAR X) (CDR X))
-(COND (P1 E1) (P2 E2))
-```
-
-S-expressions were the **data format**: a simple recursive structure of atoms and lists, easy for a machine to parse and manipulate. McCarthy expected programmers to write M-expressions and let the system translate them into S-expressions behind the scenes.
-
-**The accident:** McCarthy needed a way to evaluate S-expressions directly, so he implemented `eval` — a universal function that could evaluate any S-expression. Once `eval` existed, it became clear that you could skip the M-expression layer entirely and write programs directly as S-expressions. This collapsed the two-level design into one: **code and data became the same thing**. The parenthesized syntax that every Lisp programmer writes today is the S-expression notation that McCarthy originally intended only for machines.
-
-This unification is the source of Lisp's most distinctive features:
-
-- **Homoiconicity:** Programs are data structures (nested lists), not text. A Lisp program can be read, manipulated, and rewritten as Lisp data — this is what makes macros possible.
-- **Quote:** `'(+ 1 2)` gives you the list `( + 1 2)` as data instead of evaluating it. This only makes sense because code and data share the same representation.
-- **`eval`:** You can evaluate arbitrary code at runtime with `(eval expr)`. The program can treat its own code as data and vice versa.
-- **Macros:** A macro receives unevaluated code (S-expressions) as arguments and returns new code (S-expressions). This is just list manipulation — trivial because code is lists.
-
-S-expressions are either **atoms** (symbols, numbers, strings, etc.) or **lists** of S-expressions. The syntax is minimal: `(` and `)` delimit lists, whitespace separates elements, and `'` quotes the next expression. Everything else — function calls, variable references, conditionals, lambda definitions — is just different arrangements of atoms and lists.
-
-As McCarthy later reflected, the survival of S-expressions and the disappearance of M-expressions was not planned: "The project of defining M-expressions precisely and compiling them or at least translating them into S-expressions was neither finalized nor explicitly abandoned. It just receded into the indefinite future."
+The sections below describe each category. For the historical context of how Lisp's syntax came to be, see [M-Expressions and S-Expressions](#m-expressions-and-s-expressions) at the end of this section.
 
 ### Special Forms
 
@@ -181,6 +155,39 @@ Regular functions written in Lisp using `lambda` or `defun`. Arguments are evalu
 - **Extending syntax?** → Macro
 
 Most code you write will be user functions. Macros are powerful but should be used sparingly—prefer functions when possible, since they're simpler to understand and debug.
+
+### M-Expressions and S-Expressions
+
+The parenthesized syntax you write in Ditty Lisp — and in every Lisp since the early 1960s — was not McCarthy's original design. It was an accident of history that became one of the most powerful ideas in programming.
+
+**M-expressions** (meta-expressions) were McCarthy's intended notation for writing Lisp programs. They looked like algebra: function applications used brackets and semicolons, and lower-case function names:
+
+```text
+cons[car[x]; cdr[x]]
+conditional[p₁ → e₁; p₂ → e₂]
+```
+
+M-expressions were meant to be the **programmer-facing language** — concise and mathematical. They would be compiled into a machine-friendly internal representation called **S-expressions** (symbolic expressions), which were nested parenthesized lists using upper-case atoms:
+
+```text
+(CONS (CAR X) (CDR X))
+(COND (P1 E1) (P2 E2))
+```
+
+S-expressions were the **data format**: a simple recursive structure of atoms and lists, easy for a machine to parse and manipulate. McCarthy expected programmers to write M-expressions and let the system translate them into S-expressions behind the scenes.
+
+**The accident:** McCarthy needed a way to evaluate S-expressions directly, so he implemented `eval` — a universal function that could evaluate any S-expression. Once `eval` existed, it became clear that you could skip the M-expression layer entirely and write programs directly as S-expressions. This collapsed the two-level design into one: **code and data became the same thing**. The parenthesized syntax that every Lisp programmer writes today is the S-expression notation that McCarthy originally intended only for machines.
+
+This unification is the source of Lisp's most distinctive features:
+
+- **Homoiconicity:** Programs are data structures (nested lists), not text. A Lisp program can be read, manipulated, and rewritten as Lisp data — this is what makes macros possible.
+- **Quote:** `'(+ 1 2)` gives you the list `( + 1 2)` as data instead of evaluating it. This only makes sense because code and data share the same representation.
+- **`eval`:** You can evaluate arbitrary code at runtime with `(eval expr)`. The program can treat its own code as data and vice versa.
+- **Macros:** A macro receives unevaluated code (S-expressions) as arguments and returns new code (S-expressions). This is just list manipulation — trivial because code is lists.
+
+S-expressions are either **atoms** (symbols, numbers, strings, etc.) or **lists** of S-expressions. The syntax is minimal: `(` and `)` delimit lists, whitespace separates elements, and `'` quotes the next expression. Everything else — function calls, variable references, conditionals, lambda definitions — is just different arrangements of atoms and lists.
+
+As McCarthy later reflected, the survival of S-expressions and the disappearance of M-expressions was not planned: "The project of defining M-expressions precisely and compiling them or at least translating them into S-expressions was neither finalized nor explicitly abandoned. It just receded into the indefinite future."
 
 ## Data Types
 
