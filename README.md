@@ -2,7 +2,9 @@
 
 An embeddable Lisp interpreter library and syntax highlighter written in C. This implementation follows traditional Lisp naming conventions and provides a REPL for testing and demonstration.
 
-**[Language Reference](LANGUAGE_REFERENCE.md)** - Full language documentation with data types, functions, and examples
+**[Language Guide](LANGUAGE_GUIDE.md)** - Conceptual guide covering evaluation, special forms, macros, conventions, and more
+
+**[Built-in Function Reference](BUILTIN_REFERENCE.md)** - Auto-generated per-function documentation with parameters, return values, and examples
 
 ## Features
 
@@ -16,7 +18,7 @@ An embeddable Lisp interpreter library and syntax highlighter written in C. This
 - **Functions**: Arithmetic, strings, lists, vectors, hash tables, regex (PCRE2), file I/O, string ports, filesystem, packages, profiling
 - **Type Predicates**: `null?`, `atom?`, `pair?`, `list?`, `integer?`, `boolean?`, `number?`, `string?`, `char?`, `symbol?`, `keyword?`, `vector?`, `hash-table?`, `function?`, `callable?`, `error?`, `regex?`
 
-See **[LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md)** for complete function listings and examples.
+See **[LANGUAGE_GUIDE.md](LANGUAGE_GUIDE.md)** for concepts and **[BUILTIN_REFERENCE.md](BUILTIN_REFERENCE.md)** for complete function listings and examples.
 
 ### Advanced Features
 
@@ -406,7 +408,7 @@ Symptoms of violation: intermittent "Undefined symbol" errors for builtins, or c
   (error (format nil "caught: ~A" (error-message err))))
 ```
 
-**For full documentation, see [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md)**
+**For full documentation, see [LANGUAGE_GUIDE.md](LANGUAGE_GUIDE.md)** (concepts) and [BUILTIN_REFERENCE.md](BUILTIN_REFERENCE.md) (function reference)
 
 ## C API Reference
 

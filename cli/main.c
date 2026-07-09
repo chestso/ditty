@@ -328,7 +328,7 @@ static void print_help(void)
     printf("  /quit             Exit the REPL\n");
     printf("  /load <filename>  Load and execute a Lisp file\n");
     printf("\n");
-    printf("See LANGUAGE_REFERENCE.md for complete language documentation.\n");
+    printf("See LANGUAGE_GUIDE.md for concepts and BUILTIN_REFERENCE.md for function listings.\n");
 }
 
 #ifdef HAVE_BOBA

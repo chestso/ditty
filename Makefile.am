@@ -22,11 +22,12 @@ EXTRA_DIST = \
     ditty.pc.in \
     ditty.desktop.in \
     README.md \
-    LANGUAGE_REFERENCE.md \
+    LANGUAGE_GUIDE.md \
     COPYING \
     .clang-format \
     lisp/lisp-fmt.lisp \
     scripts/gen-docstrings.sh \
+    scripts/gen-builtin-ref.sh \
     scripts/make-dist-zip.sh \
     icons/hicolor/scalable/apps/ditty.svg \
     icons/ditty.ico \
