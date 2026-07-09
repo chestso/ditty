@@ -644,10 +644,13 @@ static void run_interactive_repl(Environment *env)
            "This is free software: you are free to change and redistribute it.\n"
            "There is NO WARRANTY, to the extent permitted by law.\n"
            "\n"
-           "%sType expressions to evaluate%s, %s/quit to exit%s, %s/load <file> to load a file%s, %s/doc <name> for docs\n"
+           "%sType expressions to evaluate%s, %s/quit%s %sto exit%s, %s/load%s %s<file> to load a file%s, %s/doc%s %s<name> for docs%s\n"
            "%sTab for completion%s, %sUp/Down for history%s\n\n",
            color_function, DITTY_VERSION, SGR_RESET,
-           color_info, SGR_RESET, color_info, SGR_RESET, color_info, SGR_RESET, color_info, SGR_RESET,
+           color_info, SGR_RESET,
+           color_prompt, SGR_RESET, color_info, SGR_RESET,
+           color_prompt, SGR_RESET, color_info, SGR_RESET,
+           color_prompt, SGR_RESET, color_info, SGR_RESET,
            color_info, SGR_RESET, color_info, SGR_RESET);
 
     tui_runtime_run(g_runtime);
