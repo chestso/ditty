@@ -158,9 +158,11 @@ Test pointer equality (same object in memory).
 
 ### Notes
 
-- Fast pointer comparison
-- Reliable for symbols (always interned)
-- NOT reliable for numbers or strings
+- Fast pointer comparison (raw `==` on tagged pointers)
+- Reliable for symbols (always interned — same name = same pointer)
+- Reliable for small integers (fixnums are tagged immediates — same value = same bit pattern)
+- NOT reliable for floats (heap-allocated — each construction is a distinct object)
+- NOT reliable for strings (heap-allocated — each literal is a distinct object)
 - Use `equal?` for structural equality
 
 ## `equal?`
