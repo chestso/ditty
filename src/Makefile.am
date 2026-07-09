@@ -43,6 +43,7 @@ DOC_FILES = \
     $(top_srcdir)/doc/packages.md \
     $(top_srcdir)/doc/printing.md \
     $(top_srcdir)/doc/regex.md \
+    $(top_srcdir)/doc/special-forms.md \
     $(top_srcdir)/doc/string-ports.md \
     $(top_srcdir)/doc/strings.md \
     $(top_srcdir)/doc/symbols.md \

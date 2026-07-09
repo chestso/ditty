@@ -3,6 +3,16 @@
 #include <gc.h>
 #include <pcre2.h>
 
+/* Assign docstrings to special form symbols from the generated doc table.
+ * Uses the same lookup_builtin_doc() as REGISTER, but applies it to
+ * pre-interned special form symbols which are not registered as builtins. */
+#define SET_SF_DOC(c_name, lisp_name, ...)                \
+    do {                                                  \
+        const char *_d = lookup_builtin_doc(lisp_name);   \
+        if (_d)                                           \
+            LISP_SYM_VAL(c_name)->docstring = (char *)_d; \
+    } while (0);
+
 /* DITTY_VERSION, DITTY_VERSION_MAJOR/MINOR/PATCH come from
  * ditty_version.h (regenerated each build from git state). */
 #ifndef DITTY_VERSION
@@ -82,6 +92,10 @@ void register_builtins(Environment *env)
     register_packages_builtins(env);
     register_filesystem_builtins(env);
     register_time_profiling_builtins(env);
+
+    /* Assign docstrings to special form symbols */
+    SPECIAL_FORMS(SET_SF_DOC)
+#undef SET_SF_DOC
 
     /* Define version information variable */
     env_define(env, LISP_SYM_VAL(lisp_intern("ditty-version")), create_ditty_version_alist(), pkg_core);

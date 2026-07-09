@@ -21,6 +21,9 @@
 #include <ditty/highlight.h>
 #endif
 
+/* Forward declaration — defined in flare_style_charmtones.c */
+FlareStyle *flare_style_charmtones(void);
+
 #include "ditty_version.h"
 #ifndef DITTY_VERSION
 #define DITTY_VERSION "unknown"
@@ -53,7 +56,9 @@ const char *__asan_default_options(void)
 static Environment *g_env = NULL;
 static ReplAppModel *g_app = NULL;
 static TuiRuntime *g_runtime = NULL;
-static FlareLexer *g_lexer = NULL; /* reused across highlight calls */
+static FlareLexer *g_lexer = NULL;    /* reused across highlight calls */
+static FlareLexer *g_cm_lexer = NULL; /* CommonMark lexer for /doc */
+static FlareStyle *g_style = NULL;    /* CharmTones style, created once */
 
 /* ANSI color buffers */
 static char color_prompt[32];
@@ -115,7 +120,7 @@ static const char *color_for_type(LispType type)
 static char *highlight_lisp(const char *text, size_t len, void *userdata)
 {
     (void)userdata;
-    FlareResult r = flare_highlight(text, len, g_lexer, NULL, NULL);
+    FlareResult r = flare_highlight(text, len, g_lexer, g_style, NULL);
     /* flare_highlight returns malloc'd data; textinput will free it.
      * If highlighting fails, fall back to plain text. */
     if (r.data)
@@ -259,6 +264,37 @@ static void print_raw_output(const char *color, const char *text, const char *re
     fputs("\r\n", stdout);
 }
 
+/* --- /doc command --- */
+
+static void print_doc(const char *name)
+{
+    LispObject *sym = lisp_intern(name);
+
+    if (LISP_SYM_VAL(sym)->docstring != NULL) {
+        const char *md = LISP_SYM_VAL(sym)->docstring;
+        size_t md_len = strlen(md);
+
+        FlareResult r = flare_highlight(md, md_len, g_cm_lexer, g_style, NULL);
+
+        if (r.data && r.length > 0) {
+            for (size_t i = 0; i < r.length; i++) {
+                if (r.data[i] == '\n')
+                    fputs("\r\n", stdout);
+                else
+                    fputc(r.data[i], stdout);
+            }
+            fputs("\r\n", stdout);
+        } else {
+            /* Fallback: print raw markdown if highlighting fails */
+            print_raw_output(color_result, md, SGR_RESET);
+        }
+        flare_result_free(r);
+        return;
+    }
+
+    printf("%sNo documentation for '%s'%s\r\n", color_error, name, SGR_RESET);
+}
+
 /* --- Non-interactive helpers --- */
 
 static LispObject *argv_to_list(int start, int end, char **argv)
@@ -367,6 +403,19 @@ static int handle_command(const char *input, Environment *env)
             print_raw_output(clr, output, SGR_RESET);
         }
 
+        return 0;
+    }
+
+    if (strncmp(input, "/doc ", 5) == 0) {
+        const char *name = input + 5;
+        while (*name == ' ' || *name == '\t')
+            name++;
+        if (*name == '\0') {
+            printf("%sERROR: /doc requires a symbol name%s\r\n",
+                   color_error, SGR_RESET);
+            return 0;
+        }
+        print_doc(name);
         return 0;
     }
 
@@ -516,6 +565,16 @@ static void cleanup(void)
         g_lexer = NULL;
     }
 
+    if (g_cm_lexer) {
+        flare_lexer_free(g_cm_lexer);
+        g_cm_lexer = NULL;
+    }
+
+    if (g_style) {
+        flare_style_free(g_style);
+        g_style = NULL;
+    }
+
     if (g_runtime) {
         tui_runtime_free(g_runtime);
         g_runtime = NULL;
@@ -530,6 +589,12 @@ static void run_interactive_repl(Environment *env)
 
     /* Create flare lexer for syntax highlighting (reused across keystrokes) */
     g_lexer = flare_lexer_ditty(env);
+
+    /* Create CommonMark lexer for /doc command (reused across calls) */
+    g_cm_lexer = flare_lexer_commonmark(env);
+
+    /* Create CharmTones flare style (reused across all highlight calls) */
+    g_style = flare_style_charmtones();
 
     ReplAppConfig app_config = {
         .terminal_width = 80,
@@ -579,10 +644,10 @@ static void run_interactive_repl(Environment *env)
            "This is free software: you are free to change and redistribute it.\n"
            "There is NO WARRANTY, to the extent permitted by law.\n"
            "\n"
-           "%sType expressions to evaluate%s, %s/quit to exit%s, %s/load <file> to load a file\n"
+           "%sType expressions to evaluate%s, %s/quit to exit%s, %s/load <file> to load a file%s, %s/doc <name> for docs\n"
            "%sTab for completion%s, %sUp/Down for history%s\n\n",
            color_function, DITTY_VERSION, SGR_RESET,
-           color_info, SGR_RESET, color_info, SGR_RESET, color_info, SGR_RESET,
+           color_info, SGR_RESET, color_info, SGR_RESET, color_info, SGR_RESET, color_info, SGR_RESET,
            color_info, SGR_RESET, color_info, SGR_RESET);
 
     tui_runtime_run(g_runtime);
