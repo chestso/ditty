@@ -228,7 +228,7 @@ int main() {
 
 Memory is managed by Boehm GC. Call `lisp_cleanup()` once at program exit.
 
-> **Embedder contract.** A `LispObject *` is **not** always a real pointer — it may be a tagged immediate value (small integer, char, `NIL`, `LISP_TRUE`). Never read `obj->type` or `obj->value.X` directly; always go through the `LISP_*` accessor macros (`LISP_TYPE`, `LISP_INT_VAL`, `LISP_CAR`, `LISP_CDR`, `LISP_LAMBDA_NAME`, ...). The macros are defined in `<ditty/lisp_value.h>` and decode the tag bits and follow boxed-out pointers transparently. See [Object representation & GC](#object-representation--gc) below.
+> **Embedder contract.** A `LispObject *` is **not** always a real pointer — it may be a tagged immediate value (small integer, char, `NIL`, `LISP_TRUE`). Never read `obj->type` or `obj->value.X` directly; always go through the `LISP_*` accessor macros (`LISP_TYPE`, `LISP_INT_VAL`, `LISP_CAR`, `LISP_CDR`, `LISP_LAMBDA_NAME`, ...). The macros are defined in `<ditty/lisp_value.h>` and decode the tag bits and follow boxed-out pointers transparently. See [Object representation & GC](#object-representation-gc) below.
 
 ### Integration Options
 
@@ -508,7 +508,7 @@ Symptoms of violation: intermittent "Undefined symbol" errors for builtins, or c
 
 ### Value accessors (read these instead of `obj->value.X`)
 
-Defined in `<ditty/lisp_value.h>`. Required for correctness — see [Object representation & GC](#object-representation--gc).
+Defined in `<ditty/lisp_value.h>`. Required for correctness — see [Object representation & GC](#object-representation-gc).
 
 | Macro                              | What it returns                                        |
 | ---------------------------------- | ------------------------------------------------------ |
