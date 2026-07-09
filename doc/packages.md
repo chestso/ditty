@@ -280,3 +280,31 @@ Populated at startup from `DITTY_LISP_PATH` and XDG data directories.
 ```lisp
 *load-path* ; => ("/home/me/.local/share/ditty/lisp" "/usr/local/share/ditty/lisp" ...)
 ```
+
+## `*command-line-args*`
+
+A list of command-line arguments passed to the script after the `--` separator.
+Only defined when `--` is present on the command line; use `(bound? '*command-line-args*)` to check.
+
+```lisp
+; Run: ditty script.lisp -- arg1 arg2 arg3
+(if (bound? '*command-line-args*)
+    (format #t "Args: ~A~%" *command-line-args*)
+    (format #t "No arguments~%"))
+
+; Iterate over arguments
+(when (bound? '*command-line-args*)
+  (do ((args *command-line-args* (cdr args)))
+    ((null? args))
+    (format #t "Arg: ~A~%" (car args))))
+```
+
+Arguments are strings in the order they appeared. Files before `--` are executed; arguments after `--` are passed to the last script.
+
+## Package Aliases
+
+The following aliases are defined in the standard library for tab-completion discoverability. They resolve to the same function via `defalias`.
+
+- `package-set` - Alias for `in-package`
+- `package-current` - Alias for `current-package`
+- `package-list` - Alias for `list-packages`

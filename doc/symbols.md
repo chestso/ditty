@@ -2,6 +2,8 @@
 
 Symbol and keyword operations.
 
+See also: `symbol?` in [Type Predicates](type-predicates.md), `documentation` and `set-documentation!` in [Functions](functions.md).
+
 ## `symbol->string`
 
 Convert symbol to string.

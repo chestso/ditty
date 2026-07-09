@@ -210,3 +210,10 @@ Test string equality.
 (string=? "foo" "bar")     ; => #f
 (string=? "" "")           ; => #t
 ```
+
+## Practical Usage Guide
+
+- **`eq?`** - For symbols, checking if two variables point to same object
+- **`=`** - For numeric comparisons (supports integers and floats)
+- **`string=?`** - For string equality
+- **`equal?`** - Default choice for "are these values the same?" checks (lists, vectors, hash tables, any data structures)

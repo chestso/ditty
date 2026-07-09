@@ -2,6 +2,8 @@
 
 Mutable key-value hash table operations.
 
+Hash tables support all key types: strings, symbols, keywords, integers, floats, characters, booleans, nil, lists, vectors, and other hash tables. Keys are compared by value (structural equality), so `(hash-ref ht '(1 2))` will find a key set with `(hash-set! ht '(1 2) val)`.
+
 ## `make-hash-table`
 
 Create a new empty hash table.

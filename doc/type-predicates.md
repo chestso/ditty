@@ -356,3 +356,28 @@ Check if a value is callable (lambda, macro, or builtin).
 (callable? when)              ; => #t
 (callable? 42)                ; => #f
 ```
+
+## `regex?`
+
+Check if a value is a compiled regex object (produced by `regex-compile`).
+
+### Parameters
+
+- `value` - Any value to test
+
+### Returns
+
+`#t` if the value is a compiled regex object, `#f` otherwise. A pattern string is not a regex object — use `regex-compile` to create one.
+
+### Examples
+
+```lisp
+(define digits (regex-compile "\\d+"))
+(regex? digits)              ; => #t
+(regex? "\\d+")             ; => #f (pattern string, not compiled regex)
+(regex? 42)                 ; => #f
+```
+
+### See Also
+
+- `regex-compile` - Compile a pattern string into a regex object

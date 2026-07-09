@@ -222,6 +222,37 @@ Create a directory and all parent directories (like mkdir -p).
 - `config-directory` - Get platform config directory
 - `file-exists?` - Check if path exists
 
+## `file-is-directory?`
+
+Test whether a path is a directory.
+
+### Parameters
+
+- `path` - File or directory path (string)
+
+### Returns
+
+`#t` if the path exists and is a directory, `nil` otherwise (including if the path does not exist or is a regular file).
+
+### Examples
+
+```lisp
+(file-is-directory? "/tmp")            ; => #t
+(file-is-directory? "/etc/hosts")      ; => nil (regular file)
+(file-is-directory? "/no/such/path")   ; => nil (does not exist)
+
+; Use to check before calling delete-directory
+(if (file-is-directory? path)
+    (delete-directory path :recursive)
+    (delete-file path))
+```
+
+### See Also
+
+- `file-exists?` - Check if path exists (file or directory)
+- `delete-directory` - Delete a directory
+- `mkdir` - Create a directory
+
 ## `delete-directory`
 
 Delete a directory. Like Emacs Lisp's `delete-directory`.

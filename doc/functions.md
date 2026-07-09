@@ -61,6 +61,8 @@ The name as a string, or nil if anonymous.
 
 Get documentation string for function, macro, variable, or built-in bound to symbol.
 
+First checks the symbol's own docstring (set via `set-documentation!` or copied from lambda/macro on `define`), then falls back to the value's docstring if bound to a lambda/macro/builtin.
+
 ### Parameters
 
 - `symbol` - Symbol name (quoted)
@@ -167,7 +169,7 @@ Check if a symbol is bound in the environment.
 
 ## `set-documentation!`
 
-Set documentation string for a bound symbol.
+Set documentation string directly on a symbol. Since symbols are interned (globally shared), this sets the docstring globally. The symbol does not need to be bound.
 
 ### Parameters
 
@@ -181,16 +183,22 @@ Set documentation string for a bound symbol.
 ### Examples
 
 ```lisp
+; Set docstring on a bound symbol
 (define my-var 42)
 (set-documentation! 'my-var "The answer to everything.")
 (documentation 'my-var)  ; => "The answer to everything."
+
+; Can also set docstring on unbound symbols
+(set-documentation! 'future-var "Will be defined later.")
+(documentation 'future-var)  ; => "Will be defined later."
 ```
 
 ### Notes
 
 - Used by `defvar` and `defconst` macros
 - Docstrings use CommonMark (Markdown) format
-- Symbol must already be bound
+- Docstrings are stored on symbols (like Emacs Lisp), not on bindings, so they are global per symbol name
+- The symbol does not need to be bound
 
 ### Errors
 
@@ -198,7 +206,6 @@ Returns error if:
 
 - First argument is not a symbol
 - Second argument is not a string
-- Symbol is not bound
 
 ### See Also
 
@@ -238,3 +245,10 @@ Terminates the process with the given exit code (default 0). `quit` is an alias.
 ## `quit`
 
 Alias for `exit`. See `exit`.
+
+## Standard Library Aliases
+
+The following aliases are defined in the standard library via `defalias`. They resolve to the same function.
+
+- `doc` - Alias for `documentation`
+- `doc-set!` - Alias for `set-documentation!`

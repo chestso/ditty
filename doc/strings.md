@@ -62,14 +62,14 @@ Get character at index from string (UTF-8 aware).
 
 ### Returns
 
-Single-character string at the specified index.
+The character at the specified index (a `LISP_CHAR` value, e.g. `#\h`).
 
 ### Examples
 
 ```lisp
-(string-ref "hello" 0)          ; => "h"
-(string-ref "hello" 4)          ; => "o"
-(string-ref "世界" 0)            ; => "世" (UTF-8)
+(string-ref "hello" 0)          ; => #\h
+(string-ref "hello" 4)          ; => #\o
+(string-ref "世界" 0)            ; => #\世 (UTF-8)
 ```
 
 ### Notes
@@ -329,7 +329,7 @@ New string with all occurrences of `old` replaced by `new`.
 
 ## `string-upcase`
 
-Convert string to uppercase (ASCII only).
+Convert string to uppercase (UTF-8 aware, ASCII only).
 
 ### Parameters
 
@@ -337,7 +337,7 @@ Convert string to uppercase (ASCII only).
 
 ### Returns
 
-New string with all ASCII letters converted to uppercase.
+New string with all ASCII letters converted to uppercase. Non-ASCII UTF-8 characters are preserved unchanged.
 
 ### Examples
 
@@ -348,11 +348,11 @@ New string with all ASCII letters converted to uppercase.
 
 ### Notes
 
-Only converts ASCII letters (a-z). Non-ASCII characters unchanged.
+Only converts ASCII letters (a-z). Non-ASCII characters are preserved (UTF-8 safe) but not case-converted.
 
 ## `string-downcase`
 
-Convert string to lowercase (ASCII only).
+Convert string to lowercase (UTF-8 aware, ASCII only).
 
 ### Parameters
 
@@ -360,7 +360,7 @@ Convert string to lowercase (ASCII only).
 
 ### Returns
 
-New string with all ASCII letters converted to lowercase.
+New string with all ASCII letters converted to lowercase. Non-ASCII UTF-8 characters are preserved unchanged.
 
 ### Examples
 
@@ -371,7 +371,7 @@ New string with all ASCII letters converted to lowercase.
 
 ### Notes
 
-Only converts ASCII letters (A-Z). Non-ASCII characters unchanged.
+Only converts ASCII letters (A-Z). Non-ASCII characters are preserved (UTF-8 safe) but not case-converted.
 
 ## `string-trim`
 
@@ -491,3 +491,12 @@ Test if strings are in non-increasing lexicographic order (greater than or equal
 (string>=? "abc" "abc")         ; => #t (equal)
 (string>=? "ant" "zebra")       ; => nil
 ```
+
+## Standard Library Aliases
+
+The following aliases are defined in the standard library for naming consistency with other Scheme implementations. They are not separate builtins — they resolve to the same function via `defalias`.
+
+- `string-append` - Alias for `concat`
+- `string-split` - Alias for `split`
+- `string-join` - Alias for `join`
+- `string-length` - Alias for `length` (also works on lists and vectors)
