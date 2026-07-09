@@ -21,7 +21,22 @@ For per-function documentation with parameters, return values, and examples, see
 
 ## Understanding Lisp Evaluation
 
-Before diving into the language details, it helps to understand how Lisp evaluates code. When you write `(foo x y)`, Lisp evaluates this as a function call—but _how_ that call works depends on what `foo` is. There are four main categories:
+Before diving into the language details, it helps to understand how Lisp evaluates code. When you write `(foo x y)`, Lisp evaluates this as a function call—but _how_ that call works depends on what `foo` is.
+
+### What Is a "Form"?
+
+Lisp documentation uses the word **form** a lot. In Lisp, a form is simply any expression that can be evaluated. The term comes from early Lisp literature (particularly McCarthy's 1960 paper and the Lisp 1.5 manual), where "form" was shorthand for "**S-expression**" — any syntactically valid expression, whether a literal, a symbol, or a list.
+
+You'll see "form" used throughout this guide and in error messages:
+
+- `(+ 1 2)` is a form (a list form, specifically a function call)
+- `42` is a form (a self-evaluating literal)
+- `x` is a form (a symbol form, evaluated by looking up the variable)
+- `'foo` is a form (a quoted form, evaluating to the symbol `foo`)
+
+When we say **special form**, we mean a form whose evaluation rules are special — the interpreter handles it differently from a normal function call. **Macro forms** are forms whose head symbol is bound to a macro. The word "form" is just Lisp terminology for "an expression ready for evaluation."
+
+There are four main categories of forms:
 
 ### Special Forms
 
