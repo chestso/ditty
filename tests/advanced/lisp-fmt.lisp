@@ -222,7 +222,7 @@
 ;; ============================================================
 ;; These tests exercise the C I/O layer's EOL awareness directly and
 ;; then confirm the round-trip through format-file-inplace.
-(define tmpdir (or (getenv "TEMP") (getenv "TMPDIR") "/tmp"))
+(define tmpdir (temporary-file-directory))
 
 ;; stream-eol auto-detects CRLF on open.
 (let ((tmp (string-append tmpdir "/ditty-fmt-detect-crlf.lisp")))

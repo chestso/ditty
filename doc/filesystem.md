@@ -345,3 +345,88 @@ Symbol identifying the OS:
 - `home-directory` - Get home directory (platform-specific)
 - `config-directory` - Get config directory (platform-specific)
 - `data-directory` - Get data directory (platform-specific)
+
+## `temporary-file-directory`
+
+Return the directory used for temporary files. Emacs Lisp style.
+
+### Parameters
+
+None.
+
+### Returns
+
+String with the system temporary directory path.
+
+### Platform Behavior
+
+- **Unix/Linux/macOS**: `$TMPDIR` environment variable, or `/tmp` if unset
+- **Windows**: `GetTempPath()` (checks `%TEMP%`, `%TMP%`, `%USERPROFILE%` in order)
+
+### Examples
+
+```lisp
+(temporary-file-directory)  ; => "/tmp" (Unix)
+(temporary-file-directory)  ; => "C:\\Users\\Alice\\AppData\\Local\\Temp" (Windows)
+
+;; Use with make-temp-file for explicit temp path
+(define tmp (make-temp-file "myapp-"))
+```
+
+### See Also
+
+- `make-temp-file` - Create a unique temporary file or directory
+
+## `make-temp-file`
+
+Create a unique temporary file (or directory) and return its path. Emacs Lisp style.
+
+The file or directory is created atomically with a unique name derived from the given prefix. The caller is responsible for deleting the file or directory when done (using `delete-file` or `delete-directory`).
+
+### Parameters
+
+- `prefix` - String prefix for the generated name (may be empty)
+- `:directory` - Optional keyword; if present, create a directory instead of a file
+
+### Returns
+
+String with the path to the created file or directory.
+
+### Examples
+
+```lisp
+;; Create a temp file
+(define tmp (make-temp-file "ditty-"))
+;; => "/tmp/ditty-a1B2c3"
+
+;; Write and read
+(define f (open tmp "w"))
+(write-line f "hello")
+(close f)
+(delete-file tmp)
+
+;; Create a temp directory
+(define tmpdir (make-temp-file "ditty-dir-" :directory))
+;; => "/tmp/ditty-dir-Xy7z8q"
+(delete-directory tmpdir :recursive)
+```
+
+### Notes
+
+- The returned path includes the system temp directory prefix from `temporary-file-directory`
+- On Unix, files are created with `0600` permissions and directories with `0700`
+- The caller must clean up the created file or directory
+
+### Errors
+
+Returns error if:
+
+- No prefix argument is provided
+- Prefix is not a string
+- Temp file or directory cannot be created (permissions, disk full, etc.)
+
+### See Also
+
+- `temporary-file-directory` - Get the system temp directory
+- `delete-file` - Delete a file
+- `delete-directory` - Delete a directory

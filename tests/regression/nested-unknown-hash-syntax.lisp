@@ -8,15 +8,18 @@
 ;; This test verifies the parser fails cleanly at all nesting levels
 (load "tests/test-helpers.lisp")
 
+(define tmpdir (temporary-file-directory))
+
 ;; Helper function to test that parsing code with unknown #\ syntax fails cleanly
 ;; We must use a temp file approach because parse errors occur during reading,
 ;; before evaluation, so they can't be caught directly by assert-error
 (defun test-parse-error (code-str description)
-  (let ((temp-file (concat (expand-path "~/") ".telnet-lisp-parse-test.tmp")))
+  (let ((temp-file (string-append tmpdir "/ditty-parse-test.tmp")))
     ;; Write test code to temp file
     (let ((f (open temp-file "w"))) (write-line f code-str) (close f))
     ;; Try to load it - should fail with parse error
-    (assert-error (load temp-file) description)))
+    (assert-error (load temp-file) description)
+    (delete-file temp-file)))
 
 ;; Top level should fail cleanly
 (test-parse-error "#\\space" "Top level unknown hash syntax")

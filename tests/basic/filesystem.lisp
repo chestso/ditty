@@ -72,7 +72,7 @@
 (assert-error (mkdir 42) "mkdir requires a string")
 
 ;; Create a temp directory with nested subdirs
-(define temp-base (or (getenv "TEMP") (getenv "TMPDIR") home-dir))
+(define temp-base (temporary-file-directory))
 
 (define test-dir (concat temp-base "/ditty-test/nested/dir"))
 
@@ -103,5 +103,59 @@
 
 ;; Clean up
 (delete-directory (concat temp-base "/ditty-test") :recursive)
+
+;; ============================================================================
+;; temporary-file-directory Tests
+;; ============================================================================
+(assert-true (string? (temporary-file-directory))
+ "temporary-file-directory returns a string")
+(assert-true (> (length (temporary-file-directory)) 0)
+ "temporary-file-directory is non-empty")
+(assert-true (file-is-directory? (temporary-file-directory))
+ "temporary-file-directory is an existing directory")
+
+;; ============================================================================
+;; make-temp-file Tests
+;; ============================================================================
+(assert-error (make-temp-file) "make-temp-file requires an argument")
+(assert-error (make-temp-file 42) "make-temp-file requires a string prefix")
+
+;; Basic temp file creation
+(define tmp1 (make-temp-file "ditty-test-"))
+
+(assert-true (string? tmp1) "make-temp-file returns a string")
+(assert-true (file-exists? tmp1) "make-temp-file creates an existing file")
+(assert-true (not (file-is-directory? tmp1))
+ "make-temp-file creates a regular file")
+(assert-true (string-contains? tmp1 "ditty-test-")
+ "make-temp-file path contains prefix")
+
+(delete-file tmp1)
+
+(assert-nil (file-exists? tmp1) "temp file cleaned up by delete-file")
+
+;; Temp file with empty prefix
+(define tmp2 (make-temp-file ""))
+
+(assert-true (file-exists? tmp2) "make-temp-file works with empty prefix")
+
+(delete-file tmp2)
+
+;; Temp directory creation with :directory keyword
+(define tmpdir1 (make-temp-file "ditty-dir-" :directory))
+
+(assert-true (string? tmpdir1)
+ "make-temp-file with :directory returns a string")
+(assert-true (file-exists? tmpdir1)
+ "make-temp-file with :directory creates existing path")
+(assert-true (file-is-directory? tmpdir1)
+ "make-temp-file with :directory creates a directory")
+(assert-true (string-contains? tmpdir1 "ditty-dir-")
+ "make-temp-file :directory path contains prefix")
+
+(delete-directory tmpdir1 :recursive)
+
+(assert-nil (file-exists? tmpdir1)
+ "temp directory cleaned up by delete-directory")
 
 (print "All tests passed!")

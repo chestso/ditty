@@ -57,17 +57,20 @@
 ;; ============================================================================
 ;; Integration Tests - File I/O
 ;; ============================================================================
+(define test-tmpdir (temporary-file-directory))
+
+(define test-filepath (string-append test-tmpdir "/ditty-path-exp-test.tmp"))
 ;; Should be usable with file I/O functions (if home exists)
 (assert-true
  (if (string? (home-directory))
-   (progn (define test-path (expand-path "~/test-expand-path.tmp"))
-     (define f (open test-path "w"))
-     (write-line f "test content")
+   (progn (define f (open test-filepath "w")) (write-line f "test content")
      (close f)
      ;; Read it back
-     (define f2 (open test-path "r"))
+     (define f2 (open test-filepath "r"))
      (define content (read-line f2))
      (close f2)
+     ;; Clean up
+     (delete-file test-filepath)
      ;; Verify
      (string=? content "test content"))
    #t) "expanded path works with file I/O")

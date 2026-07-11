@@ -643,3 +643,110 @@ int file_mkdir_p(const char *path)
     free(buf);
     return 0;
 }
+
+int file_temp_directory(char *buf, size_t size)
+{
+    if (!buf || size == 0)
+        return -1;
+
+#ifdef _WIN32
+    DWORD len = GetTempPathA((DWORD)size, buf);
+    if (len == 0 || len >= size)
+        return -1;
+    /* GetTempPathA returns a trailing backslash; strip it */
+    if (len > 0 && (buf[len - 1] == '\\' || buf[len - 1] == '/'))
+        buf[len - 1] = '\0';
+    return 0;
+#else
+    const char *tmp = getenv("TMPDIR");
+    if (!tmp || !tmp[0])
+        tmp = "/tmp";
+    if (strlen(tmp) >= size)
+        return -1;
+    strcpy(buf, tmp);
+    return 0;
+#endif
+}
+
+int file_make_temp_file(const char *prefix, char *buf, size_t buf_size)
+{
+    if (!prefix || !buf || buf_size == 0)
+        return -1;
+
+    char tmpdir[4096];
+    if (file_temp_directory(tmpdir, sizeof(tmpdir)) != 0)
+        return -1;
+
+#ifdef _WIN32
+    /* Build a template: <tmpdir>\<prefix>XXXXXX and use GetTempFileName */
+    char template_buf[8192];
+    int n = snprintf(template_buf, sizeof(template_buf), "%s\\%s", tmpdir,
+                     prefix);
+    if (n < 0 || (size_t)n >= sizeof(template_buf))
+        return -1;
+
+    /* GetTempFileNameA needs a unique ID; it creates the file */
+    UINT uniqueId = 0;
+    char tmpPath[MAX_PATH];
+    /* GetTempPathA for the directory part */
+    char dirPart[MAX_PATH];
+    DWORD dlen = GetTempPathA(MAX_PATH, dirPart);
+    if (dlen == 0 || dlen >= MAX_PATH)
+        return -1;
+
+    if (!GetTempFileNameA(dirPart, prefix, uniqueId, tmpPath))
+        return -1;
+
+    if (strlen(tmpPath) >= buf_size)
+        return -1;
+    strcpy(buf, tmpPath);
+    return 0;
+#else
+    /* Build template: <tmpdir>/<prefix>XXXXXX */
+    int n = snprintf(buf, buf_size, "%s/%sXXXXXX", tmpdir, prefix);
+    if (n < 0 || (size_t)n >= buf_size)
+        return -1;
+
+    int fd = mkstemp(buf);
+    if (fd < 0)
+        return -1;
+    close(fd);
+    return 0;
+#endif
+}
+
+int file_make_temp_dir(const char *prefix, char *buf, size_t buf_size)
+{
+    if (!prefix || !buf || buf_size == 0)
+        return -1;
+
+    char tmpdir[4096];
+    if (file_temp_directory(tmpdir, sizeof(tmpdir)) != 0)
+        return -1;
+
+#ifdef _WIN32
+    /* On Windows, create a unique directory by retrying with random suffixes */
+    for (int attempt = 0; attempt < 100; attempt++) {
+        char name[32];
+        snprintf(name, sizeof(name), "%s%06d", prefix,
+                 (int)(rand() % 1000000));
+        int n = snprintf(buf, buf_size, "%s\\%s", tmpdir, name);
+        if (n < 0 || (size_t)n >= buf_size)
+            return -1;
+        if (CreateDirectoryA(buf, NULL))
+            return 0;
+        if (GetLastError() != ERROR_ALREADY_EXISTS)
+            return -1;
+    }
+    return -1;
+#else
+    int n = snprintf(buf, buf_size, "%s/%sXXXXXX", tmpdir, prefix);
+    if (n < 0 || (size_t)n >= buf_size)
+        return -1;
+
+    char *result = mkdtemp(buf);
+    if (result == NULL)
+        return -1;
+    return 0;
+#endif
+}

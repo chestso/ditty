@@ -1,6 +1,7 @@
 #include "builtins_internal.h"
 
 static LispObject *g_recursive_kw = NULL;
+static LispObject *g_directory_kw = NULL;
 
 /* Get user's home directory path (cross-platform)
  * Unix/Linux/macOS: $HOME
@@ -347,6 +348,67 @@ static LispObject *builtin_system_type(LispObject *args, Environment *env)
 #endif
 }
 
+/* Return the system temporary file directory.
+ * Emacs Lisp style: (temporary-file-directory)
+ * Unix: $TMPDIR or /tmp
+ * Windows: GetTempPath() (checks %TEMP%, %TMP%, %USERPROFILE%)
+ * Returns: String with temp directory path
+ */
+static LispObject *builtin_temporary_file_directory(LispObject *args,
+                                                    Environment *env)
+{
+    (void)args;
+    (void)env;
+
+    char buf[4096];
+    if (file_temp_directory(buf, sizeof(buf)) != 0)
+        return lisp_make_error("temporary-file-directory: cannot determine temp directory");
+
+    return lisp_make_string(buf);
+}
+
+/* Create a unique temporary file or directory.
+ * Emacs Lisp style: (make-temp-file prefix &optional :directory)
+ * Creates a temp file by default, or a temp directory with :directory keyword.
+ * Returns: String with the created path
+ */
+static LispObject *builtin_make_temp_file(LispObject *args, Environment *env)
+{
+    (void)env;
+    if (args == NIL)
+        return lisp_make_error("make-temp-file requires at least 1 argument");
+
+    LispObject *prefix_obj = lisp_car(args);
+    if (LISP_TYPE(prefix_obj) != LISP_STRING)
+        return lisp_make_error("make-temp-file requires a string prefix");
+
+    int make_dir = 0;
+    if (g_directory_kw == NULL)
+        g_directory_kw = lisp_make_keyword(":directory");
+    LispObject *rest = lisp_cdr(args);
+    while (rest != NIL) {
+        if (lisp_car(rest) == g_directory_kw) {
+            make_dir = 1;
+            break;
+        }
+        rest = lisp_cdr(rest);
+    }
+
+    char buf[8192];
+    const char *prefix = LISP_STR_VAL(prefix_obj);
+    int rc;
+
+    if (make_dir)
+        rc = file_make_temp_dir(prefix, buf, sizeof(buf));
+    else
+        rc = file_make_temp_file(prefix, buf, sizeof(buf));
+
+    if (rc != 0)
+        return lisp_make_error("make-temp-file: failed to create temp file");
+
+    return lisp_make_string(buf);
+}
+
 void register_filesystem_builtins(Environment *env)
 {
     REGISTER("home-directory", builtin_home_directory);
@@ -359,4 +421,6 @@ void register_filesystem_builtins(Environment *env)
     REGISTER("delete-directory", builtin_delete_directory);
     REGISTER("file-is-directory?", builtin_file_is_directory_question);
     REGISTER("system-type", builtin_system_type);
+    REGISTER("temporary-file-directory", builtin_temporary_file_directory);
+    REGISTER("make-temp-file", builtin_make_temp_file);
 }

@@ -121,6 +121,49 @@ const char *file_resolve(const char *filename, char *resolved, size_t resolved_s
  */
 const char *file_resolve_library(const char *name, char *resolved, size_t resolved_size);
 
+/* Get the system temporary file directory (cross-platform).
+ * On Unix: $TMPDIR or /tmp
+ * On Windows: GetTempPath() (which checks %TEMP%, %TMP%, %USERPROFILE%)
+ *
+ * Parameters:
+ *   buf - Output buffer for the directory path
+ *   size - Size of output buffer
+ *
+ * Returns:
+ *   0 on success, -1 on failure (buffer too small or cannot determine)
+ */
+int file_temp_directory(char *buf, size_t size);
+
+/* Create a unique temporary file with the given prefix.
+ * The file is created with 0600 permissions on Unix.
+ * On Unix: uses mkstemp() with template "<dir>/<prefix>XXXXXX"
+ * On Windows: uses GetTempFileNameA()
+ *
+ * Parameters:
+ *   prefix - Prefix for the filename (may be empty string, must not be NULL)
+ *   buf - Output buffer for the created file path
+ *   buf_size - Size of output buffer
+ *
+ * Returns:
+ *   0 on success (file created, path in buf), -1 on failure
+ */
+int file_make_temp_file(const char *prefix, char *buf, size_t buf_size);
+
+/* Create a unique temporary directory with the given prefix.
+ * The directory is created with 0700 permissions on Unix.
+ * On Unix: uses mkdtemp() with template "<dir>/<prefix>XXXXXX"
+ * On Windows: creates a directory with a unique name via CreateDirectory
+ *
+ * Parameters:
+ *   prefix - Prefix for the directory name (may be empty string, must not be NULL)
+ *   buf - Output buffer for the created directory path
+ *   buf_size - Size of output buffer
+ *
+ * Returns:
+ *   0 on success (directory created, path in buf), -1 on failure
+ */
+int file_make_temp_dir(const char *prefix, char *buf, size_t buf_size);
+
 #ifdef _WIN32
 #include <wchar.h>
 
