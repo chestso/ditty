@@ -14,6 +14,9 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `/`
   - `quotient`
   - `remainder`
+  - `remainder`
+  - `floor`
+  - `modulo`
   - `even?`
   - `odd?`
 - [Characters](#characters)
@@ -71,9 +74,15 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `file-exists?`
   - `mkdir`
   - `file-is-directory?`
+  - `file-name-directory`
+  - `directory-file-name`
+  - `file-name-nondirectory`
   - `delete-directory`
   - `system-type`
+  - `temporary-file-directory`
+  - `make-temp-file`
 - [Functions](#functions)
+  - `lambda`
   - `function-params`
   - `function-body`
   - `function-name`
@@ -189,6 +198,8 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `get-output-string`
   - `string-port?`
 - [Strings](#strings)
+  - `make-string`
+  - `utf8-display-width`
   - `concat`
   - `substring`
   - `string-ref`
@@ -248,6 +259,24 @@ docstrings via `scripts/gen-docstrings.sh`.
 ## Arithmetic
 
 Functions for numerical operations.
+
+### Integer literals
+
+Integers can be written in decimal or with a radix prefix.
+
+```lisp
+##xFF     ; hexadecimal => 255
+##xff     ; lowercase hex => 255
+##o10     ; octal => 8
+##b11     ; binary => 3
+##d42     ; decimal => 42
+```
+
+Negative radix literals are written with a leading `-` before the radix prefix:
+
+```lisp
+(- #xFF)  ; => -255
+```
 
 ### `+`
 
@@ -390,6 +419,93 @@ Integer remainder after division.
 #### See Also
 
 - `quotient` - Integer division
+- `/` - Regular division (returns float)
+
+### `remainder`
+
+Integer remainder (modulo operation).
+
+#### Parameters
+
+- `dividend` - The number to be divided (integer or float)
+- `divisor` - The number to divide by (integer or float)
+
+#### Returns
+
+Integer remainder after division. The result has the same sign as the dividend.
+
+#### Examples
+
+```lisp
+(remainder 17 5)     ; => 2
+(remainder 10 3)     ; => 1
+(remainder 20 5)     ; => 0
+(remainder -17 5)    ; => -2
+```
+
+#### See Also
+
+- `floor` - Floor division (rounds toward negative infinity)
+- `modulo` - Modulo operation (result has same sign as divisor)
+- `quotient` - Integer division
+- `/` - Regular division (returns float)
+
+### `floor`
+
+Floor division - divide and round toward negative infinity.
+
+#### Parameters
+
+- `dividend` - The number to be divided (integer or float)
+- `divisor` - The number to divide by (integer or float)
+
+#### Returns
+
+Integer result of division, rounded toward negative infinity.
+
+#### Examples
+
+```lisp
+(floor 7 3)      ; => 2
+(floor -7 3)     ; => -3
+(floor 7 -3)     ; => -3
+(floor -7 -3)    ; => 2
+```
+
+#### See Also
+
+- `modulo` - Modulo operation (result has same sign as divisor)
+- `quotient` - Integer division (truncates toward zero)
+- `remainder` - Integer remainder (sign follows dividend)
+- `/` - Regular division (returns float)
+
+### `modulo`
+
+Modulo operation - returns the remainder of division with the sign of the divisor.
+
+#### Parameters
+
+- `dividend` - The number to be divided (integer or float)
+- `divisor` - The number to divide by (integer or float)
+
+#### Returns
+
+Integer remainder after division. The result has the same sign as the divisor.
+
+#### Examples
+
+```lisp
+(modulo 7 3)     ; => 1
+(modulo -7 3)    ; => 2
+(modulo 7 -3)    ; => -2
+(modulo -7 -3)   ; => -1
+```
+
+#### See Also
+
+- `floor` - Floor division (rounds toward negative infinity)
+- `quotient` - Integer division (truncates toward zero)
+- `remainder` - Integer remainder (sign follows dividend)
 - `/` - Regular division (returns float)
 
 ### `even?`
@@ -1933,6 +2049,92 @@ Create a directory and all parent directories (like mkdir -p).
 
 ### `file-is-directory?`
 
+Check if a path is a directory.
+
+#### Parameters
+
+- `path` - File path (string)
+
+#### Returns
+
+`#t` if path is a directory, nil otherwise (or if path doesn't exist).
+
+#### Examples
+
+```lisp
+(file-is-directory? "/tmp")          ; => #t
+(file-is-directory? "/etc/passwd")   ; => nil
+(file-is-directory? "/no/such/path") ; => nil
+```
+
+### `file-name-directory`
+
+Return the directory part of a path.
+
+#### Parameters
+
+- `path` - File path (string)
+
+#### Returns
+
+String with the directory component including the trailing separator, or `nil` if the path has no directory component.
+
+#### Examples
+
+```lisp
+(file-name-directory "/home/user/file.txt")  ; => "/home/user/"
+(file-name-directory "file.txt")             ; => nil
+```
+
+#### See Also
+
+- `directory-file-name` - Emacs alias for `file-name-directory`
+- `file-name-nondirectory` - Get the filename component
+
+### `directory-file-name`
+
+Emacs alias for `file-name-directory`. Return the directory part of a path.
+
+#### Parameters
+
+- `path` - File path (string)
+
+#### Returns
+
+String with the directory component including the trailing separator, or `nil` if the path has no directory component.
+
+#### Examples
+
+```lisp
+(directory-file-name "/home/user/file.txt")  ; => "/home/user/"
+(directory-file-name "file.txt")             ; => nil
+```
+
+### `file-name-nondirectory`
+
+Return the filename component of a path.
+
+#### Parameters
+
+- `path` - File path (string)
+
+#### Returns
+
+String with the filename component after the last separator. Returns empty string if the path ends with a separator.
+
+#### Examples
+
+```lisp
+(file-name-nondirectory "/home/user/file.txt")  ; => "file.txt"
+(file-name-nondirectory "file.txt")             ; => "file.txt"
+(file-name-nondirectory "/home/user/")            ; => ""
+```
+
+#### See Also
+
+- `file-name-directory` - Get the directory component
+- `directory-file-name` - Emacs alias for `file-name-directory`
+
 Test whether a path is a directory.
 
 #### Parameters
@@ -2055,11 +2257,133 @@ Symbol identifying the OS:
 - `config-directory` - Get config directory (platform-specific)
 - `data-directory` - Get data directory (platform-specific)
 
+### `temporary-file-directory`
+
+Return the directory used for temporary files. Emacs Lisp style.
+
+#### Parameters
+
+None.
+
+#### Returns
+
+String with the system temporary directory path.
+
+#### Platform Behavior
+
+- **Unix/Linux/macOS**: `$TMPDIR` environment variable, or `/tmp` if unset
+- **Windows**: `GetTempPath()` (checks `%TEMP%`, `%TMP%`, `%USERPROFILE%` in order)
+
+#### Examples
+
+```lisp
+(temporary-file-directory)  ; => "/tmp" (Unix)
+(temporary-file-directory)  ; => "C:\\Users\\Alice\\AppData\\Local\\Temp" (Windows)
+
+;; Use with make-temp-file for explicit temp path
+(define tmp (make-temp-file "myapp-"))
+```
+
+#### See Also
+
+- `make-temp-file` - Create a unique temporary file or directory
+
+### `make-temp-file`
+
+Create a unique temporary file (or directory) and return its path. Emacs Lisp style.
+
+The file or directory is created atomically with a unique name derived from the given prefix. The caller is responsible for deleting the file or directory when done (using `delete-file` or `delete-directory`).
+
+#### Parameters
+
+- `prefix` - String prefix for the generated name (may be empty)
+- `:directory` - Optional keyword; if present, create a directory instead of a file
+
+#### Returns
+
+String with the path to the created file or directory.
+
+#### Examples
+
+```lisp
+;; Create a temp file
+(define tmp (make-temp-file "ditty-"))
+;; => "/tmp/ditty-a1B2c3"
+
+;; Write and read
+(define f (open tmp "w"))
+(write-line f "hello")
+(close f)
+(delete-file tmp)
+
+;; Create a temp directory
+(define tmpdir (make-temp-file "ditty-dir-" :directory))
+;; => "/tmp/ditty-dir-Xy7z8q"
+(delete-directory tmpdir :recursive)
+```
+
+#### Notes
+
+- The returned path includes the system temp directory prefix from `temporary-file-directory`
+- On Unix, files are created with `0600` permissions and directories with `0700`
+- The caller must clean up the created file or directory
+
+#### Errors
+
+Returns error if:
+
+- No prefix argument is provided
+- Prefix is not a string
+- Temp file or directory cannot be created (permissions, disk full, etc.)
+
+#### See Also
+
+- `temporary-file-directory` - Get the system temp directory
+- `delete-file` - Delete a file
+- `delete-directory` - Delete a directory
+
 ---
 
 ## Functions
 
 Function introspection and evaluation.
+
+### `lambda`
+
+Create an anonymous function.
+
+#### Syntax
+
+```lisp
+(lambda (params...) body...)
+```
+
+Parameters may include:
+
+- Required parameters: `x`
+- Optional parameters with defaults: `&optional (y 10)` or `&optional y`
+- Rest parameter: `&rest args`
+
+Optional defaults can reference earlier parameters.
+
+#### Examples
+
+```lisp
+((lambda (x) (* x 2)) 5)              ; => 10
+
+((lambda (x &optional (y 10)) (+ x y)) 3)      ; => 13
+((lambda (x &optional (y 10)) (+ x y)) 3 4)    ; => 7
+
+((lambda (a &optional (b (* a 2))) (+ a b)) 3) ; => 9
+
+((lambda (a &optional b &rest rest) (list a b rest)) 1 2 3 4)
+; => (1 2 (3 4))
+```
+
+#### See Also
+
+- `define` - Bind a function to a name
+- `apply` - Apply a function to a list of arguments
 
 ### `function-params`
 
@@ -4255,6 +4579,8 @@ Supports rest parameters using dotted parameter list syntax.
 
 Create local variable bindings with parallel evaluation. All init expressions are evaluated before any variable is bound. Body has implicit `progn`.
 
+A named `let` form binds a recursive function for looping. The name is followed by the same binding list and body. Tail calls back to the name are optimized.
+
 #### Parameters
 
 - `bindings` - List of `(name init-expr)` pairs
@@ -4268,6 +4594,11 @@ Create local variable bindings with parallel evaluation. All init expressions ar
 
 (let ((a 1) (b 2))
   (* a b))                 ; => 2
+
+(let loop ((i 0) (sum 0))
+  (if (< i 5)
+      (loop (+ i 1) (+ sum i))
+      sum))                ; => 10
 ```
 
 ### `let*`
@@ -4757,6 +5088,60 @@ Test if a value is a string port (input or output).
 ## Strings
 
 String manipulation functions. All operations are UTF-8 aware.
+
+### `make-string`
+
+Create a new string of a given length filled with a character.
+
+#### Parameters
+
+- `length` - Number of characters (integer, non-negative)
+- `fill` - Optional character to fill with (defaults to space)
+
+#### Returns
+
+A new string of `length` characters, each equal to `fill`.
+
+#### Examples
+
+```lisp
+(make-string 4 #\A)          ; => "AAAA"
+(make-string 4)               ; => "    "
+(make-string 0 #\A)           ; => ""
+(make-string 3 #\x03B1)       ; => "ααα" (3 Greek alpha characters)
+```
+
+#### Notes
+
+- `length` is the number of characters, not bytes
+- Works correctly with multi-byte UTF-8 fill characters
+
+### `utf8-display-width`
+
+Return the terminal display width of a UTF-8 string in columns.
+
+#### Parameters
+
+- `string` - The string to measure
+
+#### Returns
+
+Integer column width. ASCII characters count as 1, CJK characters as 2,
+combining characters as 0.
+
+#### Examples
+
+```lisp
+(utf8-display-width "hello")     ; => 5
+(utf8-display-width "中")       ; => 2
+(utf8-display-width "")         ; => 0
+(utf8-display-width (make-string 1 (code-char 768)))  ; => 0 (combining char)
+```
+
+#### See Also
+
+- `make-string` - Create repeated-character strings
+- `string-length` - Number of characters in a string
 
 ### `concat`
 

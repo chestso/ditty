@@ -409,6 +409,77 @@ static LispObject *builtin_make_temp_file(LispObject *args, Environment *env)
     return lisp_make_string(buf);
 }
 
+/* Return directory part of a path (everything before last separator, including separator).
+ * Emacs Lisp style: (directory-file-name PATH) and (file-name-directory PATH)
+ * Returns: String with directory part, or nil if no directory.
+ */
+static LispObject *builtin_file_name_directory(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("file-name-directory");
+
+    LispObject *arg = lisp_car(args);
+    if (LISP_TYPE(arg) != LISP_STRING) {
+        return lisp_make_error("file-name-directory: argument must be a string");
+    }
+
+    const char *path = LISP_STR_VAL(arg);
+    const char *last_sep = strrchr(path, '/');
+
+#if defined(_WIN32) || defined(_WIN64)
+    const char *last_backslash = strrchr(path, '\\');
+    if (last_backslash && (!last_sep || last_backslash > last_sep))
+        last_sep = last_backslash;
+#endif
+
+    if (last_sep == NULL)
+        return NIL;
+
+    size_t len = (size_t)(last_sep - path + 1);
+    char *result = GC_malloc(len + 1);
+    memcpy(result, path, len);
+    result[len] = '\0';
+
+    return lisp_make_string(result);
+}
+
+/* Return non-directory part of a path (filename after last separator).
+ * Emacs Lisp style: (file-name-nondirectory PATH)
+ * Returns: String with filename component.
+ */
+static LispObject *builtin_file_name_nondirectory(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("file-name-nondirectory");
+
+    LispObject *arg = lisp_car(args);
+    if (LISP_TYPE(arg) != LISP_STRING) {
+        return lisp_make_error("file-name-nondirectory: argument must be a string");
+    }
+
+    const char *path = LISP_STR_VAL(arg);
+    size_t path_len = strlen(path);
+    if (path_len == 0)
+        return lisp_make_string("");
+
+    const char *last_sep = strrchr(path, '/');
+
+#if defined(_WIN32) || defined(_WIN64)
+    const char *last_backslash = strrchr(path, '\\');
+    if (last_backslash && (!last_sep || last_backslash > last_sep))
+        last_sep = last_backslash;
+#endif
+
+    if (last_sep == NULL)
+        return lisp_make_string(path);
+
+    /* If path ends with a separator, the non-directory part is empty */
+    if (last_sep == path + path_len - 1)
+        return lisp_make_string("");
+
+    return lisp_make_string(last_sep + 1);
+}
+
 void register_filesystem_builtins(Environment *env)
 {
     REGISTER("home-directory", builtin_home_directory);
@@ -423,4 +494,7 @@ void register_filesystem_builtins(Environment *env)
     REGISTER("system-type", builtin_system_type);
     REGISTER("temporary-file-directory", builtin_temporary_file_directory);
     REGISTER("make-temp-file", builtin_make_temp_file);
+    REGISTER("file-name-directory", builtin_file_name_directory);
+    REGISTER("directory-file-name", builtin_file_name_directory);
+    REGISTER("file-name-nondirectory", builtin_file_name_nondirectory);
 }

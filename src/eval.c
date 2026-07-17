@@ -387,8 +387,8 @@ static LispObject *eval_set_bang(LispObject *args, Environment *env)
  * Returns: 0 on success, -1 on error (sets error message)
  */
 static int parse_lambda_params(LispObject *params, LispObject **required_out, LispObject **optional_out,
-                               LispObject **rest_out, int *required_count_out, int *optional_count_out,
-                               char **error_msg_out)
+                               LispObject **optional_defaults_out, LispObject **rest_out, int *required_count_out,
+                               int *optional_count_out, char **error_msg_out)
 {
     /* States for parameter parsing */
     enum
@@ -401,6 +401,7 @@ static int parse_lambda_params(LispObject *params, LispObject **required_out, Li
     /* Build lists using cons cells (reversed, will reverse at end) */
     LispObject *required_list = NIL;
     LispObject *optional_list = NIL;
+    LispObject *optional_defaults_list = NIL;
     LispObject *rest_param = NULL;
     int required_count = 0;
     int optional_count = 0;
@@ -411,6 +412,7 @@ static int parse_lambda_params(LispObject *params, LispObject **required_out, Li
     if (params == NIL) {
         *required_out = NIL;
         *optional_out = NIL;
+        *optional_defaults_out = NIL;
         *rest_out = NULL;
         *required_count_out = 0;
         *optional_count_out = 0;
@@ -481,22 +483,50 @@ static int parse_lambda_params(LispObject *params, LispObject **required_out, Li
             break;
         }
 
-        /* Regular parameter - must be a symbol */
-        if (LISP_TYPE(param) != LISP_SYMBOL) {
-            *error_msg_out = "Parameter must be a symbol";
-            return -1;
-        }
-
-        /* Add to appropriate list based on state */
+        /* Required parameters must be symbols */
         if (state == REQUIRED) {
+            if (LISP_TYPE(param) != LISP_SYMBOL) {
+                *error_msg_out = "Parameter must be a symbol";
+                return -1;
+            }
             required_list = lisp_make_cons(param, required_list);
             required_count++;
-        } else if (state == OPTIONAL) {
-            optional_list = lisp_make_cons(param, optional_list);
-            optional_count++;
+            current = lisp_cdr(current);
+            continue;
         }
 
-        current = lisp_cdr(current);
+        /* Optional parameters: symbol or (symbol default) */
+        if (state == OPTIONAL) {
+            LispObject *opt_param = NULL;
+            LispObject *opt_default = NIL;
+
+            if (LISP_TYPE(param) == LISP_SYMBOL) {
+                opt_param = param;
+            } else if (LISP_TYPE(param) == LISP_CONS) {
+                opt_param = lisp_car(param);
+                if (LISP_TYPE(opt_param) != LISP_SYMBOL) {
+                    *error_msg_out = "Optional parameter name must be a symbol";
+                    return -1;
+                }
+                LispObject *default_list = lisp_cdr(param);
+                if (default_list != NIL && default_list != NULL) {
+                    opt_default = lisp_car(default_list);
+                }
+            } else {
+                *error_msg_out = "Optional parameter must be a symbol or (symbol default)";
+                return -1;
+            }
+
+            optional_list = lisp_make_cons(opt_param, optional_list);
+            optional_defaults_list = lisp_make_cons(opt_default, optional_defaults_list);
+            optional_count++;
+            current = lisp_cdr(current);
+            continue;
+        }
+
+        /* Rest state should not have more params after &rest handling */
+        *error_msg_out = "Invalid parameter after &rest";
+        return -1;
     }
 
     /* Reverse lists (we built them backwards) */
@@ -507,14 +537,18 @@ static int parse_lambda_params(LispObject *params, LispObject **required_out, Li
     }
 
     LispObject *reversed_optional = NIL;
+    LispObject *reversed_optional_defaults = NIL;
     while (optional_list != NIL) {
         reversed_optional = lisp_make_cons(lisp_car(optional_list), reversed_optional);
+        reversed_optional_defaults = lisp_make_cons(lisp_car(optional_defaults_list), reversed_optional_defaults);
         optional_list = lisp_cdr(optional_list);
+        optional_defaults_list = lisp_cdr(optional_defaults_list);
     }
 
     /* Set output parameters */
     *required_out = reversed_required;
     *optional_out = reversed_optional;
+    *optional_defaults_out = reversed_optional_defaults;
     *rest_out = rest_param;
     *required_count_out = required_count;
     *optional_count_out = optional_count;
@@ -538,13 +572,14 @@ static LispObject *eval_lambda(LispObject *args, Environment *env)
     /* Parse parameter list */
     LispObject *required_params = NULL;
     LispObject *optional_params = NULL;
+    LispObject *optional_defaults = NULL;
     LispObject *rest_param = NULL;
     int required_count = 0;
     int optional_count = 0;
     char *error_msg = NULL;
 
-    if (parse_lambda_params(params, &required_params, &optional_params, &rest_param, &required_count, &optional_count,
-                            &error_msg) != 0) {
+    if (parse_lambda_params(params, &required_params, &optional_params, &optional_defaults, &rest_param, &required_count,
+                            &optional_count, &error_msg) != 0) {
         return lisp_make_error(error_msg);
     }
 
@@ -563,8 +598,8 @@ static LispObject *eval_lambda(LispObject *args, Environment *env)
     }
 
     /* Create lambda with parsed params and extracted docstring */
-    LispObject *lambda = lisp_make_lambda_ext(params, required_params, optional_params, rest_param, required_count,
-                                              optional_count, body, env, NULL);
+    LispObject *lambda = lisp_make_lambda_ext(params, required_params, optional_params, optional_defaults, rest_param,
+                                              required_count, optional_count, body, env, NULL);
 
     /* Set docstring if extracted */
     if (docstring != NULL) {
@@ -760,6 +795,88 @@ static LispObject *expand_macro(LispObject *macro, LispObject *args, Environment
     return eval_progn(LISP_MACRO_BODY(macro), new_env, 0);
 }
 
+static LispObject *reverse_list(LispObject *list)
+{
+    LispObject *result = NIL;
+    while (list != NIL && list != NULL) {
+        LispObject *node = lisp_make_cons(lisp_car(list), result);
+        result = node;
+        list = lisp_cdr(list);
+    }
+    return result;
+}
+
+static LispObject *eval_named_let(LispObject *name, LispObject *bindings, LispObject *body,
+                                  Environment *env, int in_tail_position)
+{
+    LispObject *params = NIL;
+    LispObject *init_exprs = NIL;
+
+    while (bindings != NIL && bindings != NULL) {
+        LispObject *binding = lisp_car(bindings);
+
+        if (LISP_TYPE(binding) != LISP_CONS) {
+            return lisp_make_error("named let binding must be a list");
+        }
+
+        LispObject *param_name = lisp_car(binding);
+        if (LISP_TYPE(param_name) != LISP_SYMBOL) {
+            return lisp_make_error("named let binding name must be a symbol");
+        }
+
+        LispObject *value_list = lisp_cdr(binding);
+        if (value_list == NIL) {
+            return lisp_make_error("named let binding requires a value");
+        }
+
+        params = lisp_make_cons(param_name, params);
+        init_exprs = lisp_make_cons(lisp_car(value_list), init_exprs);
+        bindings = lisp_cdr(bindings);
+    }
+
+    params = reverse_list(params);
+    init_exprs = reverse_list(init_exprs);
+
+    /* Count required parameters */
+    int required_count = 0;
+    LispObject *count_p = params;
+    while (count_p != NIL && count_p != NULL) {
+        required_count++;
+        count_p = lisp_cdr(count_p);
+    }
+
+    /* Closure environment is a child of the current environment */
+    Environment *closure_env = env_create(env);
+
+    /* Create the loop lambda; it will close over the loop name binding */
+    LispObject *lambda = lisp_make_lambda_ext(params, params, NIL, NIL, NULL, required_count, 0, body, closure_env,
+                                              LISP_SYM_VAL(name)->name);
+
+    /* Bind the loop name to the lambda in its own closure */
+    env_define(closure_env, LISP_SYM_VAL(name), lambda, NULL);
+
+    /* Evaluate initial values in the current (parent) environment */
+    LispObject *args = NIL;
+    LispObject *args_tail = NIL;
+    while (init_exprs != NIL && init_exprs != NULL) {
+        LispObject *value = lisp_eval_internal(lisp_car(init_exprs), env, 0);
+        if (should_propagate_error(value)) {
+            return value;
+        }
+        if (args_tail == NIL) {
+            args = lisp_make_cons(value, NIL);
+            args_tail = args;
+        } else {
+            LISP_CDR(args_tail) = lisp_make_cons(value, NIL);
+            args_tail = LISP_CDR(args_tail);
+        }
+        init_exprs = lisp_cdr(init_exprs);
+    }
+
+    /* Apply the lambda to the initial values */
+    return apply(lambda, args, env, in_tail_position);
+}
+
 static LispObject *eval_let(LispObject *args, Environment *env, int in_tail_position)
 {
     if (args == NIL) {
@@ -771,6 +888,16 @@ static LispObject *eval_let(LispObject *args, Environment *env, int in_tail_posi
 
     if (body == NIL) {
         return lisp_make_error("let requires a body");
+    }
+
+    /* Named let: (let name ((x init) ...) body ...) */
+    if (LISP_TYPE(bindings) == LISP_SYMBOL) {
+        LispObject *real_bindings = lisp_car(body);
+        LispObject *real_body = lisp_cdr(body);
+        if (real_body == NIL) {
+            return lisp_make_error("named let requires a body");
+        }
+        return eval_named_let(bindings, real_bindings, real_body, env, in_tail_position);
     }
 
     /* Create new environment */
@@ -1298,15 +1425,28 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
             arg_list = lisp_cdr(arg_list);
         }
 
-        /* Bind optional parameters (default to nil) */
+        /* Bind optional parameters (evaluate defaults in new_env when missing) */
         LispObject *opt_params = LISP_LAMBDA_OPTIONAL_PARAMS(func);
+        LispObject *opt_defaults = LISP_LAMBDA_OPTIONAL_DEFAULTS(func);
         while (opt_params != NIL && opt_params != NULL) {
             LispObject *param_sym = lisp_car(opt_params);
-            LispObject *value = (arg_list != NIL) ? lisp_car(arg_list) : NIL;
+            LispObject *default_expr = (opt_defaults != NIL && opt_defaults != NULL) ? lisp_car(opt_defaults) : NIL;
+            LispObject *value;
+
+            if (arg_list != NIL && arg_list != NULL) {
+                value = lisp_car(arg_list);
+                arg_list = lisp_cdr(arg_list);
+            } else {
+                value = lisp_eval_internal(default_expr, new_env, 0);
+                if (should_propagate_error(value)) {
+                    pop_call_frame(new_env);
+                    return value;
+                }
+            }
             env_define(new_env, LISP_SYM_VAL(param_sym), value, NULL);
             opt_params = lisp_cdr(opt_params);
-            if (arg_list != NIL) {
-                arg_list = lisp_cdr(arg_list);
+            if (opt_defaults != NIL && opt_defaults != NULL) {
+                opt_defaults = lisp_cdr(opt_defaults);
             }
         }
 

@@ -159,6 +159,74 @@ static LispObject *builtin_remainder(LispObject *args, Environment *env)
     return lisp_make_integer(result);
 }
 
+static LispObject *builtin_floor(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_2("floor");
+
+    LispObject *first = lisp_car(args);
+    LispObject *second = lisp_car(lisp_cdr(args));
+
+    if (LISP_TYPE(first) != LISP_INTEGER && LISP_TYPE(first) != LISP_NUMBER) {
+        return lisp_make_error("floor requires numbers");
+    }
+    if (LISP_TYPE(second) != LISP_INTEGER && LISP_TYPE(second) != LISP_NUMBER) {
+        return lisp_make_error("floor requires numbers");
+    }
+
+    int first_is_integer;
+    int second_is_integer;
+    long long first_val = (long long)get_numeric_value(first, &first_is_integer);
+    long long second_val = (long long)get_numeric_value(second, &second_is_integer);
+
+    if (second_val == 0) {
+        return lisp_make_error("Division by zero");
+    }
+
+    long long result = first_val / second_val;
+
+    // Round toward negative infinity if signs differ and there's a remainder
+    if ((first_val < 0) != (second_val < 0) && first_val % second_val != 0) {
+        result--;
+    }
+
+    return lisp_make_integer(result);
+}
+
+static LispObject *builtin_modulo(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_2("modulo");
+
+    LispObject *first = lisp_car(args);
+    LispObject *second = lisp_car(lisp_cdr(args));
+
+    if (LISP_TYPE(first) != LISP_INTEGER && LISP_TYPE(first) != LISP_NUMBER) {
+        return lisp_make_error("modulo requires numbers");
+    }
+    if (LISP_TYPE(second) != LISP_INTEGER && LISP_TYPE(second) != LISP_NUMBER) {
+        return lisp_make_error("modulo requires numbers");
+    }
+
+    int first_is_integer;
+    int second_is_integer;
+    long long first_val = (long long)get_numeric_value(first, &first_is_integer);
+    long long second_val = (long long)get_numeric_value(second, &second_is_integer);
+
+    if (second_val == 0) {
+        return lisp_make_error("Division by zero");
+    }
+
+    long long result = first_val % second_val;
+
+    // Ensure result has same sign as divisor
+    if ((result > 0 && second_val < 0) || (result < 0 && second_val > 0)) {
+        result += second_val;
+    }
+
+    return lisp_make_integer(result);
+}
+
 static LispObject *builtin_even_question(LispObject *args, Environment *env)
 {
     (void)env;
@@ -207,6 +275,8 @@ void register_arithmetic_builtins(Environment *env)
     REGISTER("/", builtin_divide);
     REGISTER("quotient", builtin_quotient);
     REGISTER("remainder", builtin_remainder);
+    REGISTER("floor", builtin_floor);
+    REGISTER("modulo", builtin_modulo);
     REGISTER("even?", builtin_even_question);
     REGISTER("odd?", builtin_odd_question);
 }

@@ -95,16 +95,17 @@ typedef LispObject *(*BuiltinFunc)(LispObject *args, Environment *env);
  * small (~24 bytes instead of ~80). Heap-only; immediates never reach them. */
 typedef struct LambdaInfo
 {
-    LispObject *params;          /* Full parameter list (for display) */
-    LispObject *required_params; /* List of required parameter symbols */
-    LispObject *optional_params; /* List of optional parameter symbols */
-    LispObject *rest_param;      /* Rest parameter symbol (or NULL) */
-    int required_count;          /* Number of required params */
-    int optional_count;          /* Number of optional params */
-    LispObject *body;            /* Body expressions */
-    Environment *closure;        /* Lexical environment */
-    char *name;                  /* Optional function name for debugging */
-    char *docstring;             /* Documentation string (CommonMark format) */
+    LispObject *params;            /* Full parameter list (for display) */
+    LispObject *required_params;   /* List of required parameter symbols */
+    LispObject *optional_params;   /* List of optional parameter symbols */
+    LispObject *optional_defaults; /* List of default expressions for optional params (parallel to optional_params) */
+    LispObject *rest_param;        /* Rest parameter symbol (or NULL) */
+    int required_count;            /* Number of required params */
+    int optional_count;            /* Number of optional params */
+    LispObject *body;              /* Body expressions */
+    Environment *closure;          /* Lexical environment */
+    char *name;                    /* Optional function name for debugging */
+    char *docstring;               /* Documentation string (CommonMark format) */
 } LambdaInfo;
 
 typedef struct MacroInfo
@@ -272,8 +273,8 @@ LispObject *lisp_make_error(const char *message);
 LispObject *lisp_make_builtin(BuiltinFunc func, const char *name);
 LispObject *lisp_make_lambda(LispObject *params, LispObject *body, Environment *closure, const char *name);
 LispObject *lisp_make_lambda_ext(LispObject *params, LispObject *required_params, LispObject *optional_params,
-                                 LispObject *rest_param, int required_count, int optional_count,
-                                 LispObject *body, Environment *closure, const char *name);
+                                 LispObject *optional_defaults, LispObject *rest_param, int required_count,
+                                 int optional_count, LispObject *body, Environment *closure, const char *name);
 LispObject *lisp_make_macro(LispObject *params, LispObject *body, Environment *closure, const char *name);
 LispObject *lisp_make_file_stream(FILE *file);
 LispObject *lisp_make_vector(size_t capacity);

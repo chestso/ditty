@@ -411,6 +411,51 @@ static LispObject *read_character(const char **input)
     return lisp_make_error(errbuf);
 }
 
+static LispObject *read_number_with_base(const char **input, int base)
+{
+    /* Skip optional sign before digits (if any) */
+    int negative = 0;
+    if (**input == '-') {
+        negative = 1;
+        (*input)++;
+    } else if (**input == '+') {
+        (*input)++;
+    }
+
+    if (**input == '\0' || !isxdigit((unsigned char)**input)) {
+        return lisp_make_error("Expected digits after radix prefix");
+    }
+
+    long long value = 0;
+    while (**input != '\0' && **input != ')' && **input != ' ' &&
+           **input != '\t' && **input != '\n' && **input != '\r') {
+        int digit = -1;
+        char c = **input;
+        if (c >= '0' && c <= '9')
+            digit = c - '0';
+        else if (c >= 'a' && c <= 'z')
+            digit = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'Z')
+            digit = c - 'A' + 10;
+        else
+            break;
+
+        if (digit >= base) {
+            char errbuf[64];
+            snprintf(errbuf, sizeof(errbuf), "Invalid digit '%c' for base %d", c, base);
+            return lisp_make_error(errbuf);
+        }
+
+        value = value * base + digit;
+        (*input)++;
+    }
+
+    if (negative)
+        value = -value;
+
+    return lisp_make_integer(value);
+}
+
 static LispObject *read_quote(const char **input)
 {
     (*input)++; /* Skip quote character */
@@ -511,7 +556,7 @@ LispObject *lisp_read(const char **input)
         return read_string(input);
     }
 
-    /* Handle #t, #f, #(...), and #\char */
+    /* Handle #t, #f, #(...), #\char, and radix literals (#x, #o, #b, #d) */
     if (**input == '#') {
         const char *p = *input + 1;
         if (*p == 't') {
@@ -524,6 +569,18 @@ LispObject *lisp_read(const char **input)
             return read_vector(input);
         } else if (*p == '\\') {
             return read_character(input);
+        } else if (*p == 'x' || *p == 'X') {
+            *input = p + 1;
+            return read_number_with_base(input, 16);
+        } else if (*p == 'o' || *p == 'O') {
+            *input = p + 1;
+            return read_number_with_base(input, 8);
+        } else if (*p == 'b' || *p == 'B') {
+            *input = p + 1;
+            return read_number_with_base(input, 2);
+        } else if (*p == 'd' || *p == 'D') {
+            *input = p + 1;
+            return read_number_with_base(input, 10);
         }
         /* Unknown # syntax - advance past # and next char to prevent silent exit */
         (*input) += (*p ? 2 : 1);

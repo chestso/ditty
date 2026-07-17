@@ -224,6 +224,92 @@ Create a directory and all parent directories (like mkdir -p).
 
 ## `file-is-directory?`
 
+Check if a path is a directory.
+
+### Parameters
+
+- `path` - File path (string)
+
+### Returns
+
+`#t` if path is a directory, nil otherwise (or if path doesn't exist).
+
+### Examples
+
+```lisp
+(file-is-directory? "/tmp")          ; => #t
+(file-is-directory? "/etc/passwd")   ; => nil
+(file-is-directory? "/no/such/path") ; => nil
+```
+
+## `file-name-directory`
+
+Return the directory part of a path.
+
+### Parameters
+
+- `path` - File path (string)
+
+### Returns
+
+String with the directory component including the trailing separator, or `nil` if the path has no directory component.
+
+### Examples
+
+```lisp
+(file-name-directory "/home/user/file.txt")  ; => "/home/user/"
+(file-name-directory "file.txt")             ; => nil
+```
+
+### See Also
+
+- `directory-file-name` - Emacs alias for `file-name-directory`
+- `file-name-nondirectory` - Get the filename component
+
+## `directory-file-name`
+
+Emacs alias for `file-name-directory`. Return the directory part of a path.
+
+### Parameters
+
+- `path` - File path (string)
+
+### Returns
+
+String with the directory component including the trailing separator, or `nil` if the path has no directory component.
+
+### Examples
+
+```lisp
+(directory-file-name "/home/user/file.txt")  ; => "/home/user/"
+(directory-file-name "file.txt")             ; => nil
+```
+
+## `file-name-nondirectory`
+
+Return the filename component of a path.
+
+### Parameters
+
+- `path` - File path (string)
+
+### Returns
+
+String with the filename component after the last separator. Returns empty string if the path ends with a separator.
+
+### Examples
+
+```lisp
+(file-name-nondirectory "/home/user/file.txt")  ; => "file.txt"
+(file-name-nondirectory "file.txt")             ; => "file.txt"
+(file-name-nondirectory "/home/user/")            ; => ""
+```
+
+### See Also
+
+- `file-name-directory` - Get the directory component
+- `directory-file-name` - Emacs alias for `file-name-directory`
+
 Test whether a path is a directory.
 
 ### Parameters

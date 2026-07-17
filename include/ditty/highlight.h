@@ -7,7 +7,7 @@
 #ifndef DITTY_FLARE_HIGHLIGHT_H
 #define DITTY_FLARE_HIGHLIGHT_H
 
-#include "lisp.h"
+#include "../lisp.h"
 #include <stddef.h>
 #include <stdint.h>
 

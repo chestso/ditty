@@ -264,6 +264,7 @@ LispObject *lisp_make_lambda(LispObject *params, LispObject *body, Environment *
     LISP_LAMBDA_PARAMS(obj) = params;
     LISP_LAMBDA_REQUIRED_PARAMS(obj) = params; /* For backward compat: all params are required */
     LISP_LAMBDA_OPTIONAL_PARAMS(obj) = NIL;
+    LISP_LAMBDA_OPTIONAL_DEFAULTS(obj) = NIL;
     LISP_LAMBDA_REST_PARAM(obj) = NULL;
     LISP_LAMBDA_REQUIRED_COUNT(obj) = 0; /* Will be computed during apply */
     LISP_LAMBDA_OPTIONAL_COUNT(obj) = 0;
@@ -275,8 +276,8 @@ LispObject *lisp_make_lambda(LispObject *params, LispObject *body, Environment *
 }
 
 LispObject *lisp_make_lambda_ext(LispObject *params, LispObject *required_params, LispObject *optional_params,
-                                 LispObject *rest_param, int required_count, int optional_count, LispObject *body,
-                                 Environment *closure, const char *name)
+                                 LispObject *optional_defaults, LispObject *rest_param, int required_count,
+                                 int optional_count, LispObject *body, Environment *closure, const char *name)
 {
     LispObject *obj = GC_malloc(sizeof(LispObject));
     obj->type = LISP_LAMBDA;
@@ -284,6 +285,7 @@ LispObject *lisp_make_lambda_ext(LispObject *params, LispObject *required_params
     LISP_LAMBDA_PARAMS(obj) = params;
     LISP_LAMBDA_REQUIRED_PARAMS(obj) = required_params;
     LISP_LAMBDA_OPTIONAL_PARAMS(obj) = optional_params;
+    LISP_LAMBDA_OPTIONAL_DEFAULTS(obj) = optional_defaults ? optional_defaults : NIL;
     LISP_LAMBDA_REST_PARAM(obj) = rest_param;
     LISP_LAMBDA_REQUIRED_COUNT(obj) = required_count;
     LISP_LAMBDA_OPTIONAL_COUNT(obj) = optional_count;

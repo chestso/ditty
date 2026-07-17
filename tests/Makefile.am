@@ -132,14 +132,21 @@ TESTS = \
     basic/and_or_list.lisp \
     basic/characters.lisp \
     basic/filesystem.lisp \
+    basic/floor_modulo.lisp \
     basic/format.lisp \
+    basic/make_string.lisp \
     basic/hash_tables.lisp \
     basic/integer_ops.lisp \
     basic/integers.lisp \
     basic/keywords.lisp \
     basic/length.lisp \
     basic/list_reverse.lisp \
+    basic/make_string.lisp \
+    basic/named_let.lisp \
+    basic/number_literals.lisp \
+    basic/optional_defaults.lisp \
     basic/path_expansion.lisp \
+    basic/path_functions.lisp \
     basic/printing.lisp \
     basic/recursion.lisp \
     basic/string-index.lisp \
@@ -149,6 +156,7 @@ TESTS = \
     basic/symbols.lisp \
     basic/packages.lisp \
     basic/vectors.lisp \
+    basic/utf8_display_width.lisp \
     advanced/collection_iteration.lisp \
     advanced/cond_case.lisp \
     advanced/condition-system.lisp \
@@ -200,14 +208,21 @@ EXTRA_DIST = \
     basic/and_or_list.lisp \
     basic/characters.lisp \
     basic/filesystem.lisp \
+    basic/floor_modulo.lisp \
     basic/format.lisp \
+    basic/make_string.lisp \
     basic/hash_tables.lisp \
     basic/integer_ops.lisp \
     basic/integers.lisp \
     basic/keywords.lisp \
     basic/length.lisp \
     basic/list_reverse.lisp \
+    basic/make_string.lisp \
+    basic/named_let.lisp \
+    basic/number_literals.lisp \
+    basic/optional_defaults.lisp \
     basic/path_expansion.lisp \
+    basic/path_functions.lisp \
     basic/printing.lisp \
     basic/recursion.lisp \
     basic/string-index.lisp \
@@ -217,6 +232,7 @@ EXTRA_DIST = \
     basic/symbols.lisp \
     basic/packages.lisp \
     basic/vectors.lisp \
+    basic/utf8_display_width.lisp \
     advanced/collection_iteration.lisp \
     advanced/cond_case.lisp \
     advanced/condition-system.lisp \

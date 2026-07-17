@@ -217,7 +217,7 @@
            (and (char>=? ch #\A) (char<=? ch #\F)))))
 
 (defun read-hex-digits (state count)
-  "Read COUNT hex digits and return their numeric value."
+  "Read exactly COUNT hex digits and return their numeric value."
   (let ((value 0)
         (i 0))
     (do () ((>= i count))
@@ -233,6 +233,30 @@
             (+ (* value 16) (+ 10 (- (char-code ch) (char-code #\A)))))))
         (set! i (+ i 1))))
     value))
+
+(defun read-hex-codepoint (state)
+  "Read a variable-length hex codepoint after #\\x or #\\u. Stops at the first
+   non-hex digit. Returns the decoded character."
+  (let ((codepoint 0)
+        (i 0)
+        (max-digits 6))
+    (do () ((>= i max-digits))
+      (let ((ch (reader-peek state)))
+        (if (hex-digit? ch)
+          (progn (reader-advance! state)
+            (cond
+              ((and (char>=? ch #\0) (char<=? ch #\9))
+               (set! codepoint
+                (+ (* codepoint 16) (- (char-code ch) (char-code #\0)))))
+              ((and (char>=? ch #\a) (char<=? ch #\f))
+               (set! codepoint
+                (+ (* codepoint 16) (+ 10 (- (char-code ch) (char-code #\a))))))
+              ((and (char>=? ch #\A) (char<=? ch #\F))
+               (set! codepoint
+                (+ (* codepoint 16) (+ 10 (- (char-code ch) (char-code #\A)))))))
+            (set! i (+ i 1)))
+          (set! i max-digits))))
+    (code-char codepoint)))
 
 (defun parse-character-name (name)
   "Parse a character name like 'newline' or 'a' into a character."
@@ -251,25 +275,25 @@
 (defun read-character-literal (state)
   "Read a character literal like #\\a or #\\newline.
    Note: Called after # has been consumed. Consumes the backslash and character name.
-   Handles hex escapes (#\\x1b) and unicode escapes (#\\u0041) but only if followed
-   by valid hex digits. Otherwise treats #\\x and #\\u as regular characters."
+   Handles hex escapes (#\\xNN) and unicode escapes (#\\uNNNN) with any number of
+   valid hex digits. Otherwise treats #\\x and #\\u as regular characters."
   (reader-advance! state) ; skip backslash
   (let ((ch (reader-peek state))
         (src (rs-source state)))
     (cond
       ((null? ch) (error "Unexpected EOF in character literal"))
-      ;; Check for hex escape: #\xNN - only if followed by hex digit
+      ;; Check for hex escape: #\xNNNN - read all consecutive hex digits
       ((and (char=? ch #\x)
             (let ((next-pos (+ (rs-pos state) 1)))
               (and (< next-pos (length src))
                    (hex-digit? (string-ref src next-pos)))))
-       (reader-advance! state) (code-char (read-hex-digits state 2)))
-      ;; Check for unicode escape: #\uNNNN - only if followed by hex digit
+       (reader-advance! state) (read-hex-codepoint state))
+      ;; Check for unicode escape: #\uNNNN - read all consecutive hex digits
       ((and (char=? ch #\u)
             (let ((next-pos (+ (rs-pos state) 1)))
               (and (< next-pos (length src))
                    (hex-digit? (string-ref src next-pos)))))
-       (reader-advance! state) (code-char (read-hex-digits state 4)))
+       (reader-advance! state) (read-hex-codepoint state))
       (#t
        ;; Read at least one character, then continue if not a delimiter
        (let ((start (rs-pos state)))
@@ -282,7 +306,7 @@
 ;;; Hash Token Reading (#t, #f, #\, #()
 ;;; ----------------------------------------------------------------------------
 (defun read-hash-token (state line col)
-  "Read a # prefixed token."
+  "Read a # prefixed token (#t, #f, #\, #(), #xNN, #oNN, #bNN, #dNN)."
   (reader-advance! state) ; skip #
   (let ((ch (reader-peek state)))
     (cond
@@ -295,6 +319,10 @@
       ((char=? ch #\\)
        (let ((char-val (read-character-literal state)))
          (make-token 'char char-val line col)))
+      ((or (char=? ch #\x) (char=? ch #\X) (char=? ch #\o) (char=? ch #\O)
+           (char=? ch #\b) (char=? ch #\B) (char=? ch #\d) (char=? ch #\D))
+       (let ((literal (concat "#" (read-atom-token state))))
+         (make-token 'atom literal line col)))
       (#t (error (format nil "Unknown # syntax: #~A at line ~A" ch line))))))
 
 ;;; ----------------------------------------------------------------------------
@@ -413,12 +441,34 @@
 ;;; Atom Value Parsing
 ;;; ----------------------------------------------------------------------------
 (defun parse-atom-value (str)
-  "Convert atom string to appropriate Lisp value."
+  "Convert atom string to appropriate Lisp value. Handles nil, booleans,
+   decimal integers, and #x/#o/#b/#d prefixed literals."
   (cond
     ((string=? str "nil") nil)
     ((string=? str "#t") #t)
     ((string=? str "#f") #f)
+    ((and (> (length str) 2) (char=? (string-ref str 0) #\#))
+     (let ((num (parse-hash-number str)))
+       (if num num (string->symbol str))))
     (#t (let ((num (string->number str))) (if num num (string->symbol str))))))
+
+(defun parse-hash-number (str)
+  "Parse a #x/#o/#b/#d number literal. Returns the number or nil if invalid."
+  (let ((base
+         (cond
+           ((or (char=? (string-ref str 1) #\x) (char=? (string-ref str 1) #\X))
+            16)
+           ((or (char=? (string-ref str 1) #\o) (char=? (string-ref str 1) #\O))
+            8)
+           ((or (char=? (string-ref str 1) #\b) (char=? (string-ref str 1) #\B))
+            2)
+           ((or (char=? (string-ref str 1) #\d) (char=? (string-ref str 1) #\D))
+            10)
+           (#t nil)))
+        (digits (substring str 2 (length str))))
+    (if (and base (> (length digits) 0))
+      (string->number digits base)
+      nil)))
 
 ;;; ----------------------------------------------------------------------------
 ;;; Expression Parser
@@ -928,6 +978,8 @@
 
 (defun format-let-form (lst indent)
   "Format let/let* forms with proper binding alignment.
+   Supports both ordinary (let ((var val) ...) body) and named
+   (let name ((var val) ...) body) variants.
    (let* ((var1 val1)
           (var2 val2))
      body)
@@ -937,18 +989,28 @@
   (let* ((head (unwrap-value (car lst)))
          (head-str (symbol->string head))
          (rest (cdr lst))
-         (bindings-raw (if (pair? rest) (car rest) '()))
+         ;; Detect named let: (let name ((var val) ...) body...)
+         (name-candidate (if (pair? rest) (car rest) nil))
+         (name-value (unwrap-value name-candidate))
+         (named (symbol? name-value))
+         (name-str (if named (symbol->string name-value) ""))
+         (rest-after-name (if named (cdr rest) rest))
+         (bindings-raw (if (pair? rest-after-name) (car rest-after-name) '()))
          (bindings (unwrap-value bindings-raw))
-         (body (if (pair? rest) (cdr rest) '()))
+         (body (if (pair? rest-after-name) (cdr rest-after-name) '()))
          (body-indent (+ indent *indent-size*))
-         ;; Bindings start after "(let* ("
-         (binding-indent (+ indent (length head-str) *let-binding-offset*))
+         ;; Bindings start after "(let* (" or "(let name ("
+         (binding-indent
+          (+ indent (length head-str) *let-binding-offset*
+           (if named (+ 1 (length name-str)) 0)))
          (lb (lb-create indent))
          (force-break #f)
          (prev-last-line -1))
-    ;; Start: (let* (
+    ;; Start: (let* ( or (let name (
     (lb-append! lb "(")
     (lb-append! lb head-str)
+    (when named (lb-append! lb " ")
+      (lb-append! lb name-str))
     (lb-append! lb " (")
     ;; Format bindings with comment-node support
     (if (pair? bindings)

@@ -2,6 +2,60 @@
 
 String manipulation functions. All operations are UTF-8 aware.
 
+## `make-string`
+
+Create a new string of a given length filled with a character.
+
+### Parameters
+
+- `length` - Number of characters (integer, non-negative)
+- `fill` - Optional character to fill with (defaults to space)
+
+### Returns
+
+A new string of `length` characters, each equal to `fill`.
+
+### Examples
+
+```lisp
+(make-string 4 #\A)          ; => "AAAA"
+(make-string 4)               ; => "    "
+(make-string 0 #\A)           ; => ""
+(make-string 3 #\x03B1)       ; => "ααα" (3 Greek alpha characters)
+```
+
+### Notes
+
+- `length` is the number of characters, not bytes
+- Works correctly with multi-byte UTF-8 fill characters
+
+## `utf8-display-width`
+
+Return the terminal display width of a UTF-8 string in columns.
+
+### Parameters
+
+- `string` - The string to measure
+
+### Returns
+
+Integer column width. ASCII characters count as 1, CJK characters as 2,
+combining characters as 0.
+
+### Examples
+
+```lisp
+(utf8-display-width "hello")     ; => 5
+(utf8-display-width "中")       ; => 2
+(utf8-display-width "")         ; => 0
+(utf8-display-width (make-string 1 (code-char 768)))  ; => 0 (combining char)
+```
+
+### See Also
+
+- `make-string` - Create repeated-character strings
+- `string-length` - Number of characters in a string
+
 ## `concat`
 
 Concatenate strings together.

@@ -170,6 +170,8 @@ Supports rest parameters using dotted parameter list syntax.
 
 Create local variable bindings with parallel evaluation. All init expressions are evaluated before any variable is bound. Body has implicit `progn`.
 
+A named `let` form binds a recursive function for looping. The name is followed by the same binding list and body. Tail calls back to the name are optimized.
+
 ### Parameters
 
 - `bindings` - List of `(name init-expr)` pairs
@@ -183,6 +185,11 @@ Create local variable bindings with parallel evaluation. All init expressions ar
 
 (let ((a 1) (b 2))
   (* a b))                 ; => 2
+
+(let loop ((i 0) (sum 0))
+  (if (< i 5)
+      (loop (+ i 1) (+ sum i))
+      sum))                ; => 10
 ```
 
 ## `let*`

@@ -755,6 +755,80 @@ static LispObject *builtin_string_trim(LispObject *args, Environment *env)
     return lisp_make_string(result);
 }
 
+static LispObject *builtin_make_string(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("make-string");
+
+    LispObject *len_arg = lisp_car(args);
+    if (LISP_TYPE(len_arg) != LISP_INTEGER) {
+        return lisp_make_error("make-string: length must be an integer");
+    }
+
+    long long len = LISP_INT_VAL(len_arg);
+    if (len < 0) {
+        return lisp_make_error("make-string: length cannot be negative");
+    }
+
+    // Default fill character is space
+    uint32_t fill = ' ';
+
+    LispObject *cdr_args = lisp_cdr(args);
+    if (cdr_args != NIL) {
+        LispObject *char_arg = lisp_car(cdr_args);
+        if (LISP_TYPE(char_arg) != LISP_CHAR) {
+            return lisp_make_error("make-string: fill must be a character");
+        }
+        fill = LISP_CHAR_VAL(char_arg);
+    }
+
+    // Encode the fill character once
+    char fill_bytes[4];
+    int fill_len = 0;
+    if (fill < 0x80) {
+        fill_bytes[0] = (char)fill;
+        fill_len = 1;
+    } else if (fill < 0x800) {
+        fill_bytes[0] = (char)(0xC0 | (fill >> 6));
+        fill_bytes[1] = (char)(0x80 | (fill & 0x3F));
+        fill_len = 2;
+    } else if (fill < 0x10000) {
+        fill_bytes[0] = (char)(0xE0 | (fill >> 12));
+        fill_bytes[1] = (char)(0x80 | ((fill >> 6) & 0x3F));
+        fill_bytes[2] = (char)(0x80 | (fill & 0x3F));
+        fill_len = 3;
+    } else {
+        fill_bytes[0] = (char)(0xF0 | (fill >> 18));
+        fill_bytes[1] = (char)(0x80 | ((fill >> 12) & 0x3F));
+        fill_bytes[2] = (char)(0x80 | ((fill >> 6) & 0x3F));
+        fill_bytes[3] = (char)(0x80 | (fill & 0x3F));
+        fill_len = 4;
+    }
+
+    // Allocate output buffer: len characters, each of fill_len bytes
+    char *str = GC_malloc(len * fill_len + 1);
+    for (long long i = 0; i < len; i++) {
+        memcpy(str + i * fill_len, fill_bytes, fill_len);
+    }
+    str[len * fill_len] = '\0';
+
+    return lisp_make_string(str);
+}
+
+static LispObject *builtin_utf8_display_width(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("utf8-display-width");
+
+    LispObject *arg = lisp_car(args);
+    if (LISP_TYPE(arg) != LISP_STRING) {
+        return lisp_make_error("utf8-display-width: argument must be a string");
+    }
+
+    int width = utf8_display_width(LISP_STR_VAL(arg));
+    return lisp_make_integer(width);
+}
+
 void register_strings_builtins(Environment *env)
 {
     REGISTER("concat", builtin_concat);
@@ -777,4 +851,6 @@ void register_strings_builtins(Environment *env)
     REGISTER("string-upcase", builtin_string_upcase);
     REGISTER("string-downcase", builtin_string_downcase);
     REGISTER("string-trim", builtin_string_trim);
+    REGISTER("make-string", builtin_make_string);
+    REGISTER("utf8-display-width", builtin_utf8_display_width);
 }

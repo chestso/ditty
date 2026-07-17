@@ -2,6 +2,24 @@
 
 Functions for numerical operations.
 
+## Integer literals
+
+Integers can be written in decimal or with a radix prefix.
+
+```lisp
+#xFF     ; hexadecimal => 255
+#xff     ; lowercase hex => 255
+#o10     ; octal => 8
+#b11     ; binary => 3
+#d42     ; decimal => 42
+```
+
+Negative radix literals are written with a leading `-` before the radix prefix:
+
+```lisp
+(- #xFF)  ; => -255
+```
+
 ## `+`
 
 Add numbers together.
@@ -143,6 +161,93 @@ Integer remainder after division.
 ### See Also
 
 - `quotient` - Integer division
+- `/` - Regular division (returns float)
+
+## `remainder`
+
+Integer remainder (modulo operation).
+
+### Parameters
+
+- `dividend` - The number to be divided (integer or float)
+- `divisor` - The number to divide by (integer or float)
+
+### Returns
+
+Integer remainder after division. The result has the same sign as the dividend.
+
+### Examples
+
+```lisp
+(remainder 17 5)     ; => 2
+(remainder 10 3)     ; => 1
+(remainder 20 5)     ; => 0
+(remainder -17 5)    ; => -2
+```
+
+### See Also
+
+- `floor` - Floor division (rounds toward negative infinity)
+- `modulo` - Modulo operation (result has same sign as divisor)
+- `quotient` - Integer division
+- `/` - Regular division (returns float)
+
+## `floor`
+
+Floor division - divide and round toward negative infinity.
+
+### Parameters
+
+- `dividend` - The number to be divided (integer or float)
+- `divisor` - The number to divide by (integer or float)
+
+### Returns
+
+Integer result of division, rounded toward negative infinity.
+
+### Examples
+
+```lisp
+(floor 7 3)      ; => 2
+(floor -7 3)     ; => -3
+(floor 7 -3)     ; => -3
+(floor -7 -3)    ; => 2
+```
+
+### See Also
+
+- `modulo` - Modulo operation (result has same sign as divisor)
+- `quotient` - Integer division (truncates toward zero)
+- `remainder` - Integer remainder (sign follows dividend)
+- `/` - Regular division (returns float)
+
+## `modulo`
+
+Modulo operation - returns the remainder of division with the sign of the divisor.
+
+### Parameters
+
+- `dividend` - The number to be divided (integer or float)
+- `divisor` - The number to divide by (integer or float)
+
+### Returns
+
+Integer remainder after division. The result has the same sign as the divisor.
+
+### Examples
+
+```lisp
+(modulo 7 3)     ; => 1
+(modulo -7 3)    ; => 2
+(modulo 7 -3)    ; => -2
+(modulo -7 -3)   ; => -1
+```
+
+### See Also
+
+- `floor` - Floor division (rounds toward negative infinity)
+- `quotient` - Integer division (truncates toward zero)
+- `remainder` - Integer remainder (sign follows dividend)
 - `/` - Regular division (returns float)
 
 ## `even?`

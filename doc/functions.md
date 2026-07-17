@@ -2,6 +2,43 @@
 
 Function introspection and evaluation.
 
+## `lambda`
+
+Create an anonymous function.
+
+### Syntax
+
+```lisp
+(lambda (params...) body...)
+```
+
+Parameters may include:
+
+- Required parameters: `x`
+- Optional parameters with defaults: `&optional (y 10)` or `&optional y`
+- Rest parameter: `&rest args`
+
+Optional defaults can reference earlier parameters.
+
+### Examples
+
+```lisp
+((lambda (x) (* x 2)) 5)              ; => 10
+
+((lambda (x &optional (y 10)) (+ x y)) 3)      ; => 13
+((lambda (x &optional (y 10)) (+ x y)) 3 4)    ; => 7
+
+((lambda (a &optional (b (* a 2))) (+ a b)) 3) ; => 9
+
+((lambda (a &optional b &rest rest) (list a b rest)) 1 2 3 4)
+; => (1 2 (3 4))
+```
+
+### See Also
+
+- `define` - Bind a function to a name
+- `apply` - Apply a function to a list of arguments
+
 ## `function-params`
 
 Return the parameter list of a lambda or macro.

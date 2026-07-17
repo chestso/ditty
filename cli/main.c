@@ -21,8 +21,10 @@
 #include <ditty/highlight.h>
 #endif
 
+#ifdef HAVE_BOBA
 /* Forward declaration — defined in flare_style_charmtones.c */
 FlareStyle *flare_style_charmtones(void);
+#endif
 
 #include "ditty_version.h"
 #ifndef DITTY_VERSION
@@ -264,6 +266,7 @@ static void print_raw_output(const char *color, const char *text, const char *re
     fputs("\r\n", stdout);
 }
 
+#ifdef HAVE_BOBA
 /* --- /doc command --- */
 
 static void print_doc(const char *name)
@@ -295,7 +298,7 @@ static void print_doc(const char *name)
     printf("%sNo documentation for '%s'%s\r\n", color_error, name, SGR_RESET);
 }
 
-/* --- Non-interactive helpers --- */
+#endif /* HAVE_BOBA */ /* --- Non-interactive helpers --- */
 
 static LispObject *argv_to_list(int start, int end, char **argv)
 {
