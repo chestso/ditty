@@ -431,6 +431,38 @@ Symbol identifying the OS:
 - `home-directory` - Get home directory (platform-specific)
 - `config-directory` - Get config directory (platform-specific)
 - `data-directory` - Get data directory (platform-specific)
+- `current-directory` - Get current working directory
+
+## `current-directory`
+
+Return the current working directory. Racket style.
+
+### Parameters
+
+None.
+
+### Returns
+
+String with the current working directory path.
+
+### Platform Behavior
+
+- **Unix/Linux/macOS**: Standard `getcwd()` system call
+- **Windows**: `GetCurrentDirectoryA()` (ANSI path)
+
+### Examples
+
+```lisp
+(current-directory)  ; => "/home/user/projects"
+(current-directory)  ; => "C:\\Users\\Alice\\Projects" (Windows)
+```
+
+### See Also
+
+- `home-directory` - Get home directory (platform-specific)
+- `config-directory` - Get config directory (platform-specific)
+- `data-directory` - Get data directory (platform-specific)
+- `*load-pathname*` - Get path of currently loading file
 
 ## `temporary-file-directory`
 
@@ -516,3 +548,30 @@ Returns error if:
 - `temporary-file-directory` - Get the system temp directory
 - `delete-file` - Delete a file
 - `delete-directory` - Delete a directory
+
+## `*load-pathname*`
+
+Return the path of the file currently being loaded. Common Lisp style variable.
+
+### Parameters
+
+None.
+
+### Returns
+
+String with the absolute or resolved path of the file currently being loaded, or `nil` when no file is being loaded (e.g., in the REPL or from `eval-string`).
+
+### Examples
+
+```lisp
+;; In a loaded file "foo.lisp":
+*load-pathname*  ; => "/path/to/foo.lisp"
+
+;; At the REPL
+*load-pathname*  ; => nil
+```
+
+### See Also
+
+- `load` - Load and evaluate a Lisp file
+- `current-directory` - Get current working directory

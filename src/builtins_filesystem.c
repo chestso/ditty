@@ -1,4 +1,5 @@
 #include "builtins_internal.h"
+#include <unistd.h>
 
 static LispObject *g_recursive_kw = NULL;
 static LispObject *g_directory_kw = NULL;
@@ -41,6 +42,30 @@ static LispObject *builtin_home_directory(LispObject *args, Environment *env)
     }
 
     return lisp_make_string(home);
+}
+
+/* Return the current working directory.
+ * Racket style: (current-directory)
+ * Unix/Linux/macOS: getcwd()
+ * Windows: GetCurrentDirectory()
+ * Returns: String with the current working directory path
+ */
+static LispObject *builtin_current_directory(LispObject *args, Environment *env)
+{
+    (void)args;
+    (void)env;
+
+    char buf[4096];
+#if defined(_WIN32) || defined(_WIN64)
+    DWORD len = GetCurrentDirectoryA(sizeof(buf), buf);
+    if (len == 0 || len >= sizeof(buf))
+        return lisp_make_error("current-directory: cannot determine current directory");
+#else
+    if (getcwd(buf, sizeof(buf)) == NULL)
+        return lisp_make_error("current-directory: cannot determine current directory");
+#endif
+
+    return lisp_make_string(buf);
 }
 
 /* Expand ~/ in file paths to home directory (cross-platform)
@@ -494,6 +519,8 @@ void register_filesystem_builtins(Environment *env)
     REGISTER("system-type", builtin_system_type);
     REGISTER("temporary-file-directory", builtin_temporary_file_directory);
     REGISTER("make-temp-file", builtin_make_temp_file);
+    REGISTER("current-directory", builtin_current_directory);
+    REGISTER("pwd", builtin_current_directory);
     REGISTER("file-name-directory", builtin_file_name_directory);
     REGISTER("directory-file-name", builtin_file_name_directory);
     REGISTER("file-name-nondirectory", builtin_file_name_nondirectory);

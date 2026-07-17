@@ -29,6 +29,7 @@ LispObject *sym_unclosed_input = NULL;
 LispObject *sym_package_ref = NULL;
 LispObject *sym_star_package_star = NULL;
 LispObject *sym_star_features_star = NULL;
+LispObject *sym_star_load_pathname_star = NULL;
 
 /* Name array for completion API (third column ignored) */
 const char *lisp_special_forms[] = {
@@ -696,6 +697,7 @@ Environment *lisp_init(void)
     sym_package_ref = lisp_intern("package-ref");
     sym_star_package_star = lisp_intern("*package*");
     sym_star_features_star = lisp_intern("*features*");
+    sym_star_load_pathname_star = lisp_intern("*load-pathname*");
     pkg_core = LISP_SYM_VAL(lisp_intern("core"));
     pkg_user = LISP_SYM_VAL(lisp_intern("user"));
 
@@ -707,6 +709,9 @@ Environment *lisp_init(void)
 
     /* Initialize *features* to nil (empty list) */
     env_define(env, LISP_SYM_VAL(sym_star_features_star), NIL, pkg_core);
+
+    /* Initialize *load-pathname* to nil */
+    env_define(env, LISP_SYM_VAL(sym_star_load_pathname_star), NIL, pkg_core);
 
     register_builtins(env);
 
@@ -774,6 +779,12 @@ LispObject *lisp_load_file(const char *filename, Environment *env)
     buffer[actual_read] = '\0';
     fclose(file);
 
+    /* Save and set *load-pathname* to the resolved path */
+    LispObject *saved_load_pathname = env_lookup(env, LISP_SYM_VAL(sym_star_load_pathname_star));
+    if (saved_load_pathname == NULL)
+        saved_load_pathname = NIL;
+    env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), lisp_make_string(path));
+
     /* Evaluate all expressions */
     const char *input = buffer;
     LispObject *result = NIL;
@@ -784,15 +795,20 @@ LispObject *lisp_load_file(const char *filename, Environment *env)
             break;
 
         if (LISP_TYPE(expr) == LISP_ERROR) {
+            env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), saved_load_pathname);
             return expr;
         }
 
         result = lisp_eval(expr, env);
 
         if (LISP_TYPE(result) == LISP_ERROR) {
+            env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), saved_load_pathname);
             return result;
         }
     }
+
+    /* Restore *load-pathname* */
+    env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), saved_load_pathname);
 
     return result;
 }

@@ -267,6 +267,72 @@ static LispObject *builtin_odd_question(LispObject *args, Environment *env)
     return lisp_make_boolean(0);
 }
 
+static LispObject *builtin_max(LispObject *args, Environment *env)
+{
+    (void)env;
+    if (args == NIL)
+        return lisp_make_error("max requires at least one argument");
+
+    int all_integers = 1;
+    LispObject *first = lisp_car(args);
+    int first_is_integer = 0;
+    double result = get_numeric_value(first, &first_is_integer);
+    if (!first_is_integer && LISP_TYPE(first) != LISP_NUMBER && LISP_TYPE(first) != LISP_INTEGER)
+        return lisp_make_error("max requires numbers");
+    if (!first_is_integer)
+        all_integers = 0;
+
+    args = lisp_cdr(args);
+    while (args != NIL && args != NULL) {
+        LispObject *arg = lisp_car(args);
+        int arg_is_integer = 0;
+        double val = get_numeric_value(arg, &arg_is_integer);
+        if (!arg_is_integer && LISP_TYPE(arg) != LISP_NUMBER && LISP_TYPE(arg) != LISP_INTEGER)
+            return lisp_make_error("max requires numbers");
+        if (!arg_is_integer)
+            all_integers = 0;
+        if (val > result)
+            result = val;
+        args = lisp_cdr(args);
+    }
+
+    return all_integers ? lisp_make_integer((long long)result)
+                        : lisp_make_number(result);
+}
+
+static LispObject *builtin_min(LispObject *args, Environment *env)
+{
+    (void)env;
+    if (args == NIL)
+        return lisp_make_error("min requires at least one argument");
+
+    int all_integers = 1;
+    LispObject *first = lisp_car(args);
+    int first_is_integer = 0;
+    double result = get_numeric_value(first, &first_is_integer);
+    if (!first_is_integer && LISP_TYPE(first) != LISP_NUMBER && LISP_TYPE(first) != LISP_INTEGER)
+        return lisp_make_error("min requires numbers");
+    if (!first_is_integer)
+        all_integers = 0;
+
+    args = lisp_cdr(args);
+    while (args != NIL && args != NULL) {
+        LispObject *arg = lisp_car(args);
+        int arg_is_integer = 0;
+        double val = get_numeric_value(arg, &arg_is_integer);
+        if (!arg_is_integer && LISP_TYPE(arg) != LISP_NUMBER && LISP_TYPE(arg) != LISP_INTEGER)
+            return lisp_make_error("min requires numbers");
+        if (!arg_is_integer)
+            all_integers = 0;
+        if (val < result)
+            result = val;
+        args = lisp_cdr(args);
+    }
+
+    return all_integers ? lisp_make_integer((long long)result)
+                        : lisp_make_number(result);
+}
+
 void register_arithmetic_builtins(Environment *env)
 {
     REGISTER("+", builtin_add);
@@ -279,4 +345,6 @@ void register_arithmetic_builtins(Environment *env)
     REGISTER("modulo", builtin_modulo);
     REGISTER("even?", builtin_even_question);
     REGISTER("odd?", builtin_odd_question);
+    REGISTER("max", builtin_max);
+    REGISTER("min", builtin_min);
 }

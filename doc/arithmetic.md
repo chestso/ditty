@@ -313,3 +313,63 @@ Converts floats to integers by truncation before testing.
 - `even?` - Test if number is even
 - `quotient` - Integer division
 - `remainder` - Integer remainder
+
+## `max`
+
+Return the largest of the given numbers.
+
+### Parameters
+
+- `numbers...` - One or more numbers to compare
+
+### Returns
+
+The maximum value. Returns integer if all arguments are integers; otherwise returns float.
+
+### Examples
+
+```lisp
+(max 1 3 2)      ; => 3 (integer)
+(max -5 -2 -10)  ; => -2 (integer)
+(max 1 2.5 2)    ; => 2.5 (float)
+(max 42)         ; => 42 (single argument)
+```
+
+### Errors
+
+Returns error if no arguments are provided or if any argument is not a number.
+
+### See Also
+
+- `min` - Return the smallest number
+- `>` - Greater-than comparison
+
+## `min`
+
+Return the smallest of the given numbers.
+
+### Parameters
+
+- `numbers...` - One or more numbers to compare
+
+### Returns
+
+The minimum value. Returns integer if all arguments are integers; otherwise returns float.
+
+### Examples
+
+```lisp
+(min 1 3 2)      ; => 1 (integer)
+(min -5 -2 -10)  ; => -10 (integer)
+(min 1 2.5 2)    ; => 1.0 (float)
+(min 42)         ; => 42 (single argument)
+```
+
+### Errors
+
+Returns error if no arguments are provided or if any argument is not a number.
+
+### See Also
+
+- `max` - Return the largest number
+- `<` - Less-than comparison

@@ -861,6 +861,9 @@ int main(int argc, char **argv)
             buffer[actual_read] = '\0';
             fclose(file);
 
+            /* Set *load-pathname* to resolved script path */
+            env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), lisp_make_string(path));
+
             const char *input = buffer;
 
             while (*input) {
