@@ -33,14 +33,28 @@ A new string of `length` characters, each equal to `fill`.
 
 Return the terminal display width of a UTF-8 string in columns.
 
+Width is computed per UAX #29 grapheme clusters and follows coffer's
+no-locale model:
+
+- ASCII characters count as 1.
+- CJK and fullwidth characters count as 2.
+- Combining characters, variation selectors, and ZWJ attach to the preceding
+  base and add no width.
+- U+FE0F (VS16) forces the preceding base to 2 cells; U+FE0E (VS15) forces it
+  to 1 cell. When both are present, VS15 wins.
+- A pair of regional indicators (U+1F1E6–U+1F1FF) forms a single 2-cell flag
+  cluster; an unpaired regional indicator is 1 cell.
+- ZWJ emoji families (e.g. 👨‍👩‍👧‍👦) collapse to a single 2-cell cluster.
+- East Asian Ambiguous codepoints are treated as narrow (width 1) because
+  ditty has no locale model.
+
 ### Parameters
 
 - `string` - The string to measure
 
 ### Returns
 
-Integer column width. ASCII characters count as 1, CJK characters as 2,
-combining characters as 0.
+Integer column width.
 
 ### Examples
 
@@ -49,6 +63,9 @@ combining characters as 0.
 (utf8-display-width "中")       ; => 2
 (utf8-display-width "")         ; => 0
 (utf8-display-width (make-string 1 (code-char 768)))  ; => 0 (combining char)
+(utf8-display-width "♠️")       ; => 2 (VS16 forces emoji presentation)
+(utf8-display-width "🇺🇸")      ; => 2 (regional indicator pair)
+(utf8-display-width "👨‍👩‍👧‍👦")  ; => 2 (ZWJ emoji family)
 ```
 
 ### See Also

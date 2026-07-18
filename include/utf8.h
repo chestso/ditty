@@ -1,6 +1,7 @@
 #ifndef UTF8_H
 #define UTF8_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -301,21 +302,6 @@ static inline int utf8_is_emoji_property(uint32_t cp)
     return 0;
 }
 
-/* Check if codepoint renders at 2-cell width (true emoji or emoji-style that overflows).
- * This is used to detect emoji that visually occupy 2 cells even if vterm treats them as 1.
- * second_char: the next codepoint (for variation selector check) or 0 */
-static inline int utf8_is_emoji_2wide(uint32_t cp, uint32_t second_char)
-{
-    return (second_char == 0xFE0F) ||          /* Variation selector forces emoji presentation */
-           utf8_is_emoji_presentation(cp) ||   /* Emoji_Presentation=Yes */
-           utf8_is_emoji_property(cp) ||       /* Emoji=Yes property */
-           (cp >= 0x1F300 && cp <= 0x1F5FF) || /* Misc Symbols and Pictographs */
-           (cp >= 0x1F600 && cp <= 0x1F64F) || /* Emoticons */
-           (cp >= 0x1F680 && cp <= 0x1F6FF) || /* Transport/Map */
-           (cp >= 0x1F900 && cp <= 0x1F9FF) || /* Supplemental Symbols */
-           (cp >= 0x1FA00 && cp <= 0x1FAFF);   /* Chess, Extended-A symbols */
-}
-
 /* Check if codepoint is a block element (U+2580-U+259F).
  * These are 1-cell wide but need to fill the entire cell. */
 static inline int utf8_is_block_element(uint32_t codepoint)
@@ -371,11 +357,33 @@ int utf8_get_codepoint(const char *ptr);
 /* Buffer must have space for at least 5 bytes (4 UTF-8 bytes + null terminator) */
 int utf8_put_codepoint(unsigned int codepoint, char *buf);
 
-/* Get display width of a single Unicode codepoint */
+/* Get display width of a single codepoint (base width, no selectors/VS/ZWJ) */
 /* Returns 0 for control/combining chars, 2 for wide chars (CJK/emoji), 1 otherwise */
 int utf8_codepoint_width(int codepoint);
 
-/* Calculate display width of UTF-8 string in terminal columns */
+/* Width of a grapheme cluster given as a codepoint array.
+ * Rules (matching coffer/src/width.c::cfr_cluster_width):
+ *   - len == 0                       -> 0
+ *   - RI pair (cps[0],cps[1] in 1F1E6-1F1FF) -> 2
+ *   - VS16 (U+FE0F) present, no VS15 -> 2
+ *   - VS15 (U+FE0E) present          -> 1   (VS15 wins over VS16 for width)
+ *   - ZWJ family: head Extended_Pictographic, cluster contains ZWJ, no VS15 -> 2
+ *   - otherwise                      -> utf8_codepoint_width(cps[0])
+ */
+int utf8_cluster_width(const uint32_t *cps, size_t len);
+
+/* UAX #29 sufficient subset (matches coffer):
+ *   GB3   CR x LF
+ *   GB9   x Extend | ZWJ
+ *   GB9a  x SpacingMark
+ *   GB11  Extended_Pictographic Extend* ZWJ x Extended_Pictographic
+ *         (approximated as: prev == ZWJ -> no break)
+ *   GB12  ^(RI RI)* RI x RI
+ *   GB999 any / any
+ */
+bool utf8_grapheme_break_before(uint32_t prev, uint32_t cur);
+
+/* Calculate display width of UTF-8 string in terminal columns (grapheme-aware) */
 /* Returns number of columns the string would occupy */
 int utf8_display_width(const char *str);
 
