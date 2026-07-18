@@ -15,8 +15,13 @@
   (assert-true (> (cdr size) 0) "terminal columns should be positive"))
 
 ;; Input should not be available in a test runner without a real stdin.
-(assert-true (boolean? (terminal-input-available-p))
- "terminal-input-available-p should return a boolean")
+;; In ditty's boolean model #f is NIL, and boolean? only matches #t.
+;; terminal-input-available-p returns #t or NIL, so the result is
+;; either a boolean or nil (which is the canonical false value).
+(assert-true
+ (or (boolean? (terminal-input-available-p))
+     (null? (terminal-input-available-p)))
+ "terminal-input-available-p should return #t or nil")
 
 ;; Raw mode toggling should return truthy and be idempotent.
 (assert-true (set-terminal-raw) "set-terminal-raw should return truthy")
@@ -25,9 +30,13 @@
 ;; Restoring an already-restored terminal is a no-op.
 (assert-true (restore-terminal) "restore-terminal should be idempotent")
 
-;; Resized flag is a boolean. It starts false and flips true on SIGWINCH.
-(assert-true (boolean? (terminal-resized-p))
- "terminal-resized-p should return a boolean")
+;; Resized flag starts false and flips true on SIGWINCH.  In ditty's
+;; boolean model #f is NIL, so accept either #t or nil here (both are
+;; valid initial states on a consoleless CI runner).
+(assert-true
+ (or (boolean? (terminal-resized-p))
+     (null? (terminal-resized-p)))
+ "terminal-resized-p should return #t or nil")
 
 (assert-false (terminal-resized-p)
  "terminal-resized-p should be false initially")

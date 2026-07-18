@@ -678,29 +678,28 @@ int file_make_temp_file(const char *prefix, char *buf, size_t buf_size)
         return -1;
 
 #ifdef _WIN32
-    /* Build a template: <tmpdir>\<prefix>XXXXXX and use GetTempFileName */
-    char template_buf[8192];
-    int n = snprintf(template_buf, sizeof(template_buf), "%s\\%s", tmpdir,
-                     prefix);
-    if (n < 0 || (size_t)n >= sizeof(template_buf))
-        return -1;
-
-    /* GetTempFileNameA needs a unique ID; it creates the file */
-    UINT uniqueId = 0;
-    char tmpPath[MAX_PATH];
-    /* GetTempPathA for the directory part */
-    char dirPart[MAX_PATH];
-    DWORD dlen = GetTempPathA(MAX_PATH, dirPart);
-    if (dlen == 0 || dlen >= MAX_PATH)
-        return -1;
-
-    if (!GetTempFileNameA(dirPart, prefix, uniqueId, tmpPath))
-        return -1;
-
-    if (strlen(tmpPath) >= buf_size)
-        return -1;
-    strcpy(buf, tmpPath);
-    return 0;
+    /* GetTempFileNameA only uses the first 3 characters of the prefix,
+     * which breaks callers that check for the full prefix in the path.
+     * Build the path manually and create the file atomically, mirroring
+     * mkstemp semantics on Unix. */
+    for (int attempt = 0; attempt < 100; attempt++) {
+        char name[64];
+        snprintf(name, sizeof(name), "%s%06d", prefix,
+                 (int)(rand() % 1000000));
+        int n = snprintf(buf, buf_size, "%s\\%s", tmpdir, name);
+        if (n < 0 || (size_t)n >= buf_size)
+            return -1;
+        HANDLE h = CreateFileA(buf, GENERIC_WRITE, 0, NULL, CREATE_NEW,
+                              FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            CloseHandle(h);
+            return 0;
+        }
+        DWORD err = GetLastError();
+        if (err != ERROR_FILE_EXISTS && err != ERROR_ALREADY_EXISTS)
+            return -1;
+    }
+    return -1;
 #else
     /* Build template: <tmpdir>/<prefix>XXXXXX */
     int n = snprintf(buf, buf_size, "%s/%sXXXXXX", tmpdir, prefix);
