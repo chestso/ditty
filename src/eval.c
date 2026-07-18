@@ -106,6 +106,7 @@ static LispObject *lisp_eval_internal(LispObject *expr, Environment *env, int in
     case LISP_STRING_PORT:
     case LISP_VECTOR:
     case LISP_HASH_TABLE:
+    case LISP_REGEX:
         return expr;
 
     case LISP_ERROR:
