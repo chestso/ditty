@@ -385,11 +385,34 @@ static LispObject *eval_set_bang(LispObject *args, Environment *env)
         return value;
     }
 
-    /* Try to update existing binding */
-    if (!env_set(env, LISP_SYM_VAL(name), value)) {
-        /* If not found, error */
+    /* Try to update existing binding. For package-qualified symbols
+     * (sym->namespace != NULL), first try a direct match on the qualified
+     * Symbol itself (e.g., (define a:b 1) then (set! a:b 2)), then fall
+     * back to a package-tagged match on the unqualified name (e.g.,
+     * (in-package 'math) (define pi 3) then (set! math:pi 314)). */
+    Symbol *sym = LISP_SYM_VAL(name);
+    int updated;
+    if (sym->namespace != NULL) {
+        updated = env_set(env, sym, value);
+        if (!updated) {
+            updated = env_set_in_package(env,
+                                         LISP_SYM_VAL(lisp_intern(sym->name)),
+                                         LISP_SYM_VAL(lisp_intern(sym->namespace)),
+                                         value);
+        }
+    } else {
+        updated = env_set(env, sym, value);
+    }
+
+    if (!updated) {
         char error[256];
-        snprintf(error, sizeof(error), "set!: cannot set undefined variable: %s", LISP_SYM_VAL(name)->name);
+        if (sym->namespace != NULL)
+            snprintf(error, sizeof(error),
+                     "set!: cannot set undefined variable: %s:%s",
+                     sym->namespace, sym->name);
+        else
+            snprintf(error, sizeof(error),
+                     "set!: cannot set undefined variable: %s", sym->name);
         return lisp_make_error(error);
     }
 

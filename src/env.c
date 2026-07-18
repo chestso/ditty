@@ -193,6 +193,26 @@ int env_set(Environment *env, Symbol *sym, LispObject *value)
     return 0; /* Variable not found */
 }
 
+int env_set_in_package(Environment *env, Symbol *sym, Symbol *package, LispObject *value)
+{
+    /* Like env_set, but matches bindings stored under the unqualified `sym`
+     * with a `package` tag (the case for definitions made inside
+     * (in-package "pkg")). Walks the same chain as env_lookup_in_package. */
+    while (env != NULL) {
+        size_t idx = hash_symbol(sym, env->bucket_count);
+        struct Binding *binding = env->buckets[idx];
+        while (binding != NULL) {
+            if (binding->symbol == sym && binding->package == package) {
+                binding->value = value;
+                return 1; /* Successfully updated */
+            }
+            binding = binding->next;
+        }
+        env = env->parent;
+    }
+    return 0; /* Variable not found */
+}
+
 void env_free(Environment *env)
 {
     /* GC handles cleanup automatically */

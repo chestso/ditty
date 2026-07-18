@@ -395,6 +395,7 @@ void env_define(Environment *env, Symbol *sym, LispObject *value, Symbol *packag
 LispObject *env_lookup(Environment *env, Symbol *sym);
 LispObject *env_lookup_in_package(Environment *env, Symbol *sym, Symbol *package);
 int env_set(Environment *env, Symbol *sym, LispObject *value);
+int env_set_in_package(Environment *env, Symbol *sym, Symbol *package, LispObject *value);
 void env_free(Environment *env);
 Symbol *env_current_package(Environment *env);
 /* Call stack functions */

@@ -38,6 +38,29 @@
 
 (assert-equal 5 (math:math-add 2 3) "package-qualified access works")
 
+;; set! on a cross-package qualified symbol: the binding lives in the math
+;; package under the unqualified name `math-pi`, so set! must resolve through
+;; the package tag rather than the qualified Symbol pointer. Regression for
+;; the bug where (set! pkg:sym val) failed with "cannot set undefined variable".
+(in-package 'math)
+
+(define math-pi 3)
+
+(in-package 'user)
+
+(assert-equal 3 math:math-pi "cross-package qualified read works")
+
+(set! math:math-pi 314)
+
+(assert-equal 314 math:math-pi
+ "set! on cross-package qualified symbol updates binding")
+
+(in-package 'math)
+
+(assert-equal 314 math-pi "set! visible from inside the defining package")
+
+(in-package 'user)
+
 ;; core:+ still resolves to the builtin
 (assert-equal 30 (core:+ 10 20) "core:+ resolves to addition")
 
