@@ -14,17 +14,17 @@
 (assert-nil (string? '(a b c)) "string? rejects list")
 
 ;; Split test
-(assert-equal (split "apple-banana-cherry" "-") '("apple" "banana" "cherry")
+(assert-equal '("apple" "banana" "cherry") (split "apple-banana-cherry" "-")
  "split string by delimiter")
-(assert-equal (string-split "a,b,c" ",") '("a" "b" "c")
+(assert-equal '("a" "b" "c") (string-split "a,b,c" ",")
  "string-split alias works")
 ;; Join test
-(assert-equal (join '("a" "b" "c") ",") "a,b,c" "join strings with comma")
-(assert-equal (join '("hello" "world") " ") "hello world"
+(assert-equal "a,b,c" (join '("a" "b" "c") ",") "join strings with comma")
+(assert-equal "hello world" (join '("hello" "world") " ")
  "join strings with space")
-(assert-equal (join '("one") "-") "one" "join single element list")
-(assert-equal (join 'nil ",") "" "join empty list returns empty string")
-(assert-equal (string-join '("x" "y" "z") "-") "x-y-z"
+(assert-equal "one" (join '("one") "-") "join single element list")
+(assert-equal "" (join 'nil ",") "join empty list returns empty string")
+(assert-equal "x-y-z" (string-join '("x" "y" "z") "-")
  "string-join alias works")
 
 ;; String contains
@@ -42,28 +42,29 @@
  "string-prefix? rejects non-matching prefix")
 
 ;; String transformations
-(assert-equal (string-replace "hello world" "world" "universe")
- "hello universe" "string-replace changes substring")
-(assert-equal (string-replace "hello" "l" "L") "heLLo"
+(assert-equal
+ "hello universe" (string-replace "hello world" "world" "universe")
+ "string-replace changes substring")
+(assert-equal "heLLo" (string-replace "hello" "l" "L")
  "string-replace changes all occurrences")
-(assert-equal (string-replace "foofoofoo" "foo" "bar") "barbarbar"
+(assert-equal "barbarbar" (string-replace "foofoofoo" "foo" "bar")
  "string-replace multiple occurrences")
-(assert-equal (string-replace "x" "x" "y") "y"
+(assert-equal "y" (string-replace "x" "x" "y")
  "string-replace single character")
-(assert-equal (string-replace "abc" "x" "y") "abc"
+(assert-equal "abc" (string-replace "abc" "x" "y")
  "string-replace with no match returns original")
 ;; String case conversion
-(assert-equal (string-upcase "hello world") "HELLO WORLD"
+(assert-equal "HELLO WORLD" (string-upcase "hello world")
  "string-upcase converts to uppercase")
-(assert-equal (string-upcase "Hello World") "HELLO WORLD"
+(assert-equal "HELLO WORLD" (string-upcase "Hello World")
  "string-upcase on mixed case")
-(assert-equal (string-upcase "123abc") "123ABC"
+(assert-equal "123ABC" (string-upcase "123abc")
  "string-upcase preserves numbers")
-(assert-equal (string-downcase "HELLO WORLD") "hello world"
+(assert-equal "hello world" (string-downcase "HELLO WORLD")
  "string-downcase converts to lowercase")
-(assert-equal (string-downcase "Hello World") "hello world"
+(assert-equal "hello world" (string-downcase "Hello World")
  "string-downcase on mixed case")
-(assert-equal (string-downcase "123ABC") "123abc"
+(assert-equal "123abc" (string-downcase "123ABC")
  "string-downcase preserves numbers")
 
 ;; String comparisons

@@ -18,9 +18,9 @@
 ;; ===========================================
 (define p1 (open-input-string "abc"))
 
-(assert-equal (port-read-char p1) #\a "port-read-char first")
-(assert-equal (port-read-char p1) #\b "port-read-char second")
-(assert-equal (port-read-char p1) #\c "port-read-char third")
+(assert-equal #\a (port-read-char p1) "port-read-char first")
+(assert-equal #\b (port-read-char p1) "port-read-char second")
+(assert-equal #\c (port-read-char p1) "port-read-char third")
 
 (assert-nil (port-read-char p1) "port-read-char at EOF")
 (assert-nil (port-read-char p1) "port-read-char past EOF")
@@ -30,42 +30,42 @@
 ;; ===========================================
 (define p2 (open-input-string "xyz"))
 
-(assert-equal (port-peek-char p2) #\x "port-peek-char first")
-(assert-equal (port-peek-char p2) #\x "port-peek-char same again")
-(assert-equal (port-read-char p2) #\x "port-read-char after peek")
-(assert-equal (port-peek-char p2) #\y "port-peek-char second")
+(assert-equal #\x (port-peek-char p2) "port-peek-char first")
+(assert-equal #\x (port-peek-char p2) "port-peek-char same again")
+(assert-equal #\x (port-read-char p2) "port-read-char after peek")
+(assert-equal #\y (port-peek-char p2) "port-peek-char second")
 
 ;; ===========================================
 ;; Position Tracking
 ;; ===========================================
 (define p3 (open-input-string "test"))
 
-(assert-equal (port-position p3) 0 "port-position at start")
+(assert-equal 0 (port-position p3) "port-position at start")
 
 (port-read-char p3)
 
-(assert-equal (port-position p3) 1 "port-position after one read")
+(assert-equal 1 (port-position p3) "port-position after one read")
 
 (port-read-char p3)
 (port-read-char p3)
 
-(assert-equal (port-position p3) 3 "port-position after three reads")
+(assert-equal 3 (port-position p3) "port-position after three reads")
 
 (port-peek-char p3) ; peek doesn't advance
 
-(assert-equal (port-position p3) 3 "port-position unchanged after peek")
+(assert-equal 3 (port-position p3) "port-position unchanged after peek")
 
 ;; ===========================================
 ;; Source String
 ;; ===========================================
 (define p4 (open-input-string "source"))
 
-(assert-equal (port-source p4) "source" "port-source at start")
+(assert-equal "source" (port-source p4) "port-source at start")
 
 (port-read-char p4)
 (port-read-char p4)
 
-(assert-equal (port-source p4) "source" "port-source unchanged after reads")
+(assert-equal "source" (port-source p4) "port-source unchanged after reads")
 
 ;; ===========================================
 ;; EOF Detection
@@ -96,18 +96,18 @@
 (assert-nil (port-read-char p6) "port-read-char on empty string")
 (assert-nil (port-peek-char p6) "port-peek-char on empty string")
 
-(assert-equal (port-position p6) 0 "port-position on empty string")
-(assert-equal (port-source p6) "" "port-source on empty string")
+(assert-equal 0 (port-position p6) "port-position on empty string")
+(assert-equal "" (port-source p6) "port-source on empty string")
 
 ;; ===========================================
 ;; Multi-byte UTF-8 Characters
 ;; ===========================================
 (define p7 (open-input-string "日本語"))
 
-(assert-equal (port-read-char p7) #\u65e5 "port-read-char UTF-8 first")
-(assert-equal (port-position p7) 1 "port-position counts chars not bytes")
-(assert-equal (port-read-char p7) #\u672c "port-read-char UTF-8 second")
-(assert-equal (port-read-char p7) #\u8a9e "port-read-char UTF-8 third")
+(assert-equal #\u65e5 (port-read-char p7) "port-read-char UTF-8 first")
+(assert-equal 1 (port-position p7) "port-position counts chars not bytes")
+(assert-equal #\u672c (port-read-char p7) "port-read-char UTF-8 second")
+(assert-equal #\u8a9e (port-read-char p7) "port-read-char UTF-8 third")
 
 (assert-true (port-eof? p7) "port-eof? after UTF-8")
 
@@ -116,22 +116,22 @@
 ;; ===========================================
 (define p8 (open-input-string "a日b"))
 
-(assert-equal (port-read-char p8) #\a "mixed: ASCII first")
-(assert-equal (port-read-char p8) #\u65e5 "mixed: UTF-8 middle")
-(assert-equal (port-read-char p8) #\b "mixed: ASCII last")
-(assert-equal (port-position p8) 3 "mixed: position is char count")
+(assert-equal #\a (port-read-char p8) "mixed: ASCII first")
+(assert-equal #\u65e5 (port-read-char p8) "mixed: UTF-8 middle")
+(assert-equal #\b (port-read-char p8) "mixed: ASCII last")
+(assert-equal 3 (port-position p8) "mixed: position is char count")
 
 ;; ===========================================
 ;; Whitespace and Special Characters
 ;; ===========================================
 (define p9 (open-input-string "a b\tc\n"))
 
-(assert-equal (port-read-char p9) #\a "special: first char")
-(assert-equal (port-read-char p9) #\space "special: space")
-(assert-equal (port-read-char p9) #\b "special: after space")
-(assert-equal (port-read-char p9) #\tab "special: tab")
-(assert-equal (port-read-char p9) #\c "special: after tab")
-(assert-equal (port-read-char p9) #\newline "special: newline")
+(assert-equal #\a (port-read-char p9) "special: first char")
+(assert-equal #\space (port-read-char p9) "special: space")
+(assert-equal #\b (port-read-char p9) "special: after space")
+(assert-equal #\tab (port-read-char p9) "special: tab")
+(assert-equal #\c (port-read-char p9) "special: after tab")
+(assert-equal #\newline (port-read-char p9) "special: newline")
 
 ;; ===========================================
 ;; Output String Ports
@@ -140,19 +140,19 @@
 
 (assert-true (string-port? op1) "output port is a string-port")
 
-(assert-equal (get-output-string op1) "" "fresh output port is empty")
+(assert-equal "" (get-output-string op1) "fresh output port is empty")
 
 (port-write-string op1 "hello")
 
-(assert-equal (get-output-string op1) "hello" "write-string appends")
+(assert-equal "hello" (get-output-string op1) "write-string appends")
 
 (port-write-string op1 ", world")
 
-(assert-equal (get-output-string op1) "hello, world" "write-string accumulates")
+(assert-equal "hello, world" (get-output-string op1) "write-string accumulates")
 
 (port-write-char op1 #\!)
 
-(assert-equal (get-output-string op1) "hello, world!" "write-char appends")
+(assert-equal "hello, world!" (get-output-string op1) "write-char appends")
 
 ;; Growth beyond the initial 64-byte capacity
 (define op2 (open-output-string))
@@ -160,7 +160,7 @@
 (do ((i 0 (+ i 1))) ((>= i 100))
   (port-write-string op2 "0123456789"))
 
-(assert-equal (length (get-output-string op2)) 1000
+(assert-equal 1000 (length (get-output-string op2))
  "output port grows past initial capacity")
 
 ;; Multi-byte UTF-8 output
@@ -169,8 +169,8 @@
 (port-write-string op3 "日本")
 (port-write-string op3 "go")
 
-(assert-equal (get-output-string op3) "日本go" "output port handles UTF-8")
-(assert-equal (length (get-output-string op3)) 4
+(assert-equal "日本go" (get-output-string op3) "output port handles UTF-8")
+(assert-equal 4 (length (get-output-string op3))
  "UTF-8 char count tracked, not bytes")
 
 ;; with-output-to-string sugar

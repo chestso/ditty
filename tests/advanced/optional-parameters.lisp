@@ -6,27 +6,31 @@
 ;; Basic Optional Parameters
 ;; ===========================================
 ;; Single optional parameter (defaults to nil)
-(assert-equal ((lambda (a &optional b) (list a b)) 1) (list 1 nil)
+(assert-equal (list 1 nil) ((lambda (a &optional b) (list a b)) 1)
  "single optional param - not provided")
-(assert-equal ((lambda (a &optional b) (list a b)) 1 2) (list 1 2)
+(assert-equal (list 1 2) ((lambda (a &optional b) (list a b)) 1 2)
  "single optional param - provided")
 ;; Multiple optional parameters
-(assert-equal ((lambda (a &optional b c d) (list a b c d)) 1)
- (list 1 nil nil nil) "multiple optional params - none provided")
-(assert-equal ((lambda (a &optional b c d) (list a b c d)) 1 2)
- (list 1 2 nil nil) "multiple optional params - one provided")
-(assert-equal ((lambda (a &optional b c d) (list a b c d)) 1 2 3)
- (list 1 2 3 nil) "multiple optional params - two provided")
-(assert-equal ((lambda (a &optional b c d) (list a b c d)) 1 2 3 4)
- (list 1 2 3 4) "multiple optional params - all provided")
+(assert-equal
+ (list 1 nil nil nil) ((lambda (a &optional b c d) (list a b c d)) 1)
+ "multiple optional params - none provided")
+(assert-equal
+ (list 1 2 nil nil) ((lambda (a &optional b c d) (list a b c d)) 1 2)
+ "multiple optional params - one provided")
+(assert-equal
+ (list 1 2 3 nil) ((lambda (a &optional b c d) (list a b c d)) 1 2 3)
+ "multiple optional params - two provided")
+(assert-equal
+ (list 1 2 3 4) ((lambda (a &optional b c d) (list a b c d)) 1 2 3 4)
+ "multiple optional params - all provided")
 ;; ===========================================
 ;; Only Optional Parameters (No Required)
 ;; ===========================================
-(assert-equal ((lambda (&optional a b) (list a b))) (list nil nil)
+(assert-equal (list nil nil) ((lambda (&optional a b) (list a b)))
  "only optional params - none provided")
-(assert-equal ((lambda (&optional a b) (list a b)) 1) (list 1 nil)
+(assert-equal (list 1 nil) ((lambda (&optional a b) (list a b)) 1)
  "only optional params - one provided")
-(assert-equal ((lambda (&optional a b) (list a b)) 1 2) (list 1 2)
+(assert-equal (list 1 2) ((lambda (&optional a b) (list a b)) 1 2)
  "only optional params - all provided")
 
 ;; ===========================================
@@ -37,41 +41,47 @@
   (lambda (name &optional greeting)
     (let ((g (or greeting "Hello"))) (concat g ", " name "!"))))
 
-(assert-equal (greet "Alice") "Hello, Alice!"
+(assert-equal "Hello, Alice!" (greet "Alice")
  "optional param with default - not provided")
-(assert-equal (greet "Bob" "Hi") "Hi, Bob!"
+(assert-equal "Hi, Bob!" (greet "Bob" "Hi")
  "optional param with default - provided")
 
 ;; Numeric default
 (define multiply-or-default (lambda (x &optional factor) (* x (or factor 2))))
 
-(assert-equal (multiply-or-default 5) 10
+(assert-equal 10 (multiply-or-default 5)
  "numeric optional param with default - not provided")
-(assert-equal (multiply-or-default 5 3) 15
+(assert-equal 15 (multiply-or-default 5 3)
  "numeric optional param with default - provided")
 ;; ===========================================
 ;; Rest Parameters
 ;; ===========================================
 ;; Basic rest parameter
-(assert-equal ((lambda (a &rest more) (list a more)) 1) (list 1 nil)
+(assert-equal (list 1 nil) ((lambda (a &rest more) (list a more)) 1)
  "rest param - no extra args")
-(assert-equal ((lambda (a &rest more) (list a more)) 1 2 3) (list 1 (list 2 3))
+(assert-equal (list 1 (list 2 3)) ((lambda (a &rest more) (list a more)) 1 2 3)
  "rest param - multiple extra args")
 ;; Rest parameter collects everything
-(assert-equal ((lambda (&rest all) all) 1 2 3 4 5) (list 1 2 3 4 5)
+(assert-equal (list 1 2 3 4 5) ((lambda (&rest all) all) 1 2 3 4 5)
  "rest param only - collects all args")
 ;; ===========================================
 ;; Combined Optional and Rest Parameters
 ;; ===========================================
-(assert-equal ((lambda (a &optional b &rest more) (list a b more)) 1)
- (list 1 nil nil) "optional and rest - only required provided")
-(assert-equal ((lambda (a &optional b &rest more) (list a b more)) 1 2)
- (list 1 2 nil) "optional and rest - required and optional provided")
-(assert-equal ((lambda (a &optional b &rest more) (list a b more)) 1 2 3 4)
- (list 1 2 (list 3 4)) "optional and rest - all provided")
+(assert-equal
+ (list 1 nil nil) ((lambda (a &optional b &rest more) (list a b more)) 1)
+ "optional and rest - only required provided")
+(assert-equal
+ (list 1 2 nil) ((lambda (a &optional b &rest more) (list a b more)) 1 2)
+ "optional and rest - required and optional provided")
+(assert-equal
+ (list 1 2 (list 3 4))
+ ((lambda (a &optional b &rest more) (list a b more)) 1 2 3 4)
+ "optional and rest - all provided")
 ;; Multiple optional with rest
-(assert-equal ((lambda (a &optional b c &rest more) (list a b c more)) 1)
- (list 1 nil nil nil) "multiple optional and rest - only required")
+(assert-equal
+ (list 1 nil nil nil)
+ ((lambda (a &optional b c &rest more) (list a b c more)) 1)
+ "multiple optional and rest - only required")
 (assert-equal
  ((lambda (a &optional b c &rest more) (list a b c more)) 1 2 3 4 5)
  (list 1 2 3 (list 4 5)) "multiple optional and rest - all provided")
@@ -86,8 +96,8 @@
       (do ((nums numbers (cdr nums))) ((null? nums) total)
         (set! total (+ total (car nums)))))))
 
-(assert-equal (sum 1) 1 "named function with rest - single arg")
-(assert-equal (sum 1 2 3 4 5) 15 "named function with rest - multiple args")
+(assert-equal 1 (sum 1) "named function with rest - single arg")
+(assert-equal 15 (sum 1 2 3 4 5) "named function with rest - multiple args")
 
 ;; Function with optional and rest
 (define format-list
@@ -107,7 +117,7 @@
 ;; Helper to convert value to string
 (define string (lambda (x) (if (integer? x) (number->string x) x)))
 
-(assert-equal (format-list "Items: " "; " "a" "b" "c") "Items: ; a; b; c"
+(assert-equal "Items: ; a; b; c" (format-list "Items: " "; " "a" "b" "c")
  "named function with optional and rest")
 
 ;; ===========================================
@@ -121,8 +131,9 @@
  "too many args - no rest param")
 
 ;; Correct with rest parameter - no max limit
-(assert-equal ((lambda (a &rest more) (list a (length more))) 1 2 3 4 5)
- (list 1 4) "no max args with rest param")
+(assert-equal
+ (list 1 4) ((lambda (a &rest more) (list a (length more))) 1 2 3 4 5)
+ "no max args with rest param")
 
 ;; ===========================================
 ;; Syntax Error Tests
@@ -148,11 +159,11 @@
 ;; Edge Cases
 ;; ===========================================
 ;; Empty parameter list (valid)
-(assert-equal ((lambda nil 42)) 42 "empty parameter list")
+(assert-equal 42 ((lambda nil 42)) "empty parameter list")
 ;; Only &rest parameter
-(assert-equal ((lambda (&rest all) (length all)) 1 2 3) 3 "only &rest param")
+(assert-equal 3 ((lambda (&rest all) (length all)) 1 2 3) "only &rest param")
 ;; Zero required, one optional
-(assert-equal ((lambda (&optional x) (or x 99))) 99
+(assert-equal 99 ((lambda (&optional x) (or x 99)))
  "zero required with optional default")
-(assert-equal ((lambda (&optional x) (or x 99)) 55) 55
+(assert-equal 55 ((lambda (&optional x) (or x 99)) 55)
  "zero required with optional provided")

@@ -1,18 +1,18 @@
 (load "tests/test-helpers.lisp")
 
 ;; directory-file-name / file-name-directory
-(assert-equal (directory-file-name "/home/user/file.txt") "/home/user/"
+(assert-equal "/home/user/" (directory-file-name "/home/user/file.txt")
  "directory-file-name absolute")
-(assert-equal (directory-file-name "file.txt") nil "directory-file-name no dir")
-(assert-equal (file-name-directory "/home/user/file.txt") "/home/user/"
+(assert-equal nil (directory-file-name "file.txt") "directory-file-name no dir")
+(assert-equal "/home/user/" (file-name-directory "/home/user/file.txt")
  "file-name-directory alias")
 
 ;; file-name-nondirectory
-(assert-equal (file-name-nondirectory "/home/user/file.txt") "file.txt"
+(assert-equal "file.txt" (file-name-nondirectory "/home/user/file.txt")
  "file-name-nondirectory absolute")
-(assert-equal (file-name-nondirectory "file.txt") "file.txt"
+(assert-equal "file.txt" (file-name-nondirectory "file.txt")
  "file-name-nondirectory relative")
-(assert-equal (file-name-nondirectory "/home/user/") ""
+(assert-equal "" (file-name-nondirectory "/home/user/")
  "file-name-nondirectory trailing slash")
 
 ;; Error cases

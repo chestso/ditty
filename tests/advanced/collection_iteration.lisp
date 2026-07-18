@@ -11,22 +11,22 @@
 (hash-set! ht "age" 30)
 (hash-set! ht "city" "NYC")
 
-(assert-equal (hash-count ht) 3 "hash table with 3 entries")
+(assert-equal 3 (hash-count ht) "hash table with 3 entries")
 
 ;; Get all keys
 (define keys (hash-keys ht))
 
-(assert-equal keys '("city" "name" "age") "hash-keys returns all keys")
+(assert-equal '("city" "name" "age") keys "hash-keys returns all keys")
 
 ;; Get all values
 (define values (hash-values ht))
 
-(assert-equal values '("NYC" "Alice" 30) "hash-values returns all values")
+(assert-equal '("NYC" "Alice" 30) values "hash-values returns all values")
 
 ;; Get key-value pairs as list of cons cells
 (define entries (hash-entries ht))
 
-(assert-equal entries '(("city" . "NYC") ("name" . "Alice") ("age" . 30))
+(assert-equal '(("city" . "NYC") ("name" . "Alice") ("age" . 30)) entries
  "hash-entries returns key-value pairs")
 ;; Iterate over keys using do loop
 (assert-equal
@@ -50,8 +50,9 @@
 (define v #(10 20 30 40 50))
 
 ;; Iterate with index and access elements
-(assert-equal (do ((i 0 (+ i 1))) ((>= i (length v)) "done") (vector-ref v i))
- "done" "iterate over vector with index")
+(assert-equal
+ "done" (do ((i 0 (+ i 1))) ((>= i (length v)) "done") (vector-ref v i))
+ "iterate over vector with index")
 
 ;; Sum all elements using accumulator
 (define sum 0)
@@ -71,11 +72,11 @@
    (car remaining)) "done"
  "iterate over list")
 ;; Get list length
-(assert-equal (length lst) 5 "length")
+(assert-equal 5 (length lst) "length")
 ;; Access by index
-(assert-equal (list-ref lst 0) 1 "list-ref at index 0")
-(assert-equal (list-ref lst 2) 3 "list-ref at index 2")
-(assert-equal (list-ref lst 4) 5 "list-ref at index 4")
+(assert-equal 1 (list-ref lst 0) "list-ref at index 0")
+(assert-equal 3 (list-ref lst 2) "list-ref at index 2")
+(assert-equal 5 (list-ref lst 4) "list-ref at index 4")
 ;; Iterate with index counter
 (assert-equal
  (do ((remaining lst (cdr remaining)) (i 0 (+ i 1))) ((null? remaining) "done")
@@ -102,7 +103,7 @@
 (hash-set! user_ht "user2" "user")
 (hash-set! user_ht "user3" "admin")
 
-(assert-equal (hash-count user_ht) 3 "user hash table has 3 entries")
+(assert-equal 3 (hash-count user_ht) "user hash table has 3 entries")
 
 (define admins 0)
 
@@ -121,17 +122,17 @@
 ;; ===========================================
 (define empty_ht (make-hash-table))
 
-(assert-equal (hash-keys empty_ht) 'nil "empty hash keys")
-(assert-equal (hash-values empty_ht) 'nil "empty hash values")
-(assert-equal (hash-entries empty_ht) 'nil "empty hash entries")
-(assert-equal (hash-count empty_ht) 0 "empty hash count")
+(assert-equal 'nil (hash-keys empty_ht) "empty hash keys")
+(assert-equal 'nil (hash-values empty_ht) "empty hash values")
+(assert-equal 'nil (hash-entries empty_ht) "empty hash entries")
+(assert-equal 0 (hash-count empty_ht) "empty hash count")
 
 (define empty_list 'nil)
 
-(assert-equal (length empty_list) 0 "empty list length")
+(assert-equal 0 (length empty_list) "empty list length")
 
 (assert-true (null? empty_list) "empty list is null")
 
 (define empty_vec #())
 
-(assert-equal (length empty_vec) 0 "empty vector length")
+(assert-equal 0 (length empty_vec) "empty vector length")

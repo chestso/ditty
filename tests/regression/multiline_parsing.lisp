@@ -6,11 +6,11 @@
 ;; ===========================================
 ;; Test 1: Simple multi-line arithmetic
 ;; ===========================================
-(assert-equal (+ 1 2 3) 6 "Simple multi-line arithmetic")
+(assert-equal 6 (+ 1 2 3) "Simple multi-line arithmetic")
 ;; ===========================================
 ;; Test 2: Nested multi-line expressions
 ;; ===========================================
-(assert-equal (+ 1 (+ 2 3)) 6 "Nested multi-line expressions")
+(assert-equal 6 (+ 1 (+ 2 3)) "Nested multi-line expressions")
 
 ;; ===========================================
 ;; Test 3: Multi-line hash table operations
@@ -19,7 +19,7 @@
 
 (hash-set! ht "name" "Alice")
 
-(assert-equal (hash-ref ht "name") "Alice" "Multi-line hash table operations")
+(assert-equal "Alice" (hash-ref ht "name") "Multi-line hash table operations")
 
 ;; ===========================================
 ;; Test 4: Multi-line vector operations
@@ -29,21 +29,22 @@
 (vector-push! v 42)
 (vector-push! v 100)
 
-(assert-equal (vector-ref v 0) 42 "Multi-line vector operations")
+(assert-equal 42 (vector-ref v 0) "Multi-line vector operations")
 
 ;; ===========================================
 ;; Test 5: Complex nested multi-line conditional
 ;; ===========================================
 (define result (if (> 10 5) (+ 1 2 3) (- 5 2)))
 
-(assert-equal result 6 "Complex nested multi-line conditional")
+(assert-equal 6 result "Complex nested multi-line conditional")
 
 ;; ===========================================
 ;; Test 6: Multi-line string definition
 ;; ===========================================
 (define s "This is a (test) string")
 
-(assert-equal s "This is a (test) string" "Multi-line string definition")
+(assert-equal "This is a (test) string" s "Multi-line string definition")
 ;; All multi-line tests completed
-(assert-equal "Multi-line expression parsing works!"
- "Multi-line expression parsing works!" "Final completion test")
+(assert-equal
+ "Multi-line expression parsing works!" "Multi-line expression parsing works!"
+ "Final completion test")

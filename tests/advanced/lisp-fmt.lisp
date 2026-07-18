@@ -6,46 +6,46 @@
 ;; ============================================================
 ;; Basic Atom Formatting
 ;; ============================================================
-(assert-equal (sexp-to-string 42) "42" "integer formatting")
-(assert-equal (sexp-to-string 3.14) "3.14" "float formatting")
-(assert-equal (sexp-to-string "hello") "\"hello\"" "string formatting")
-(assert-equal (sexp-to-string 'foo) "foo" "symbol formatting")
-(assert-equal (sexp-to-string #t) "#t" "true formatting")
+(assert-equal "42" (sexp-to-string 42) "integer formatting")
+(assert-equal "3.14" (sexp-to-string 3.14) "float formatting")
+(assert-equal "\"hello\"" (sexp-to-string "hello") "string formatting")
+(assert-equal "foo" (sexp-to-string 'foo) "symbol formatting")
+(assert-equal "#t" (sexp-to-string #t) "true formatting")
 ;; Note: In this Lisp, #f and nil are the same value
-(assert-equal (sexp-to-string nil) "nil" "nil/false formatting")
+(assert-equal "nil" (sexp-to-string nil) "nil/false formatting")
 ;; ============================================================
 ;; Simple List Formatting
 ;; ============================================================
 ;; Note: '() equals nil in this Lisp, which formats as "nil"
-(assert-equal (sexp-to-string 'nil) "nil" "empty list is nil")
-(assert-equal (sexp-to-string '(a)) "(a)" "single element list")
-(assert-equal (sexp-to-string '(a b c)) "(a b c)" "simple list")
-(assert-equal (sexp-to-string '(+ 1 2)) "(+ 1 2)" "function call list")
-(assert-equal (sexp-to-string '((a b) (c d))) "((a b) (c d))" "nested lists")
+(assert-equal "nil" (sexp-to-string 'nil) "empty list is nil")
+(assert-equal "(a)" (sexp-to-string '(a)) "single element list")
+(assert-equal "(a b c)" (sexp-to-string '(a b c)) "simple list")
+(assert-equal "(+ 1 2)" (sexp-to-string '(+ 1 2)) "function call list")
+(assert-equal "((a b) (c d))" (sexp-to-string '((a b) (c d))) "nested lists")
 ;; ============================================================
 ;; Vector Formatting
 ;; ============================================================
-(assert-equal (sexp-to-string #()) "#()" "empty vector")
-(assert-equal (sexp-to-string #(1 2 3)) "#(1 2 3)" "simple vector")
+(assert-equal "#()" (sexp-to-string #()) "empty vector")
+(assert-equal "#(1 2 3)" (sexp-to-string #(1 2 3)) "simple vector")
 ;; ============================================================
 ;; Quote/Quasiquote Shorthand
 ;; ============================================================
 ;; Quote shorthand
-(assert-equal (sexp-to-string '(quote x)) "'x" "quote outputs as apostrophe")
-(assert-equal (sexp-to-string '(quote (a b c))) "'(a b c)" "quoted list")
-(assert-equal (format-sexp '(quote (a b c)) 0) "'(a b c)"
+(assert-equal "'x" (sexp-to-string '(quote x)) "quote outputs as apostrophe")
+(assert-equal "'(a b c)" (sexp-to-string '(quote (a b c))) "quoted list")
+(assert-equal "'(a b c)" (format-sexp '(quote (a b c)) 0)
  "format-sexp uses quote shorthand")
 ;; Quasiquote shorthand
-(assert-equal (sexp-to-string '(quasiquote x)) "`x"
+(assert-equal "`x" (sexp-to-string '(quasiquote x))
  "quasiquote outputs as backtick")
-(assert-equal (sexp-to-string '(quasiquote (a b c))) "`(a b c)"
+(assert-equal "`(a b c)" (sexp-to-string '(quasiquote (a b c)))
  "quasiquoted list")
 ;; Unquote shorthand
-(assert-equal (sexp-to-string '(unquote x)) ",x" "unquote outputs as comma")
-(assert-equal (sexp-to-string '(unquote-splicing x)) ",@x"
+(assert-equal ",x" (sexp-to-string '(unquote x)) "unquote outputs as comma")
+(assert-equal ",@x" (sexp-to-string '(unquote-splicing x))
  "unquote-splicing outputs as comma-at")
 ;; Nested quasiquote with unquote
-(assert-equal (sexp-to-string '(quasiquote (a (unquote b) c))) "`(a ,b c)"
+(assert-equal "`(a ,b c)" (sexp-to-string '(quasiquote (a (unquote b) c)))
  "quasiquote with nested unquote")
 ;; Complex quasiquote
 (assert-equal
@@ -55,18 +55,19 @@
 ;; Format-sexp Tests (with indentation)
 ;; ============================================================
 ;; Simple expressions stay on one line
-(assert-equal (format-sexp '(+ 1 2) 0) "(+ 1 2)" "simple expr on one line")
+(assert-equal "(+ 1 2)" (format-sexp '(+ 1 2) 0) "simple expr on one line")
 ;; Nested short expressions
-(assert-equal (format-sexp '(+ (* 2 3) 4) 0) "(+ (* 2 3) 4)"
+(assert-equal "(+ (* 2 3) 4)" (format-sexp '(+ (* 2 3) 4) 0)
  "nested expr on one line")
 ;; ============================================================
 ;; Special Form Indentation
 ;; ============================================================
 ;; Short defun stays on one line
-(assert-equal (format-sexp '(defun foo (x) (+ x 1)) 0)
- "(defun foo (x) (+ x 1))" "short defun on one line")
+(assert-equal
+ "(defun foo (x) (+ x 1))" (format-sexp '(defun foo (x) (+ x 1)) 0)
+ "short defun on one line")
 ;; simple define
-(assert-equal (format-sexp '(define x 42) 0) "(define x 42)"
+(assert-equal "(define x 42)" (format-sexp '(define x 42) 0)
  "simple define on one line")
 ;; Longer defun uses multi-line (via format-special-form)
 ;; Build a defun that's too long for one line
@@ -80,7 +81,7 @@
 ;; Let Form Formatting
 ;; ============================================================
 ;; Short let stays on one line
-(assert-equal (format-sexp '(let ((x 1)) x) 0) "(let ((x 1)) x)"
+(assert-equal "(let ((x 1)) x)" (format-sexp '(let ((x 1)) x) 0)
  "short let on one line")
 ;; Longer let* forces multi-line
 (assert-equal
@@ -94,19 +95,20 @@
 ;; Cond Form Formatting
 ;; ============================================================
 ;; Short cond stays on one line
-(assert-equal (format-sexp '(cond ((= x 1) "one") (#t "other")) 0)
- "(cond ((= x 1) \"one\") (#t \"other\"))" "short cond on one line")
+(assert-equal
+ "(cond ((= x 1) \"one\") (#t \"other\"))"
+ (format-sexp '(cond ((= x 1) "one") (#t "other")) 0) "short cond on one line")
 ;; ============================================================
 ;; If Form Formatting
 ;; ============================================================
 ;; Short if stays on one line
-(assert-equal (format-sexp '(if test then else) 0) "(if test then else)"
+(assert-equal "(if test then else)" (format-sexp '(if test then else) 0)
  "short if on one line")
 ;; ============================================================
 ;; Dotted Pair Formatting
 ;; ============================================================
-(assert-equal (sexp-to-string (cons 'a 'b)) "(a . b)" "dotted pair")
-(assert-equal (sexp-to-string '(a b . c)) "(a b . c)" "improper list")
+(assert-equal "(a . b)" (sexp-to-string (cons 'a 'b)) "dotted pair")
+(assert-equal "(a b . c)" (sexp-to-string '(a b . c)) "improper list")
 
 ;; ============================================================
 ;; Round-trip Formatting (idempotence)
@@ -115,7 +117,7 @@
 (let ((expr '(defun test (a b) (+ a b))))
   (let ((once (format-sexp expr 0))
         (twice (format-sexp expr 0)))
-    (assert-equal once twice "format is idempotent")))
+    (assert-equal twice once "format is idempotent")))
 
 ;; ============================================================
 ;; Comment-Preservation Regression Tests
@@ -208,13 +210,13 @@
     (let* ((src (car remaining))
            (once (format-source-string src))
            (twice (format-source-string once)))
-      (assert-equal once twice "format-source-string is idempotent"))))
+      (assert-equal twice once "format-source-string is idempotent"))))
 
 ;; Self-format smoke: formatting lisp-fmt.lisp must be byte-identical to
 ;; the on-disk source. Catches any regression in one line.
 (let* ((source (read-file-to-string "lisp/lisp-fmt.lisp"))
        (formatted (format-source-string source)))
-  (assert-equal (string-trim source) (string-trim formatted)
+  (assert-equal (string-trim formatted) (string-trim source)
    "lisp-fmt.lisp self-format is byte-identical"))
 
 ;; ============================================================
@@ -230,7 +232,7 @@
     (write-string out "(foo)\n(bar)\n")
     (close out))
   (let ((in (open tmp "r")))
-    (assert-equal "\r\n" (stream-eol in) "stream-eol detects CRLF on open")
+    (assert-equal (stream-eol in) "\r\n" "stream-eol detects CRLF on open")
     (close in))
   (delete-file tmp))
 
@@ -240,7 +242,7 @@
     (write-string out "(foo)\n(bar)\n")
     (close out))
   (let ((in (open tmp "r")))
-    (assert-equal "\n" (stream-eol in) "stream-eol detects LF on open")
+    (assert-equal (stream-eol in) "\n" "stream-eol detects LF on open")
     (close in))
   (delete-file tmp))
 
@@ -249,14 +251,14 @@
   (let ((out (open tmp "w" "\r\n")))
     (write-string out "line1\nline2\n")
     (close out))
-  (assert-equal "line1\r\nline2\r\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "line1\r\nline2\r\n"
    "write-string translates \\n to \\r\\n on a CRLF stream")
   (delete-file tmp))
 (let ((tmp (string-append tmpdir "/ditty-fmt-ws-lf.lisp")))
   (let ((out (open tmp "w")))
     (write-string out "line1\nline2\n")
     (close out))
-  (assert-equal "line1\nline2\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "line1\nline2\n"
    "write-string writes verbatim on an LF stream")
   (delete-file tmp))
 
@@ -265,7 +267,7 @@
   (let ((out (open tmp "w")))
     (write-string out "abc")
     (close out))
-  (assert-equal "abc" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "abc"
    "write-string does not append a trailing newline")
   (delete-file tmp))
 
@@ -275,10 +277,10 @@
     (write-line file "(define  x  1)")
     (close file))
   (format-file-inplace tmp)
-  (assert-equal "(define x 1)\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "(define x 1)\n"
    "LF file round-trip ends with exactly one \\n")
   (format-file-inplace tmp)
-  (assert-equal "(define x 1)\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "(define x 1)\n"
    "LF file round-trip is idempotent")
   (delete-file tmp))
 
@@ -288,10 +290,10 @@
     (write-string out "(define  x  1)\n")
     (close out))
   (format-file-inplace tmp)
-  (assert-equal "(define x 1)\r\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "(define x 1)\r\n"
    "CRLF file round-trip ends with exactly one \\r\\n")
   (format-file-inplace tmp)
-  (assert-equal "(define x 1)\r\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "(define x 1)\r\n"
    "CRLF file round-trip is idempotent")
   (delete-file tmp))
 
@@ -301,7 +303,7 @@
     (write-string out "(define  x  1)\n\n\n")
     (close out))
   (format-file-inplace tmp)
-  (assert-equal "(define x 1)\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "(define x 1)\n"
    "LF multiple trailing newlines collapse to one")
   (delete-file tmp))
 (let ((tmp (string-append tmpdir "/ditty-fmt-multi-crlf.lisp")))
@@ -309,7 +311,7 @@
     (write-string out "(define  x  1)\n\n\n")
     (close out))
   (format-file-inplace tmp)
-  (assert-equal "(define x 1)\r\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "(define x 1)\r\n"
    "CRLF multiple trailing newlines collapse to one")
   (delete-file tmp))
 
@@ -319,7 +321,7 @@
     (write-string out "(define  x  1)")
     (close out))
   (format-file-inplace tmp)
-  (assert-equal "(define x 1)\n" (read-file-raw tmp)
+  (assert-equal (read-file-raw tmp) "(define x 1)\n"
    "missing trailing newline gets added")
   (delete-file tmp))
 

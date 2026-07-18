@@ -1,20 +1,20 @@
 (load "tests/test-helpers.lisp")
 
 ;; ASCII
-(assert-equal 4 (utf8-display-width "ABCD") "ascii width")
+(assert-equal (utf8-display-width "ABCD") 4 "ascii width")
 
 ;; Wide characters (CJK)
-(assert-equal 2 (utf8-display-width "中") "cjk width")
+(assert-equal (utf8-display-width "中") 2 "cjk width")
 
 ;; Combining characters (zero width)
-(assert-equal 0 (utf8-display-width (make-string 1 (code-char 768)))
+(assert-equal (utf8-display-width (make-string 1 (code-char 768))) 0
  "combining width")
 
 ;; Mixed
-(assert-equal 3 (utf8-display-width "A中") "mixed width")
+(assert-equal (utf8-display-width "A中") 3 "mixed width")
 
 ;; Empty
-(assert-equal 0 (utf8-display-width "") "empty width")
+(assert-equal (utf8-display-width "") 0 "empty width")
 
 ;; Error
 (assert-error (utf8-display-width 123) "non-string width")

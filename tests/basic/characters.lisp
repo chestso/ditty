@@ -10,21 +10,21 @@
 (assert-equal #\Z #\Z "char literal #\\Z")
 (assert-equal #\0 #\0 "char literal #\\0")
 ;; Named characters
-(assert-equal #\space (code-char 32) "named char #\\space")
-(assert-equal #\newline (code-char 10) "named char #\\newline")
-(assert-equal #\tab (code-char 9) "named char #\\tab")
-(assert-equal #\return (code-char 13) "named char #\\return")
-(assert-equal #\escape (code-char 27) "named char #\\escape")
-(assert-equal #\null (code-char 0) "named char #\\null")
-(assert-equal #\backspace (code-char 8) "named char #\\backspace")
-(assert-equal #\delete (code-char 127) "named char #\\delete")
+(assert-equal (code-char 32) #\space "named char #\\space")
+(assert-equal (code-char 10) #\newline "named char #\\newline")
+(assert-equal (code-char 9) #\tab "named char #\\tab")
+(assert-equal (code-char 13) #\return "named char #\\return")
+(assert-equal (code-char 27) #\escape "named char #\\escape")
+(assert-equal (code-char 0) #\null "named char #\\null")
+(assert-equal (code-char 8) #\backspace "named char #\\backspace")
+(assert-equal (code-char 127) #\delete "named char #\\delete")
 ;; Hex notation
 (assert-equal #\A #\A "hex char #\\x41 = A")
 (assert-equal #\a #\a "hex char #\\x61 = a")
 (assert-equal #\escape #\escape "hex char #\\x1b = escape")
 ;; Unicode notation
-(assert-equal #\u4e16 (code-char 19990) "unicode char #\\u4e16")
-(assert-equal (char-code #\u4e16) 19990 "unicode char code")
+(assert-equal (code-char 19990) #\u4e16 "unicode char #\\u4e16")
+(assert-equal 19990 (char-code #\u4e16) "unicode char code")
 
 ;; ===========================================
 ;; Type Predicate
@@ -38,23 +38,23 @@
 ;; ===========================================
 ;; Character/Code Conversion
 ;; ===========================================
-(assert-equal (char-code #\a) 97 "char-code #\\a")
-(assert-equal (char-code #\A) 65 "char-code #\\A")
-(assert-equal (char-code #\space) 32 "char-code #\\space")
-(assert-equal (char-code #\newline) 10 "char-code #\\newline")
-(assert-equal (code-char 97) #\a "code-char 97")
-(assert-equal (code-char 65) #\A "code-char 65")
-(assert-equal (code-char 32) #\space "code-char 32")
-(assert-equal (code-char 0) #\null "code-char 0")
+(assert-equal 97 (char-code #\a) "char-code #\\a")
+(assert-equal 65 (char-code #\A) "char-code #\\A")
+(assert-equal 32 (char-code #\space) "char-code #\\space")
+(assert-equal 10 (char-code #\newline) "char-code #\\newline")
+(assert-equal #\a (code-char 97) "code-char 97")
+(assert-equal #\A (code-char 65) "code-char 65")
+(assert-equal #\space (code-char 32) "code-char 32")
+(assert-equal #\null (code-char 0) "code-char 0")
 ;; ===========================================
 ;; String/Character Conversion
 ;; ===========================================
-(assert-equal (char->string #\a) "a" "char->string #\\a")
-(assert-equal (char->string #\space) " " "char->string #\\space")
-(assert-equal (char->string #\newline) "\n" "char->string #\\newline")
-(assert-equal (string->char "a") #\a "string->char \"a\"")
-(assert-equal (string->char " ") #\space "string->char \" \"")
-(assert-equal (string->char "\n") #\newline "string->char newline")
+(assert-equal "a" (char->string #\a) "char->string #\\a")
+(assert-equal " " (char->string #\space) "char->string #\\space")
+(assert-equal "\n" (char->string #\newline) "char->string #\\newline")
+(assert-equal #\a (string->char "a") "string->char \"a\"")
+(assert-equal #\space (string->char " ") "string->char \" \"")
+(assert-equal #\newline (string->char "\n") "string->char newline")
 
 ;; ===========================================
 ;; Character Comparisons
@@ -86,14 +86,14 @@
 ;; ===========================================
 ;; Case Conversion
 ;; ===========================================
-(assert-equal (char-upcase #\a) #\A "char-upcase #\\a")
-(assert-equal (char-upcase #\z) #\Z "char-upcase #\\z")
-(assert-equal (char-upcase #\A) #\A "char-upcase #\\A already upper")
-(assert-equal (char-upcase #\1) #\1 "char-upcase #\\1 unchanged")
-(assert-equal (char-downcase #\A) #\a "char-downcase #\\A")
-(assert-equal (char-downcase #\Z) #\z "char-downcase #\\Z")
-(assert-equal (char-downcase #\a) #\a "char-downcase #\\a already lower")
-(assert-equal (char-downcase #\1) #\1 "char-downcase #\\1 unchanged")
+(assert-equal #\A (char-upcase #\a) "char-upcase #\\a")
+(assert-equal #\Z (char-upcase #\z) "char-upcase #\\z")
+(assert-equal #\A (char-upcase #\A) "char-upcase #\\A already upper")
+(assert-equal #\1 (char-upcase #\1) "char-upcase #\\1 unchanged")
+(assert-equal #\a (char-downcase #\A) "char-downcase #\\A")
+(assert-equal #\z (char-downcase #\Z) "char-downcase #\\Z")
+(assert-equal #\a (char-downcase #\a) "char-downcase #\\a already lower")
+(assert-equal #\1 (char-downcase #\1) "char-downcase #\\1 unchanged")
 
 ;; ===========================================
 ;; Character Classification
@@ -122,12 +122,12 @@
 ;; ===========================================
 (assert-true (char? (string-ref "hello" 0)) "string-ref returns char")
 
-(assert-equal (string-ref "hello" 0) #\h "string-ref first char")
-(assert-equal (string-ref "hello" 4) #\o "string-ref last char")
-(assert-equal (string-ref "a" 0) #\a "string-ref single char string")
+(assert-equal #\h (string-ref "hello" 0) "string-ref first char")
+(assert-equal #\o (string-ref "hello" 4) "string-ref last char")
+(assert-equal #\a (string-ref "a" 0) "string-ref single char string")
 ;; ===========================================
 ;; string-append alias for concat
 ;; ===========================================
-(assert-equal (string-append "hello" " " "world") "hello world" "string-append")
-(assert-equal (string-append "a" "b" "c") "abc" "string-append multiple")
-(assert-equal (string-append) "" "string-append empty")
+(assert-equal "hello world" (string-append "hello" " " "world") "string-append")
+(assert-equal "abc" (string-append "a" "b" "c") "string-append multiple")
+(assert-equal "" (string-append) "string-append empty")

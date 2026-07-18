@@ -16,9 +16,9 @@
     ;; Open for reading
     (define datafile (open "output.log" "r"))
     ;; Read lines one by one
-    (assert-equal (read-line datafile) "Log entry 1" "read first line")
-    (assert-equal (read-line datafile) "Log entry 2" "read second line")
-    (assert-equal (read-line datafile) "Log entry 3" "read third line")
+    (assert-equal "Log entry 1" (read-line datafile) "read first line")
+    (assert-equal "Log entry 2" (read-line datafile) "read second line")
+    (assert-equal "Log entry 3" (read-line datafile) "read third line")
     (assert-nil (read-line datafile) "EOF returns nil")
     (close datafile)
     ;; ============================================
@@ -34,9 +34,9 @@
     (close f2)
     ;; Read mode (default)
     (define f3 (open "file1.txt" "r"))
-    (assert-equal (read-line f3) "This creates or overwrites"
+    (assert-equal "This creates or overwrites" (read-line f3)
      "read overwritten line")
-    (assert-equal (read-line f3) "This appends to the file"
+    (assert-equal "This appends to the file" (read-line f3)
      "read appended line")
     (close f3)
     ;; ============================================
@@ -64,8 +64,8 @@
     (close json_file)
     ;; Read JSON from file
     (define data (read-json "test.json"))
-    (assert-equal (hash-ref data "name") "Alice" "JSON name field")
-    (assert-equal (hash-ref data "age") 30 "JSON age field")
+    (assert-equal "Alice" (hash-ref data "name") "JSON name field")
+    (assert-equal 30 (hash-ref data "age") "JSON age field")
     (assert-true (hash-ref data "active") "JSON active field")
     ;; Read JSON from file stream
     (define file2 (open "test.json" "r"))
@@ -75,11 +75,11 @@
     (define json_str_file (open "string.json" "w"))
     (write-line json_str_file "\"hello world\"")
     (close json_str_file)
-    (assert-equal (read-json "string.json") "hello world" "JSON string value")
+    (assert-equal "hello world" (read-json "string.json") "JSON string value")
     (define json_num_file (open "number.json" "w"))
     (write-line json_num_file "42")
     (close json_num_file)
-    (assert-equal (read-json "number.json") 42 "JSON number value")
+    (assert-equal 42 (read-json "number.json") "JSON number value")
     (define json_bool_file (open "bool.json" "w"))
     (write-line json_bool_file "true")
     (close json_bool_file)

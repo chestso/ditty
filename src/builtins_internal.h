@@ -87,5 +87,6 @@ void register_errors_builtins(Environment *env);
 void register_packages_builtins(Environment *env);
 void register_filesystem_builtins(Environment *env);
 void register_time_profiling_builtins(Environment *env);
+void register_tui_builtins(Environment *env);
 
 #endif /* BUILTINS_INTERNAL_H */

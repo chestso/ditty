@@ -15,14 +15,14 @@
 ;; ===========================================
 ;; current-package defaults to "user"
 ;; ===========================================
-(assert-equal (current-package) 'user "current-package returns user by default")
+(assert-equal 'user (current-package) "current-package returns user by default")
 
 ;; ===========================================
 ;; in-package changes current package
 ;; ===========================================
 (in-package 'math)
 
-(assert-equal (current-package) 'math "in-package changes package to math")
+(assert-equal 'math (current-package) "in-package changes package to math")
 
 ;; Define bindings in math package
 (define math-add (lambda (a b) (+ a b)))
@@ -46,12 +46,12 @@
 ;; ===========================================
 (in-package 'user)
 
-(assert-equal math:math-pi 3.14159 "pkg:symbol resolves across packages")
-(assert-equal (math:math-add 2 3) 5 "pkg:symbol resolves function in package")
+(assert-equal 3.14159 math:math-pi "pkg:symbol resolves across packages")
+(assert-equal 5 (math:math-add 2 3) "pkg:symbol resolves function in package")
 ;; ===========================================
 ;; core:+ resolves to addition
 ;; ===========================================
-(assert-equal (core:+ 10 20) 30 "core:+ resolves to addition")
+(assert-equal 30 (core:+ 10 20) "core:+ resolves to addition")
 
 ;; ===========================================
 ;; Undefined pkg:symbol is an error
@@ -69,22 +69,22 @@
 ;; ===========================================
 ;; Unqualified names resolve across packages
 ;; ===========================================
-(assert-equal (current-package) 'user "still in user package")
-(assert-equal (math-add 10 20) 30 "unqualified names resolve across packages")
+(assert-equal 'user (current-package) "still in user package")
+(assert-equal 30 (math-add 10 20) "unqualified names resolve across packages")
 
 ;; ===========================================
 ;; in-package accepts string argument
 ;; ===========================================
 (in-package "user")
 
-(assert-equal (current-package) 'user "in-package accepts string argument")
+(assert-equal 'user (current-package) "in-package accepts string argument")
 
 ;; ===========================================
 ;; package- prefixed aliases
 ;; ===========================================
 (package-set 'alias-test)
 
-(assert-equal (package-current) 'alias-test
+(assert-equal 'alias-test (package-current)
  "package-set / package-current work")
 
 (define alias-test-var 1)
@@ -182,7 +182,7 @@
       (assert-true (string-contains? content "\\\\")
        "docstring backslashes are escaped in saved file"))
     (load docstring-test-file)
-    (assert-equal (fn-with-quotes 5) 6
+    (assert-equal 6 (fn-with-quotes 5)
      "function with quoted docstring works after reload"))
   (delete-file docstring-test-file))
 
@@ -196,7 +196,7 @@
 
 (unwind-protect
   (progn (define my-plus +) (define + 42)
-    (assert-equal + 42 "redefining builtin updates value")
+    (assert-equal 42 + "redefining builtin updates value")
     (package-save test-shadow-file)
     (let ((content (read-file-string test-shadow-file)))
       (assert-true (regex-match? "\\(define \\+ 42\\)" content)

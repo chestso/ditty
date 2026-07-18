@@ -12,9 +12,9 @@
 (define wrapper (lambda (x) (if (> x 10) (helper x) "small")))
 
 ;; Test: Simple tail call should return actual value, not tail-call object
-(assert-equal (wrapper 15) "positive-15"
+(assert-equal "positive-15" (wrapper 15)
  "Simple tail call returns actual value")
-(assert-equal (wrapper 5) "small" "Non-tail call returns value")
+(assert-equal "small" (wrapper 5) "Non-tail call returns value")
 
 ;; Test: Nested tail calls
 (define level1 (lambda (x) (concat "L1-" x)))
@@ -23,21 +23,21 @@
 
 (define level3 (lambda (x) (level2 (concat "L3-" x))))
 
-(assert-equal (level3 "test") "L1-L2-L3-test" "Nested tail calls")
+(assert-equal "L1-L2-L3-test" (level3 "test") "Nested tail calls")
 
 ;; Test: Conditional tail calls in both branches
 (define conditional-tail
   (lambda (x pred) (if pred (helper x) (level1 (number->string x)))))
 
-(assert-equal (conditional-tail 20 #t) "positive-20"
+(assert-equal "positive-20" (conditional-tail 20 #t)
  "Conditional tail call - true branch")
-(assert-equal (conditional-tail 20 nil) "L1-20"
+(assert-equal "L1-20" (conditional-tail 20 nil)
  "Conditional tail call - false branch")
 
 ;; Test: Tail call in let expression
 (define let-tail (lambda (x) (let ((y (* x 2))) (helper y))))
 
-(assert-equal (let-tail 7) "positive-14" "Tail call in let expression")
+(assert-equal "positive-14" (let-tail 7) "Tail call in let expression")
 
 ;; Test: Complex nested structure with multiple tail calls
 (define trim-punctuation
@@ -53,14 +53,14 @@
     (if (and (string? word) (> (length word) 0)) (trim-punctuation word) "")))
 
 ;; This was the original bug case - clean-word would return #<tail-call> instead of string
-(assert-equal (clean-word "hello,") "hello" "Complex nested tail call - hello,")
-(assert-equal (clean-word "world!") "world" "Complex nested tail call - world!")
-(assert-equal (clean-word "") "" "Complex nested tail call - empty string")
+(assert-equal "hello" (clean-word "hello,") "Complex nested tail call - hello,")
+(assert-equal "world" (clean-word "world!") "Complex nested tail call - world!")
+(assert-equal "" (clean-word "") "Complex nested tail call - empty string")
 
 ;; Test: Multiple arguments with tail call
 (define multi-arg-tail (lambda (a b c) (concat a b c)))
 
 (define multi-wrapper (lambda (x) (multi-arg-tail "A-" x "-Z")))
 
-(assert-equal (multi-wrapper "test") "A-test-Z"
+(assert-equal "A-test-Z" (multi-wrapper "test")
  "Multiple arguments with tail call")

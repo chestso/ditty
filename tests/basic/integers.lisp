@@ -3,27 +3,27 @@
 (load "tests/test-helpers.lisp")
 
 ;; Integer arithmetic
-(assert-equal (+ 1 2 3) 6 "Integer addition")
-(assert-equal (- 10 3) 7 "Integer subtraction")
-(assert-equal (* 2 3 4) 24 "Integer multiplication")
+(assert-equal 6 (+ 1 2 3) "Integer addition")
+(assert-equal 7 (- 10 3) "Integer subtraction")
+(assert-equal 24 (* 2 3 4) "Integer multiplication")
 ;; Mixed integer/float
-(assert-equal (+ 1 2.5) 3.5 "Mixed int+float addition")
-(assert-equal (* 3 4.0) 12.0 "Mixed int*float multiplication")
-(assert-equal (+ 1.5 2) 3.5 "Mixed float+int addition")
+(assert-equal 3.5 (+ 1 2.5) "Mixed int+float addition")
+(assert-equal 12.0 (* 3 4.0) "Mixed int*float multiplication")
+(assert-equal 3.5 (+ 1.5 2) "Mixed float+int addition")
 ;; Division
-(assert-equal (/ 10 2) 5.0 "Division always returns float")
+(assert-equal 5.0 (/ 10 2) "Division always returns float")
 
 (assert-true (< (- (/ 10 3) 3.333333) 0.00001) "Division with remainder")
 
-(assert-equal (quotient 10 3) 3 "Integer quotient truncates")
+(assert-equal 3 (quotient 10 3) "Integer quotient truncates")
 
 ;; Type coercion in operations
 (define a 5)
 
 (define b 2.5)
 
-(assert-equal (+ a b) 7.5 "Integer promoted to float in mixed operation")
-(assert-equal (* a 10) 50 "Integer multiplication stays integer")
+(assert-equal 7.5 (+ a b) "Integer promoted to float in mixed operation")
+(assert-equal 50 (* a 10) "Integer multiplication stays integer")
 
 ;; Comparisons work with both types
 (assert-true (> 5 3) "Greater than with integers")
@@ -35,11 +35,11 @@
 ;; Truthy/falsy behavior (note: 0 is truthy in this Lisp, only nil is falsy)
 (define x 0)
 
-(assert-equal x 0 "Variable holds integer 0")
+(assert-equal 0 x "Variable holds integer 0")
 
 (define y 5)
 
-(assert-equal y 5 "Variable holds integer 5")
-(assert-equal (if 0 "yes" "no") "yes"
+(assert-equal 5 y "Variable holds integer 5")
+(assert-equal "yes" (if 0 "yes" "no")
  "0 is truthy in conditional (only nil is falsy)")
-(assert-equal (if 1 "yes" "no") "yes" "Non-zero integer is truthy")
+(assert-equal "yes" (if 1 "yes" "no") "Non-zero integer is truthy")

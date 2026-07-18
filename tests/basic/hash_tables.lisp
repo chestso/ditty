@@ -8,37 +8,37 @@
 ;; Check if hash-table? predicate works
 (assert-true (hash-table? ht) "make-hash-table creates a hash table")
 
-(assert-equal (hash-count ht) 0 "new hash table is empty")
+(assert-equal 0 (hash-count ht) "new hash table is empty")
 
 ;; Store values
 (hash-set! ht "name" "Alice")
 (hash-set! ht "age" 30)
 (hash-set! ht "city" "New York")
 
-(assert-equal (hash-count ht) 3 "hash table contains 3 entries")
+(assert-equal 3 (hash-count ht) "hash table contains 3 entries")
 ;; Retrieve values
-(assert-equal (hash-ref ht "name") "Alice" "hash-ref retrieves string value")
-(assert-equal (hash-ref ht "age") 30 "hash-ref retrieves integer value")
-(assert-equal (hash-ref ht "city") "New York" "hash-ref retrieves city value")
+(assert-equal "Alice" (hash-ref ht "name") "hash-ref retrieves string value")
+(assert-equal 30 (hash-ref ht "age") "hash-ref retrieves integer value")
+(assert-equal "New York" (hash-ref ht "city") "hash-ref retrieves city value")
 
 (assert-nil (hash-ref ht "missing") "hash-ref returns nil for missing key")
 
 ;; Update existing values
 (hash-set! ht "age" 31)
 
-(assert-equal (hash-ref ht "age") 31 "hash-set! updates existing value")
+(assert-equal 31 (hash-ref ht "age") "hash-set! updates existing value")
 
 ;; Remove entries
 (hash-remove! ht "city")
 
 (assert-nil (hash-ref ht "city") "hash-remove! removes entry")
 
-(assert-equal (hash-count ht) 2 "hash-count decreases after removal")
+(assert-equal 2 (hash-count ht) "hash-count decreases after removal")
 
 ;; Clear all entries
 (hash-clear! ht)
 
-(assert-equal (hash-count ht) 0 "hash-clear! empties hash table")
+(assert-equal 0 (hash-count ht) "hash-clear! empties hash table")
 
 ;; Hash tables are always truthy (even when empty - only nil is falsy in this Lisp)
 (assert-true ht "empty hash table is truthy")
@@ -48,20 +48,20 @@
 
 (assert-true ht "non-empty hash table is truthy")
 
-(assert-equal (hash-count ht) 1 "hash table has one entry after adding")
+(assert-equal 1 (hash-count ht) "hash table has one entry after adding")
 
 ;; Use with symbols as keys
 (hash-set! ht 'name "Bob")
 
-(assert-equal (hash-ref ht 'name) "Bob"
+(assert-equal "Bob" (hash-ref ht 'name)
  "hash-set! and hash-ref work with symbol keys")
 ;; String/symbol key interchangeability
-(assert-equal (hash-ref ht "name") "Bob"
+(assert-equal "Bob" (hash-ref ht "name")
  "symbol key retrievable with string key")
 
 (hash-set! ht "color" "red")
 
-(assert-equal (hash-ref ht 'color) "red"
+(assert-equal "red" (hash-ref ht 'color)
  "string key retrievable with symbol key")
 
 ;; ============================================================================
@@ -72,40 +72,40 @@
 ;; Integer keys
 (hash-set! ht2 42 "the answer")
 
-(assert-equal (hash-ref ht2 42) "the answer" "integer key works")
+(assert-equal "the answer" (hash-ref ht2 42) "integer key works")
 
 (assert-nil (hash-ref ht2 43) "different integer returns nil")
 
 ;; Float keys
 (hash-set! ht2 3.14 "pi")
 
-(assert-equal (hash-ref ht2 3.14) "pi" "float key works")
+(assert-equal "pi" (hash-ref ht2 3.14) "float key works")
 
 ;; Character keys
 (hash-set! ht2 #\A "letter A")
 
-(assert-equal (hash-ref ht2 #\A) "letter A" "char key works")
+(assert-equal "letter A" (hash-ref ht2 #\A) "char key works")
 
 (assert-nil (hash-ref ht2 #\B) "different char returns nil")
 
 ;; Boolean keys (#f is nil in ditty, so they share a key)
 (hash-set! ht2 #t "true val")
 
-(assert-equal (hash-ref ht2 #t) "true val" "boolean true key works")
+(assert-equal "true val" (hash-ref ht2 #t) "boolean true key works")
 
 ;; Nil key (same as #f)
 (hash-set! ht2 nil "nil val")
 
-(assert-equal (hash-ref ht2 nil) "nil val" "nil key works")
+(assert-equal "nil val" (hash-ref ht2 nil) "nil key works")
 ;; Verify count
-(assert-equal (hash-count ht2) 5 "5 entries with mixed key types")
+(assert-equal 5 (hash-count ht2) "5 entries with mixed key types")
 
 ;; Integer keys don't collide with string keys
 (hash-set! ht2 "42" "string forty-two")
 
-(assert-equal (hash-ref ht2 42) "the answer"
+(assert-equal "the answer" (hash-ref ht2 42)
  "integer 42 distinct from string 42")
-(assert-equal (hash-ref ht2 "42") "string forty-two"
+(assert-equal "string forty-two" (hash-ref ht2 "42")
  "string 42 distinct from integer 42")
 
 ;; hash-keys returns original key types
@@ -115,7 +115,7 @@
 (hash-set! ht3 "hello" "str")
 
 (let ((keys (hash-keys ht3)))
-  (assert-equal (length keys) 2 "hash-keys returns 2 keys")
+  (assert-equal 2 (length keys) "hash-keys returns 2 keys")
   ;; One key should be an integer, one a string
   (assert-true
    (or (and (number? (car keys)) (string? (car (cdr keys))))
@@ -127,10 +127,10 @@
 
 (assert-nil (hash-ref ht2 42) "hash-remove! works with integer key")
 
-(assert-equal (hash-ref ht2 "42") "string forty-two"
+(assert-equal "string forty-two" (hash-ref ht2 "42")
  "string 42 unaffected by integer 42 removal")
 
 ;; Update with non-string keys
 (hash-set! ht2 3.14 "tau/2")
 
-(assert-equal (hash-ref ht2 3.14) "tau/2" "float key value updated")
+(assert-equal "tau/2" (hash-ref ht2 3.14) "float key value updated")

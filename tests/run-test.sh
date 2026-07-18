@@ -42,4 +42,8 @@ esac
 
 # Run from project root
 cd "$PROJECT_ROOT" || exit 1
+
+# Allow (require '...) to find built-in libraries in lisp/
+export DITTY_LISP_PATH="$PROJECT_ROOT/lisp${DITTY_LISP_PATH:+:$DITTY_LISP_PATH}"
+
 exec "$REPL" "$TEST_FILE"

@@ -69,26 +69,26 @@
 ;; function-params
 (define my-add (lambda (x y) (+ x y)))
 
-(assert-equal (function-params my-add) '(x y) "function-params on lambda")
+(assert-equal '(x y) (function-params my-add) "function-params on lambda")
 ;; function-body
-(assert-equal (function-body my-add) '((+ x y)) "function-body on lambda")
+(assert-equal '((+ x y)) (function-body my-add) "function-body on lambda")
 ;; function-name
-(assert-equal (function-name +) "+" "function-name on builtin")
-(assert-equal (function-name car) "car" "function-name on car")
+(assert-equal "+" (function-name +) "function-name on builtin")
+(assert-equal "car" (function-name car) "function-name on car")
 
 (assert-nil (function-name (lambda (x) x)) "anonymous lambda has no name")
 
 ;; Named function via defun
 (defun greet (name) (concat "Hello, " name))
 
-(assert-equal (function-name greet) "greet" "function-name on named function")
-(assert-equal (function-params greet) '(name)
+(assert-equal "greet" (function-name greet) "function-name on named function")
+(assert-equal '(name) (function-params greet)
  "function-params on named function")
 
 ;; Macro introspection
 (defmacro my-when (cond . body) `(if ,cond (progn ,@body) nil))
 
-(assert-equal (function-params my-when) '(cond . body)
+(assert-equal '(cond . body) (function-params my-when)
  "function-params on macro")
 
 (assert-true (function? my-add) "my-add is function?")

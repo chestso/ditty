@@ -16,12 +16,12 @@
 (assert-nil (symbol? (cons 1 2)) "symbol? rejects cons cell")
 
 ;; Test symbol->string
-(assert-equal (symbol->string 'foo) "foo" "symbol->string converts 'foo")
-(assert-equal (symbol->string 'bar) "bar" "symbol->string converts 'bar")
-(assert-equal (symbol->string '+) "+" "symbol->string converts '+")
-(assert-equal (symbol->string 'my-symbol) "my-symbol"
+(assert-equal "foo" (symbol->string 'foo) "symbol->string converts 'foo")
+(assert-equal "bar" (symbol->string 'bar) "symbol->string converts 'bar")
+(assert-equal "+" (symbol->string '+) "symbol->string converts '+")
+(assert-equal "my-symbol" (symbol->string 'my-symbol)
  "symbol->string converts 'my-symbol")
-(assert-equal (symbol->string 'hello-world) "hello-world"
+(assert-equal "hello-world" (symbol->string 'hello-world)
  "symbol->string converts 'hello-world")
 
 ;; Test symbol->string with variables
@@ -29,7 +29,7 @@
 
 (assert-true (symbol? x) "variable holds symbol")
 
-(assert-equal (symbol->string x) "test-symbol" "symbol->string on variable")
+(assert-equal "test-symbol" (symbol->string x) "symbol->string on variable")
 
 ;; Test converting symbol to string and using it
 (define sym 'example)
@@ -38,7 +38,7 @@
 
 (assert-true (string? str) "symbol->string result is a string")
 
-(assert-equal (concat str "-suffix") "example-suffix"
+(assert-equal "example-suffix" (concat str "-suffix")
  "concat with converted symbol")
 
 ;; Test symbol? with quoted expressions
@@ -54,7 +54,7 @@
 (assert-true (symbol? '!) "symbol? recognizes '!")
 
 ;; Convert various symbols to strings
-(assert-equal (symbol->string '*) "*" "symbol->string converts '*")
-(assert-equal (symbol->string '/) "/" "symbol->string converts '/")
-(assert-equal (symbol->string 'null?) "null?" "symbol->string converts 'null?")
-(assert-equal (symbol->string 'set!) "set!" "symbol->string converts 'set!")
+(assert-equal "*" (symbol->string '*) "symbol->string converts '*")
+(assert-equal "/" (symbol->string '/) "symbol->string converts '/")
+(assert-equal "null?" (symbol->string 'null?) "symbol->string converts 'null?")
+(assert-equal "set!" (symbol->string 'set!) "symbol->string converts 'set!")

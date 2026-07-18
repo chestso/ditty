@@ -6,7 +6,7 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = ditty.pc
 
 dittydatadir = $(datadir)/ditty/lisp
-dittydata_DATA = lisp/lisp-fmt.lisp
+dittydata_DATA = lisp/lisp-fmt.lisp lisp/tui-events.lisp
 
 # App icon and desktop entry
 icondir = $(datadir)/icons/hicolor/scalable/apps
@@ -26,6 +26,7 @@ EXTRA_DIST = \
     COPYING \
     .clang-format \
     lisp/lisp-fmt.lisp \
+    lisp/tui-events.lisp \
     scripts/gen-docstrings.sh \
     scripts/gen-builtin-ref.sh \
     scripts/make-dist-zip.sh \
@@ -48,6 +49,7 @@ EXTRA_DIST = \
     doc/strings.md \
     doc/symbols.md \
     doc/time-and-profiling.md \
+    doc/tui.md \
     doc/type-predicates.md \
     doc/vectors.md \
     emacs/README.md \

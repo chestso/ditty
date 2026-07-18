@@ -48,6 +48,7 @@ DOC_FILES = \
     $(top_srcdir)/doc/strings.md \
     $(top_srcdir)/doc/symbols.md \
     $(top_srcdir)/doc/time-and-profiling.md \
+    $(top_srcdir)/doc/tui.md \
     $(top_srcdir)/doc/type-predicates.md \
     $(top_srcdir)/doc/vectors.md
 
@@ -80,6 +81,7 @@ libditty_a_SOURCES = \
     builtins_packages.c \
     builtins_filesystem.c \
     builtins_time_profiling.c \
+    builtins_tui.c \
     utf8.c \
     regex.c \
     hash_table.c \

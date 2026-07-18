@@ -23,7 +23,7 @@
   (do () ((null? rest))
     (when (eq? (car rest) 'test-lib-a) (set! count (+ count 1)))
     (set! rest (cdr rest)))
-  (assert-equal count 1 "provide is idempotent"))
+  (assert-equal 1 count "provide is idempotent"))
 
 ;; ===========================================
 ;; provided? returns #t for provided features
@@ -40,7 +40,7 @@
 ;; ===========================================
 ;; require returns immediately if already provided
 ;; ===========================================
-(assert-equal (require 'test-lib-a) 'test-lib-a
+(assert-equal 'test-lib-a (require 'test-lib-a)
  "require returns feature symbol when already loaded")
 
 ;; ===========================================
@@ -55,10 +55,10 @@
     (write-line lib-file "(provide 'test-req-lib)")
     (close lib-file)
     ;; require should load it
-    (assert-equal (require 'test-req-lib) 'test-req-lib
+    (assert-equal 'test-req-lib (require 'test-req-lib)
      "require loads library and returns feature symbol")
     ;; Library binding should be accessible via package-qualified access
-    (assert-equal test-req-lib:req-lib-val 42
+    (assert-equal 42 test-req-lib:req-lib-val
      "library binding accessible after require")
     ;; provided? should now return true
     (assert-true (provided? 'test-req-lib)
@@ -78,10 +78,10 @@
     (close lib-file2)
     ;; First require loads it
     (require 'test-req-lib2)
-    (assert-equal req-lib2-counter 1 "first require loads library")
+    (assert-equal 1 req-lib2-counter "first require loads library")
     ;; Second require should NOT reload
     (require 'test-req-lib2)
-    (assert-equal req-lib2-counter 1 "second require does not reload"))
+    (assert-equal 1 req-lib2-counter "second require does not reload"))
   (progn (delete-file "test-req-lib2.lisp")))
 
 ;; ===========================================
@@ -106,7 +106,7 @@
     (require 'test-main-lib)
     (assert-true (provided? 'test-dep) "transitive dependency loaded")
     (assert-true (provided? 'test-main-lib) "main library loaded")
-    (assert-equal test-main-lib:main-val 100
+    (assert-equal 100 test-main-lib:main-val
      "transitive dependency values accessible"))
   (progn (delete-file "test-dep.lisp") (delete-file "test-main-lib.lisp")))
 
@@ -137,11 +137,11 @@
     (write-line pkg-file "(provide 'pkg-test-feature)")
     (close pkg-file)
     ;; We're in user package
-    (assert-equal (current-package) 'user "in user package before require")
+    (assert-equal 'user (current-package) "in user package before require")
     ;; require a library that switches package
     (require 'pkg-test-feature)
     ;; *package* should be restored to user
-    (assert-equal (current-package) 'user
+    (assert-equal 'user (current-package)
      "require restores *package* after loading"))
   (progn (delete-file "pkg-test-feature.lisp")))
 
@@ -154,7 +154,7 @@
     (write-line str-lib-file "(provide 'str-test-lib)")
     (close str-lib-file)
     ;; require with string should work
-    (assert-equal (require "str-test-lib") 'str-test-lib
+    (assert-equal 'str-test-lib (require "str-test-lib")
      "require accepts string argument"))
   (progn (delete-file "str-test-lib.lisp")))
 
@@ -173,7 +173,7 @@
     (require 'dir-test-lib)
     (assert-true (provided? 'dir-test-lib)
      "require resolves directory-based library")
-    (assert-equal dir-lib-val 33
+    (assert-equal 33 dir-lib-val
      "directory-based library bindings accessible"))
   (progn (delete-file "dir-test-lib/dir-test-lib.lisp")
     (delete-directory "dir-test-lib")))
@@ -212,9 +212,9 @@
 ;; ===========================================
 (use-package 'export-test)
 
-(assert-equal (greet "World") "Hello, World"
+(assert-equal "Hello, World" (greet "World")
  "use-package brings exported function into current scope")
-(assert-equal (farewell "World") "Goodbye, World"
+(assert-equal "Goodbye, World" (farewell "World")
  "use-package brings all exported functions")
 
 ;; ===========================================
@@ -232,9 +232,9 @@
 
 (use-package 'no-export-pkg)
 
-(assert-equal no-export-val 123
+(assert-equal 123 no-export-val
  "use-package imports all bindings when no exports defined")
-(assert-equal (no-export-fn 5) 10
+(assert-equal 10 (no-export-fn 5)
  "use-package imports all functions when no exports defined")
 
 ;; ===========================================

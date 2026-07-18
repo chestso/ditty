@@ -8,7 +8,7 @@
 
 (assert-false (and nil) "and with single false argument returns false")
 
-(assert-equal (and 1 2 3) 3 "and returns last value when all truthy")
+(assert-equal 3 (and 1 2 3) "and returns last value when all truthy")
 
 (assert-false (and 1 nil 3) "and returns false when middle value is false")
 (assert-false (and nil 1 3) "and returns false when first value is false")
@@ -20,9 +20,9 @@
 
 (assert-true (or #t) "or with single true argument returns true")
 
-(assert-equal (or nil nil 3) 3 "or returns first truthy value")
-(assert-equal (or 1 2 3) 1 "or returns first value when truthy")
-(assert-equal (or nil 1 3) 1 "or skips false and returns first truthy")
+(assert-equal 3 (or nil nil 3) "or returns first truthy value")
+(assert-equal 1 (or 1 2 3) "or returns first value when truthy")
+(assert-equal 1 (or nil 1 3) "or skips false and returns first truthy")
 
 ;;; Short-circuit tests for and
 ;;; These would cause errors if not short-circuited
@@ -35,16 +35,16 @@
 (assert-true (or #t (/ 1 0))
  "or short-circuits on true, avoiding division by zero")
 
-(assert-equal (or 1 (error "should not evaluate")) 1
+(assert-equal 1 (or 1 (error "should not evaluate"))
  "or short-circuits on truthy, avoiding error")
 ;;; Test that and/or return the actual value (not just #t/#f)
-(assert-equal (and 1 2 "foo") "foo"
+(assert-equal "foo" (and 1 2 "foo")
  "and returns actual last value, not just true")
-(assert-equal (or nil nil "bar") "bar" "or returns actual first truthy value")
-(assert-equal (or 0 "baz") 0 "or returns 0 (truthy in this Lisp)")
+(assert-equal "bar" (or nil nil "bar") "or returns actual first truthy value")
+(assert-equal 0 (or 0 "baz") "or returns 0 (truthy in this Lisp)")
 ;;; Truthy/falsy semantics (Note: 0 and "" are TRUTHY, but '() is FALSY (same as nil))
-(assert-equal (and 0 5) 5 "and with 0 (truthy) returns second value")
-(assert-equal (and "" 5) 5
+(assert-equal 5 (and 0 5) "and with 0 (truthy) returns second value")
+(assert-equal 5 (and "" 5)
  "and with empty string (truthy) returns second value")
 
 (assert-nil (and 'nil 5) "and with empty list (falsy) returns nil")
@@ -79,31 +79,31 @@
 (assert-true (pair? (cons 1 nil)) "cons with nil cdr is a pair")
 
 ;;; Nested and/or
-(assert-equal (and (or nil 1) (or 2 nil)) 2 "nested and/or evaluates correctly")
-(assert-equal (or (and nil 1) (and 2 3)) 3 "nested or/and evaluates correctly")
+(assert-equal 2 (and (or nil 1) (or 2 nil)) "nested and/or evaluates correctly")
+(assert-equal 3 (or (and nil 1) (and 2 3)) "nested or/and evaluates correctly")
 
 ;;; Complex short-circuit example
 (define x 0)
 
-(assert-equal (and #t (set! x 10) (set! x 20)) 20
+(assert-equal 20 (and #t (set! x 10) (set! x 20))
  "and evaluates all expressions when all truthy")
-(assert-equal x 20 "x was set to 20 by and expression")
+(assert-equal 20 x "x was set to 20 by and expression")
 
 (set! x 0)
 
 (assert-false (and nil (set! x 10) (set! x 20)) "and stops on false")
 
-(assert-equal x 0 "x was not modified by short-circuited expressions")
+(assert-equal 0 x "x was not modified by short-circuited expressions")
 
 (set! x 0)
 
-(assert-equal (or nil (set! x 10) (set! x 20)) 10
+(assert-equal 10 (or nil (set! x 10) (set! x 20))
  "or returns first truthy value")
-(assert-equal x 10 "x was set to 10 by or expression")
+(assert-equal 10 x "x was set to 10 by or expression")
 
 (set! x 0)
 
 (assert-true (or #t (set! x 10) (set! x 20))
  "or returns first truthy value (true)")
 
-(assert-equal x 0 "x was not modified by short-circuited expressions")
+(assert-equal 0 x "x was not modified by short-circuited expressions")

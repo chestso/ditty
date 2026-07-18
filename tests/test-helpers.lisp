@@ -2,11 +2,11 @@
 ;; Provides assertion macros for test files: assert-equal, assert-true, assert-false,
 ;; assert-error, and assert-nil. All macros abort tests via (error ...) on failure.
 ;; Assert that actual equals expected (handles numbers and structural equality)
-;; Usage: (assert-equal actual expected "description")
+;; Usage: (assert-equal expected actual "description")
 ;; Returns: nil on success, aborts test with error on failure
-(defmacro assert-equal (actual expected message)
-  `(let ((actual-val ,actual)
-         (expected-val ,expected))
+(defmacro assert-equal (expected actual message)
+  `(let ((expected-val ,expected)
+         (actual-val ,actual))
      ;; Use = for numbers, equal? for everything else
      (let ((values-equal
             (if (and (number? actual-val) (number? expected-val))

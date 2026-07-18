@@ -8,7 +8,7 @@
     (write-line test_file1 "(+ 1 2 3)")
     (close test_file1)
     ;; Load and evaluate the file
-    (assert-equal (load "load_test1.lisp") 6 "load single expression file")
+    (assert-equal 6 (load "load_test1.lisp") "load single expression file")
     ;; ============================================
     ;; Test 2: Load a file with multiple expressions
     ;; ============================================
@@ -19,10 +19,10 @@
     (write-line test_file2 "(+ x y)")
     (close test_file2)
     ;; Load and evaluate - should return result of last expression
-    (assert-equal (load "load_test2.lisp") 52 "load multiple expressions file")
+    (assert-equal 52 (load "load_test2.lisp") "load multiple expressions file")
     ;; Verify variables were defined
-    (assert-equal x 42 "variable x defined from loaded file")
-    (assert-equal y 10 "variable y defined from loaded file")
+    (assert-equal 42 x "variable x defined from loaded file")
+    (assert-equal 10 y "variable y defined from loaded file")
     ;; ============================================
     ;; Test 3: Load a file that defines functions
     ;; ============================================
@@ -32,9 +32,9 @@
     (write-line test_file3 "(square 5)")
     (close test_file3)
     ;; Load and evaluate
-    (assert-equal (load "load_test3.lisp") 25 "load function definition file")
+    (assert-equal 25 (load "load_test3.lisp") "load function definition file")
     ;; Verify function was defined
-    (assert-equal (square 7) 49 "function defined from loaded file")
+    (assert-equal 49 (square 7) "function defined from loaded file")
     ;; ============================================
     ;; Test 4: Load a file with nested expressions
     ;; ============================================
@@ -44,9 +44,9 @@
     (write-line test_file4 "result")
     (close test_file4)
     ;; Load and evaluate
-    (assert-equal (load "load_test4.lisp") 26 "load nested expressions file")
+    (assert-equal 26 (load "load_test4.lisp") "load nested expressions file")
     ;; Verify variable was defined
-    (assert-equal result 26 "variable result defined from loaded file")
+    (assert-equal 26 result "variable result defined from loaded file")
     ;; ============================================
     ;; Test 5: Load a file that returns a string
     ;; ============================================
@@ -55,7 +55,7 @@
     (write-line test_file5 "(concat \"Hello\" \" \" \"World\")")
     (close test_file5)
     ;; Load and evaluate
-    (assert-equal (load "load_test5.lisp") "Hello World"
+    (assert-equal "Hello World" (load "load_test5.lisp")
      "load file returning string")
     ;; ============================================
     ;; Test 6: Load a file with empty result
@@ -65,10 +65,10 @@
     (write-line test_file6 "(define z 100)")
     (close test_file6)
     ;; Load and evaluate - should return value of last expression
-    (assert-equal (load "load_test6.lisp") 100
+    (assert-equal 100 (load "load_test6.lisp")
      "load file with define returns last value")
     ;; Verify variable was defined
-    (assert-equal z 100 "variable z defined from loaded file")
+    (assert-equal 100 z "variable z defined from loaded file")
     ;; ============================================
     ;; Test 7: Load a file with list result
     ;; ============================================
@@ -77,7 +77,7 @@
     (write-line test_file7 "(list 1 2 3 4 5)")
     (close test_file7)
     ;; Load and evaluate
-    (assert-equal (load "load_test7.lisp") '(1 2 3 4 5)
+    (assert-equal '(1 2 3 4 5) (load "load_test7.lisp")
      "load file returning list")
     ;; ============================================
     ;; Test 8: Error handling - non-existent file
@@ -98,9 +98,9 @@
     (write-line main_file "(+ helper_var 1)")
     (close main_file)
     ;; Load the main file
-    (assert-equal (load "main.lisp") 1000 "load file that loads another file")
+    (assert-equal 1000 (load "main.lisp") "load file that loads another file")
     ;; Verify helper variable was defined
-    (assert-equal helper_var 999 "helper variable defined")
+    (assert-equal 999 helper_var "helper variable defined")
     ;; ============================================
     ;; Test 10: Load a file with comments
     ;; ============================================
@@ -112,9 +112,9 @@
     (write-line test_file10 "commented")
     (close test_file10)
     ;; Load and evaluate - comments should be ignored
-    (assert-equal (load "load_test10.lisp") 42 "load file with comments")
+    (assert-equal 42 (load "load_test10.lisp") "load file with comments")
     ;; Verify variable was defined
-    (assert-equal commented 42 "variable commented defined"))
+    (assert-equal 42 commented "variable commented defined"))
   ;; ============================================
   ;; Cleanup: Delete all temporary test files
   ;; This runs regardless of errors in the tests above

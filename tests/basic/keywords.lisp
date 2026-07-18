@@ -29,11 +29,11 @@
 (assert-nil (equal? :foo 'foo) "keyword not equal? to symbol")
 
 ;; Test keyword-name
-(assert-equal (keyword-name :foo) "foo"
+(assert-equal "foo" (keyword-name :foo)
  "keyword-name returns name without colon")
-(assert-equal (keyword-name :bar-baz) "bar-baz" "keyword-name handles hyphens")
+(assert-equal "bar-baz" (keyword-name :bar-baz) "keyword-name handles hyphens")
 ;; Test keywords in data structures
-(assert-equal (car '(:a 1)) :a "keyword in list car")
+(assert-equal :a (car '(:a 1)) "keyword in list car")
 ;; Test printing
-(assert-equal (format nil "~S" :foo) ":foo" "keyword prints with colon")
-(assert-equal (format nil "~A" :foo) ":foo" "keyword princ with colon")
+(assert-equal ":foo" (format nil "~S" :foo) "keyword prints with colon")
+(assert-equal ":foo" (format nil "~A" :foo) "keyword princ with colon")

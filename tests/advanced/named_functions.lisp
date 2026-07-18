@@ -9,18 +9,18 @@
 (define add (lambda (x y) (+ x y)))
 
 ;; add should print #<lambda:add>
-(assert-equal (add 3 5) 8 "named function add")
+(assert-equal 8 (add 3 5) "named function add")
 
 ;; Define factorial
 (define factorial (lambda (n) (if (<= n 1) 1 (* n (factorial (- n 1))))))
 
 ;; factorial should print #<lambda:factorial>
-(assert-equal (factorial 5) 120 "named factorial function")
+(assert-equal 120 (factorial 5) "named factorial function")
 ;; ===========================================
 ;; Anonymous Lambdas (no name)
 ;; ===========================================
 ;; Anonymous lambda still works
-(assert-equal ((lambda (x) (* x x)) 5) 25 "anonymous lambda")
+(assert-equal 25 ((lambda (x) (* x x)) 5) "anonymous lambda")
 
 ;; Store anonymous lambda in variable
 (define anon (lambda (x) (+ x 1)))
@@ -56,7 +56,7 @@
   (lambda (name) (define greeting (lambda nil (concat "Hello, " name)))
     (greeting)))
 
-(assert-equal (greet "World") "Hello, World" "named function with closure")
+(assert-equal "Hello, World" (greet "World") "named function with closure")
 
 ;; ===========================================
 ;; Reassignment
@@ -64,17 +64,17 @@
 (define func1 (lambda nil "first"))
 
 ;; func1 => #<lambda:func1>
-(assert-equal (func1) "first" "initial function definition")
+(assert-equal "first" (func1) "initial function definition")
 
 ;; Redefine with new lambda
 (define func1 (lambda nil "second"))
 
 ;; func1 => #<lambda:func1>
-(assert-equal (func1) "second" "function redefinition")
+(assert-equal "second" (func1) "function redefinition")
 ;; ===========================================
 ;; Let bindings (lambdas stay anonymous)
 ;; ===========================================
-(assert-equal (let ((f (lambda (x) (* x 2)))) (f 10)) 20
+(assert-equal 20 (let ((f (lambda (x) (* x 2)))) (f 10))
  "lambda in let binding")
 
 ;; The lambda in let stays anonymous
@@ -86,7 +86,7 @@
 (define add5 (make-adder 5))
 
 ;; add5 => #<lambda:add5>
-(assert-equal (add5 10) 15 "higher-order function")
+(assert-equal 15 (add5 10) "higher-order function")
 
 ;; The inner lambda from make-adder is anonymous
 ;; But when we define it as add5, it gets that name
@@ -95,4 +95,4 @@
 ;; ===========================================
 (define fib (lambda (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))))
 
-(assert-equal (fib 10) 55 "recursive named function")
+(assert-equal 55 (fib 10) "recursive named function")

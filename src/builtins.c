@@ -92,6 +92,7 @@ void register_builtins(Environment *env)
     register_packages_builtins(env);
     register_filesystem_builtins(env);
     register_time_profiling_builtins(env);
+    register_tui_builtins(env);
 
     /* Assign docstrings to special form symbols */
     SPECIAL_FORMS(SET_SF_DOC)

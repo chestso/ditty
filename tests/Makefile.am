@@ -157,6 +157,10 @@ TESTS = \
     basic/packages.lisp \
     basic/vectors.lisp \
     basic/utf8_display_width.lisp \
+    basic/tui_sleep.lisp \
+    basic/tui_terminal.lisp \
+    basic/tui_read_byte.lisp \
+    basic/tui_events.lisp \
     advanced/collection_iteration.lisp \
     advanced/cond_case.lisp \
     advanced/condition-system.lisp \
@@ -233,6 +237,10 @@ EXTRA_DIST = \
     basic/packages.lisp \
     basic/vectors.lisp \
     basic/utf8_display_width.lisp \
+    basic/tui_sleep.lisp \
+    basic/tui_terminal.lisp \
+    basic/tui_read_byte.lisp \
+    basic/tui_events.lisp \
     advanced/collection_iteration.lisp \
     advanced/cond_case.lisp \
     advanced/condition-system.lisp \
