@@ -1,6 +1,10 @@
 #include "builtins_internal.h"
 #include <unistd.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 static LispObject *g_recursive_kw = NULL;
 static LispObject *g_directory_kw = NULL;
 
