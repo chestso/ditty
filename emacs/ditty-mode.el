@@ -105,7 +105,8 @@
 
 (defconst ditty--builtins
   '(;; --- Arithmetic (src/builtins_arithmetic.c) ---
-    "+" "-" "*" "/" "quotient" "remainder" "even?" "odd?"
+    "+" "-" "*" "/" "quotient" "remainder" "floor" "modulo"
+    "even?" "odd?" "max" "min"
     ;; --- Comparison (src/builtins_comparison.c) ---
     ">" "<" "=" ">=" "<=" "not" "eq?" "equal?" "string=?"
     ;; --- Type predicates (src/builtins_type_predicates.c) ---
@@ -118,6 +119,7 @@
     "char-upcase" "char-downcase"
     "char-alphabetic?" "char-numeric?" "char-whitespace?"
     ;; --- Strings (src/builtins_strings.c) ---
+    "make-string" "utf8-display-width"
     "concat" "number->string" "string->number" "split" "join"
     "string<?" "string>?" "string<=?" "string>=?"
     "string-contains?" "string-index" "string-match?"
@@ -159,10 +161,16 @@
     ;; --- Filesystem (src/builtins_filesystem.c) ---
     "home-directory" "expand-path" "getenv" "data-directory"
     "config-directory" "file-exists?" "mkdir" "delete-directory"
-    "file-is-directory?" "system-type"
+    "file-is-directory?" "system-type" "current-directory" "pwd"
+    "directory-file-name" "file-name-directory" "file-name-nondirectory"
+    "temporary-file-directory" "make-temp-file"
     ;; --- Time / profiling (src/builtins_time_profiling.c) ---
     "current-time-ms" "profile-start" "profile-stop"
     "profile-report" "profile-reset"
+    ;; --- TUI (src/builtins_tui.c) ---
+    "sleep" "set-terminal-raw" "restore-terminal" "terminal-size"
+    "terminal-input-available-p" "terminal-resized-p"
+    "read-byte" "read-byte-timeout"
     ;; --- Errors (src/builtins_errors.c) ---
     "error?" "error-type" "error-message" "error-stack" "error-data"
     "signal" "error"
