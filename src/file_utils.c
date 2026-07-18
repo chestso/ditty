@@ -690,7 +690,7 @@ int file_make_temp_file(const char *prefix, char *buf, size_t buf_size)
         if (n < 0 || (size_t)n >= buf_size)
             return -1;
         HANDLE h = CreateFileA(buf, GENERIC_WRITE, 0, NULL, CREATE_NEW,
-                              FILE_ATTRIBUTE_NORMAL, NULL);
+                               FILE_ATTRIBUTE_NORMAL, NULL);
         if (h != INVALID_HANDLE_VALUE) {
             CloseHandle(h);
             return 0;

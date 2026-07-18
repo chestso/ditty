@@ -34,8 +34,7 @@
 ;; boolean model #f is NIL, so accept either #t or nil here (both are
 ;; valid initial states on a consoleless CI runner).
 (assert-true
- (or (boolean? (terminal-resized-p))
-     (null? (terminal-resized-p)))
+ (or (boolean? (terminal-resized-p)) (null? (terminal-resized-p)))
  "terminal-resized-p should return #t or nil")
 
 (assert-false (terminal-resized-p)
