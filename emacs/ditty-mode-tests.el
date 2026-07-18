@@ -123,7 +123,6 @@ NAME is spliced into the test name."
 (ditty--deftest-special-form or          "(or 1 2)"                 2)
 (ditty--deftest-special-form condition-case "(condition-case e x y)" 2)
 (ditty--deftest-special-form unwind-protect "(unwind-protect x y)"   2)
-(ditty--deftest-special-form package-ref "(package-ref pkg sym)"    2)
 
 (ert-deftest ditty-test-special-form-negative ()
   "A non-special-form head should NOT get ditty-special-form-face."

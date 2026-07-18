@@ -17,10 +17,15 @@ typedef struct CallStackFrame CallStackFrame;
 typedef struct HandlerContext HandlerContext;
 typedef struct Symbol Symbol;
 
-/* Symbol structure - interned with optional docstring */
+/* Symbol structure - interned with optional docstring.
+ * For package-qualified symbols (read from `pkg:sym` syntax), `namespace`
+ * holds the package name and `name` holds the symbol name proper. For
+ * unqualified symbols, `namespace` is NULL. The intern table key is always
+ * the full printed form ("pkg:sym" or "sym"), so equality is preserved. */
 struct Symbol
 {
     char *name;
+    char *namespace; /* NULL for unqualified symbols */
     char *docstring; /* Documentation string (CommonMark format) */
 };
 
@@ -291,6 +296,10 @@ LispObject *lisp_make_regex(pcre2_code *code);
 
 /* Symbol interning */
 LispObject *lisp_intern(const char *name);
+/* Intern a package-qualified symbol (namespace=name). The intern table key is
+ * "namespace:name". Returns the existing qualified symbol if already interned,
+ * otherwise creates one with sym->namespace set. */
+LispObject *lisp_intern_qualified(const char *namespace, const char *name);
 void lisp_set_docstring(const char *name, const char *docstring);
 
 /* Keyword interning */
@@ -343,7 +352,6 @@ extern LispObject *sym_optional;
 extern LispObject *sym_rest;
 extern LispObject *sym_error;
 extern LispObject *sym_unclosed_input; /* reader signals incomplete input with this type */
-extern LispObject *sym_package_ref;
 extern LispObject *sym_star_package_star;
 extern LispObject *sym_star_features_star;
 extern LispObject *sym_star_load_pathname_star;

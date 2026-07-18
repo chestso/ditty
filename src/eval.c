@@ -27,7 +27,6 @@ static LispObject *eval_and(LispObject *args, Environment *env, int in_tail_posi
 static LispObject *eval_or(LispObject *args, Environment *env, int in_tail_position);
 static LispObject *eval_condition_case(LispObject *args, Environment *env, int in_tail_position);
 static LispObject *eval_unwind_protect(LispObject *args, Environment *env, int in_tail_position);
-static LispObject *eval_package_ref(LispObject *args, Environment *env);
 static LispObject *apply(LispObject *func, LispObject *args, Environment *env, int in_tail_position);
 static LispObject *lisp_eval_internal(LispObject *expr, Environment *env, int in_tail_position);
 
@@ -114,10 +113,32 @@ static LispObject *lisp_eval_internal(LispObject *expr, Environment *env, int in
 
     case LISP_SYMBOL:
     {
-        LispObject *value = env_lookup(env, LISP_SYM_VAL(expr));
+        Symbol *sym = LISP_SYM_VAL(expr);
+        LispObject *value;
+        if (sym->namespace != NULL) {
+            /* Package-qualified symbol. Two cases:
+             * 1. A binding was stored directly under this qualified Symbol
+             *    (e.g., (define a:b 1) in the current package). Try env_lookup
+             *    first so local/current-package definitions shadow.
+             * 2. A binding exists for the unqualified name in the named package
+             *    (e.g., (in-package 'math) (define foo ...) then math:foo).
+             *    Fall back to env_lookup_in_package for cross-package access. */
+            value = env_lookup(env, sym);
+            if (value == NULL) {
+                value = env_lookup_in_package(env,
+                                              LISP_SYM_VAL(lisp_intern(sym->name)),
+                                              LISP_SYM_VAL(lisp_intern(sym->namespace)));
+            }
+        } else {
+            value = env_lookup(env, sym);
+        }
         if (value == NULL) {
             char error[256];
-            snprintf(error, sizeof(error), "Undefined symbol: %s", LISP_SYM_VAL(expr)->name);
+            if (sym->namespace != NULL)
+                snprintf(error, sizeof(error), "Undefined symbol: %s:%s",
+                         sym->namespace, sym->name);
+            else
+                snprintf(error, sizeof(error), "Undefined symbol: %s", sym->name);
             return lisp_make_error_with_stack(error, env);
         }
         return value;
@@ -221,10 +242,6 @@ static LispObject *eval_list(LispObject *list, Environment *env, int in_tail_pos
 
         if (first == sym_unwind_protect) {
             return eval_unwind_protect(lisp_cdr(list), env, in_tail_position);
-        }
-
-        if (first == sym_package_ref) {
-            return eval_package_ref(lisp_cdr(list), env);
         }
     }
 
@@ -1591,34 +1608,6 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
  * Evaluates BODYFORM, then always executes CLEANUP-FORMS regardless of errors.
  * Returns the result of BODYFORM (even if it's an error).
  */
-static LispObject *eval_package_ref(LispObject *args, Environment *env)
-{
-    /* args: (package-name symbol) */
-    if (args == NIL || lisp_cdr(args) == NIL) {
-        return lisp_make_error_with_stack("package-ref requires 2 arguments", env);
-    }
-
-    LispObject *pkg_name = lisp_car(args);
-    LispObject *sym = lisp_cadr(args);
-
-    if (LISP_TYPE(pkg_name) != LISP_STRING) {
-        return lisp_make_error_with_stack("package-ref: package name must be a string", env);
-    }
-    if (LISP_TYPE(sym) != LISP_SYMBOL) {
-        return lisp_make_error_with_stack("package-ref: second argument must be a symbol", env);
-    }
-
-    Symbol *pkg_sym = LISP_SYM_VAL(lisp_intern(LISP_STR_VAL(pkg_name)));
-    LispObject *value = env_lookup_in_package(env, LISP_SYM_VAL(sym), pkg_sym);
-    if (value == NULL) {
-        char error[256];
-        snprintf(error, sizeof(error), "Undefined symbol: %s:%s",
-                 LISP_STR_VAL(pkg_name), LISP_SYM_VAL(sym)->name);
-        return lisp_make_error_with_stack(error, env);
-    }
-    return value;
-}
-
 static LispObject *eval_unwind_protect(LispObject *args, Environment *env, int in_tail_position)
 {
     (void)in_tail_position; /* Body is never in tail position - cleanup must run */

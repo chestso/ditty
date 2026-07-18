@@ -12,7 +12,7 @@ An embeddable Lisp interpreter library and syntax highlighter written in C. This
 
 - **Data Types**: Numbers, integers, booleans, strings (UTF-8), characters, symbols, keywords, lists, vectors, hash tables, lambdas, errors, regex, string ports, file streams
 - **Special Forms**: `quote`, `quasiquote`, `if`, `define`, `set!`, `lambda`, `defmacro`, `let`/`let*`, `progn`, `do`, `cond`, `case`, `and`, `or`, `condition-case`, `unwind-protect`
-- **Reader Syntax**: `pkg:symbol` qualified access (desugars to `package-ref`)
+- **Reader Syntax**: `pkg:symbol` qualified access (resolved at eval time via `env_lookup_in_package`)
 - **Function Parameters**: Required, optional (`&optional`), and rest (`&rest`) parameters with `lambda`
 - **Macros**: Code transformation with `defmacro`, quasiquote (`` ` ``), unquote (`,`), unquote-splicing (`,@`), and built-in `defun`, `defvar`, `defconst`, `defalias` macros
 - **Functions**: Arithmetic, strings, lists, vectors, hash tables, regex (PCRE2), file I/O, string ports, filesystem, packages, profiling
@@ -271,7 +271,7 @@ include/            public headers — lisp.h, lisp_value.h, utf8.h, file_utils.
   ditty/         installed header subdirectory — highlight.h (Flare API)
 src/                interpreter core
   lisp.c              constructors, lisp_init, NIL/LISP_TRUE, stdlib macros
-  eval.c              eval loop, 17 special forms, package-ref dispatch, macro expansion
+  eval.c              eval loop, 16 special forms, qualified-symbol resolution, macro expansion
   reader.c            S-expression parser
   print.c             object → string
   env.c               environments, call stack, handler contexts

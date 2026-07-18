@@ -181,6 +181,7 @@ TESTS = \
     advanced/introspection.lisp \
     advanced/tail_recursion.lisp \
     advanced/utf8.lisp \
+    regression/colon_symbol.lisp \
     regression/cond_case_multi_expr.lisp \
     regression/list_ref_type_check.lisp \
     regression/multiline_parsing.lisp \
@@ -261,6 +262,7 @@ EXTRA_DIST = \
     advanced/introspection.lisp \
     advanced/tail_recursion.lisp \
     advanced/utf8.lisp \
+    regression/colon_symbol.lisp \
     regression/cond_case_multi_expr.lisp \
     regression/list_ref_type_check.lisp \
     regression/multiline_parsing.lisp \

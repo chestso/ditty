@@ -117,7 +117,10 @@ static FlareTokenType classify_atom(const char *input, size_t offset, size_t len
             return HL_LITERAL_NUMBER;
     }
 
-    /* Symbol classification via runtime */
+    /* Symbol classification via runtime.
+     * Match the reader's pkg:sym handling: if the token contains a colon
+     * (not at start/end), intern it as a qualified symbol so the environment
+     * lookup matches what the evaluator would see. */
     char buf[256];
     if (length >= sizeof(buf))
         return HL_NAME_VARIABLE;
@@ -125,7 +128,14 @@ static FlareTokenType classify_atom(const char *input, size_t offset, size_t len
     memcpy(buf, s, length);
     buf[length] = '\0';
 
-    LispObject *sym = lisp_intern(buf);
+    char *colon = strchr(buf, ':');
+    LispObject *sym;
+    if (colon && colon != buf && colon[1] != '\0') {
+        *colon = '\0';
+        sym = lisp_intern_qualified(buf, colon + 1);
+    } else {
+        sym = lisp_intern(buf);
+    }
 
     /* Special forms: ask ditty.
      * Returns -1 for non-special-forms; must cast to int because
@@ -134,8 +144,17 @@ static FlareTokenType classify_atom(const char *input, size_t offset, size_t len
     if (kind >= 0)
         return sf_kind_to_type(kind);
 
-    /* Environment lookup: builtin, function, macro, or variable */
-    LispObject *val = env_lookup(ctx->env, LISP_SYM_VAL(sym));
+    /* Environment lookup: builtin, function, macro, or variable.
+     * For qualified symbols, env_lookup finds bindings stored directly under
+     * the qualified Symbol (e.g., (define a:b 1)); if that misses, fall back
+     * to env_lookup_in_package for cross-package access (e.g., math:math-add). */
+    Symbol *symval = LISP_SYM_VAL(sym);
+    LispObject *val = env_lookup(ctx->env, symval);
+    if (val == NULL && symval->namespace != NULL) {
+        val = env_lookup_in_package(ctx->env,
+                                    LISP_SYM_VAL(lisp_intern(symval->name)),
+                                    LISP_SYM_VAL(lisp_intern(symval->namespace)));
+    }
     if (val) {
         LispType t = LISP_TYPE(val);
         if (t == LISP_BUILTIN)

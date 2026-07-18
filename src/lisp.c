@@ -26,7 +26,6 @@ LispObject *sym_optional = NULL;
 LispObject *sym_rest = NULL;
 LispObject *sym_error = NULL;
 LispObject *sym_unclosed_input = NULL;
-LispObject *sym_package_ref = NULL;
 LispObject *sym_star_package_star = NULL;
 LispObject *sym_star_features_star = NULL;
 LispObject *sym_star_load_pathname_star = NULL;
@@ -142,6 +141,7 @@ LispObject *lisp_intern(const char *name)
     /* Create new symbol struct */
     Symbol *sym = GC_malloc(sizeof(Symbol));
     sym->name = GC_strdup(name);
+    sym->namespace = NULL;
     sym->docstring = NULL;
 
     /* Create LispObject wrapper */
@@ -150,6 +150,46 @@ LispObject *lisp_intern(const char *name)
     obj->value.symbol = sym;
 
     /* Add to intern table */
+    hash_table_set_entry(symbol_table, name_key, obj);
+
+    return obj;
+}
+
+LispObject *lisp_intern_qualified(const char *namespace, const char *name)
+{
+    /* Initialize symbol table on first use */
+    if (symbol_table == NULL) {
+        symbol_table = lisp_make_hash_table();
+    }
+
+    /* Build the full intern key: "namespace:name" */
+    size_t ns_len = strlen(namespace);
+    size_t name_len = strlen(name);
+    char *full_name = GC_malloc(ns_len + 1 + name_len + 1);
+    memcpy(full_name, namespace, ns_len);
+    full_name[ns_len] = ':';
+    memcpy(full_name + ns_len + 1, name, name_len);
+    full_name[ns_len + 1 + name_len] = '\0';
+
+    /* Look up symbol in intern table by the full key */
+    LispObject *name_key = lisp_make_string(full_name);
+    struct HashEntry *entry = hash_table_get_entry(symbol_table, name_key);
+    if (entry != NULL) {
+        return entry->value; /* Return existing qualified symbol */
+    }
+
+    /* Create new symbol struct with namespace field set */
+    Symbol *sym = GC_malloc(sizeof(Symbol));
+    sym->name = GC_strdup(name);
+    sym->namespace = GC_strdup(namespace);
+    sym->docstring = NULL;
+
+    /* Create LispObject wrapper */
+    LispObject *obj = GC_malloc(sizeof(LispObject));
+    obj->type = LISP_SYMBOL;
+    obj->value.symbol = sym;
+
+    /* Add to intern table under the full key */
     hash_table_set_entry(symbol_table, name_key, obj);
 
     return obj;
@@ -184,6 +224,7 @@ LispObject *lisp_make_keyword(const char *name)
     /* Create new symbol struct for keyword (reuses Symbol struct) */
     Symbol *sym = GC_malloc(sizeof(Symbol));
     sym->name = GC_strdup(name);
+    sym->namespace = NULL;
     sym->docstring = NULL;
 
     /* Create LispObject wrapper with LISP_KEYWORD type */
@@ -694,7 +735,6 @@ Environment *lisp_init(void)
     sym_rest = lisp_intern("&rest");
     sym_error = lisp_intern("error");
     sym_unclosed_input = lisp_intern("unclosed-input");
-    sym_package_ref = lisp_intern("package-ref");
     sym_star_package_star = lisp_intern("*package*");
     sym_star_features_star = lisp_intern("*features*");
     sym_star_load_pathname_star = lisp_intern("*load-pathname*");

@@ -89,6 +89,10 @@ static void print_object(LispObject *obj, char **buffer, size_t *size, size_t *p
         break;
 
     case LISP_SYMBOL:
+        if (LISP_SYM_VAL(obj)->namespace != NULL) {
+            append_str(buffer, size, pos, LISP_SYM_VAL(obj)->namespace);
+            append_char(buffer, size, pos, ':');
+        }
         append_str(buffer, size, pos, LISP_SYM_VAL(obj)->name);
         break;
 
@@ -310,6 +314,9 @@ static void princ_object(LispObject *obj)
         break;
 
     case LISP_SYMBOL:
+        if (LISP_SYM_VAL(obj)->namespace != NULL) {
+            printf("%s:", LISP_SYM_VAL(obj)->namespace);
+        }
         printf("%s", LISP_SYM_VAL(obj)->name);
         break;
 

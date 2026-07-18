@@ -224,7 +224,6 @@ As McCarthy later reflected, the survival of S-expressions and the disappearance
 - `or` - Logical OR with short-circuit evaluation (returns first truthy value or last falsy value)
 - `condition-case` - Catch and handle errors by type (Emacs Lisp-style exception handling)
 - `unwind-protect` - Guarantee cleanup code execution (like try-finally)
-- `package-ref` - Resolve a symbol in a specific package (emitted by `pkg:sym` reader syntax)
 
 ### Macros
 
@@ -1016,7 +1015,10 @@ math:pi                 ; => 3.14159
 (core:+ 10 20)          ; => 30 (access builtins explicitly)
 ```
 
-The reader translates `pkg:sym` into the `(package-ref "pkg" sym)` special form.
+The reader produces a single `LISP_SYMBOL` with a `namespace` field for `pkg:sym`
+syntax. The evaluator resolves qualified symbols at eval time via
+`env_lookup_in_package`, so the package need not exist at read time (only at eval
+time). This lets forward references work, e.g. `(progn (require 'lib) lib:val)`.
 
 ### Package Introspection
 
