@@ -80,7 +80,7 @@ jobs:
           make -j"$(nproc)"
 
       - name: Run tests
-        run: make -C build check
+        run: make -C build check VERBOSE=1
 
       - name: Build portable ZIP
         run: make -C build dist-portable
