@@ -56,13 +56,13 @@ Build modes (passed to `../configure`):
 
 Run from the `build/` directory:
 
-| Target | Description |
-| --- | --- |
-| `make` | Build `libditty.a` (includes Flare), `flare`, and `cli/ditty` |
-| `make check` | Run the full test suite (Lisp + C tests in parallel) |
-| `make format` | clang-format on C, shfmt on shell, prettier on Markdown, lisp-fmt on Lisp |
-| `make install` | Install library, headers, REPL, `flare`, pkg-config files |
-| `make bear` | Produce `compile_commands.json` for clangd (runs clean + rebuild under bear) |
+| Target         | Description                                                                  |
+| -------------- | ---------------------------------------------------------------------------- |
+| `make`         | Build `libditty.a` (includes Flare), `flare`, and `cli/ditty`                |
+| `make check`   | Run the full test suite (Lisp + C tests in parallel)                         |
+| `make format`  | clang-format on C, shfmt on shell, prettier on Markdown, lisp-fmt on Lisp    |
+| `make install` | Install library, headers, REPL, `flare`, pkg-config files                    |
+| `make bear`    | Produce `compile_commands.json` for clangd (runs clean + rebuild under bear) |
 
 ## Running tests
 
@@ -219,10 +219,10 @@ See `src/builtins_internal.h` for the `REGISTER` macro, `CHECK_ARGS_n` arity gua
 
 Two files are auto-generated during `make` and should never be edited directly:
 
-| File | Source | Generator |
-| --- | --- | --- |
-| `src/docstrings.gen.h` | `doc/*.md` | `scripts/gen-docstrings.sh` |
-| `src/ditty_version.h` | git state / `version` file | `build-aux/git-version.sh` |
+| File                   | Source                     | Generator                   |
+| ---------------------- | -------------------------- | --------------------------- |
+| `src/docstrings.gen.h` | `doc/*.md`                 | `scripts/gen-docstrings.sh` |
+| `src/ditty_version.h`  | git state / `version` file | `build-aux/git-version.sh`  |
 
 To manually regenerate docstrings: `scripts/gen-docstrings.sh doc > src/docstrings.gen.h`
 
