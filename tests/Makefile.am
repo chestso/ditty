@@ -148,7 +148,6 @@ TESTS = \
     basic/filesystem.lisp \
     basic/floor_modulo.lisp \
     basic/format.lisp \
-    basic/make_string.lisp \
     basic/hash_tables.lisp \
     basic/integer_ops.lisp \
     basic/integers.lisp \
@@ -233,7 +232,6 @@ EXTRA_DIST = \
     basic/filesystem.lisp \
     basic/floor_modulo.lisp \
     basic/format.lisp \
-    basic/make_string.lisp \
     basic/hash_tables.lisp \
     basic/integer_ops.lisp \
     basic/integers.lisp \
