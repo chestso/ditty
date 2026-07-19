@@ -4640,10 +4640,12 @@ Define or update a variable in the current environment. The symbol name is not e
 
 When the value is a lambda, the lambda is automatically named after the symbol.
 
+A function shorthand is supported: `(define (name params...) body...)` is equivalent to `(define name (lambda (params...) body...))`. The body may begin with a docstring, exactly as in `lambda`. The shorthand works in every package, picking up the current `*package*` for the binding.
+
 #### Parameters
 
-- `name` - Symbol name (not evaluated)
-- `value` - Expression to evaluate and bind to the name
+- `name` - Symbol name (not evaluated), or a list `(name params...)` for the function shorthand
+- `value` - Expression to evaluate and bind to the name (omitted in the function shorthand form)
 
 #### Examples
 
@@ -4654,6 +4656,17 @@ x                         ; => 42
 y                         ; => 50
 (define double (lambda (x) (* x 2)))
 (function-name double)    ; => "double"
+
+;; Function shorthand
+(define (square x) (* x x))
+(square 5)                ; => 25
+
+(define (greet name) "Greet someone." (concat "Hello, " name))
+(greet "world")           ; => "Hello, world"
+(documentation 'greet)    ; => "Greet someone."
+
+(define (answer) 42)      ; zero-arg function
+(answer)                  ; => 42
 ```
 
 ### `set!`
@@ -4714,9 +4727,11 @@ Define a macro that transforms code at evaluation time. Macros receive arguments
 
 Supports rest parameters using dotted parameter list syntax.
 
+A macro shorthand is supported: `(defmacro (name params...) body...)` is equivalent to `(defmacro name (params...) body...)`. The body may begin with a docstring.
+
 #### Parameters
 
-- `name` - Symbol name for the macro (not evaluated)
+- `name` - Symbol name for the macro (not evaluated), or a list `(name params...)` for the macro shorthand
 - `params` - Parameter list (arguments passed unevaluated)
 - `body...` - Expressions producing the macro expansion
 
@@ -4734,6 +4749,9 @@ Supports rest parameters using dotted parameter list syntax.
 
 (defmacro my-progn (first . rest)
   (cons 'progn (cons first rest)))
+
+;; Macro shorthand
+(defmacro (swap! a b) `(let ((tmp ,a)) (set! ,a ,b) (set! ,b tmp)))
 ```
 
 ### `let`

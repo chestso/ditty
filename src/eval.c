@@ -328,16 +328,35 @@ static LispObject *eval_define(LispObject *args, Environment *env)
     }
 
     LispObject *name = lisp_car(args);
-    if (LISP_TYPE(name) != LISP_SYMBOL) {
-        return lisp_make_error("define requires a symbol as first argument");
+    LispObject *value_expr;
+
+    if (LISP_TYPE(name) == LISP_CONS) {
+        /* Function shorthand: (define (fn-name params...) body...)
+         * Rewrite to (define fn-name (lambda params body...)) and
+         * fall through to the normal define path so package tagging,
+         * lambda naming, and docstring copy all behave identically. */
+        LispObject *fn_name = lisp_car(name);
+        if (LISP_TYPE(fn_name) != LISP_SYMBOL) {
+            return lisp_make_error("define: function name must be a symbol");
+        }
+        LispObject *params = lisp_cdr(name);
+        LispObject *body = lisp_cdr(args);
+        if (body == NIL) {
+            return lisp_make_error("define requires a body");
+        }
+        value_expr = lisp_make_cons(sym_lambda, lisp_make_cons(params, body));
+        name = fn_name;
+    } else {
+        if (LISP_TYPE(name) != LISP_SYMBOL) {
+            return lisp_make_error("define requires a symbol as first argument");
+        }
+        LispObject *rest = lisp_cdr(args);
+        if (rest == NIL) {
+            return lisp_make_error("define requires 2 arguments");
+        }
+        value_expr = lisp_car(rest);
     }
 
-    LispObject *rest = lisp_cdr(args);
-    if (rest == NIL) {
-        return lisp_make_error("define requires 2 arguments");
-    }
-
-    LispObject *value_expr = lisp_car(rest);
     LispObject *value = lisp_eval_internal(value_expr, env, 0);
 
     if (should_propagate_error(value)) {
@@ -657,17 +676,30 @@ static LispObject *eval_defmacro(LispObject *args, Environment *env)
     }
 
     LispObject *name = lisp_car(args);
-    if (LISP_TYPE(name) != LISP_SYMBOL) {
-        return lisp_make_error("defmacro requires a symbol as first argument");
-    }
+    LispObject *params;
+    LispObject *body;
 
-    LispObject *rest = lisp_cdr(args);
-    if (rest == NIL) {
-        return lisp_make_error("defmacro requires parameter list");
+    if (LISP_TYPE(name) == LISP_CONS) {
+        /* Macro shorthand: (defmacro (macro-name params...) body...)
+         * Mirrors the define function shorthand. */
+        LispObject *macro_name = lisp_car(name);
+        if (LISP_TYPE(macro_name) != LISP_SYMBOL) {
+            return lisp_make_error("defmacro: macro name must be a symbol");
+        }
+        params = lisp_cdr(name);
+        body = lisp_cdr(args);
+        name = macro_name;
+    } else {
+        if (LISP_TYPE(name) != LISP_SYMBOL) {
+            return lisp_make_error("defmacro requires a symbol as first argument");
+        }
+        LispObject *rest = lisp_cdr(args);
+        if (rest == NIL) {
+            return lisp_make_error("defmacro requires parameter list");
+        }
+        params = lisp_car(rest);
+        body = lisp_cdr(rest);
     }
-
-    LispObject *params = lisp_car(rest);
-    LispObject *body = lisp_cdr(rest);
 
     if (body == NIL) {
         return lisp_make_error("defmacro requires a body");
