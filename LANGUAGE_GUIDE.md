@@ -984,7 +984,7 @@ You can define custom error types using any symbol:
 
 Ditty Lisp has a package system for organizing bindings into namespaces. Each binding is tagged with an owning package. The default packages are `core` (builtins and stdlib) and `user` (user-defined bindings).
 
-See [Package Functions](#package-functions) for the full function reference. All package functions have `package-` prefixed aliases (e.g., `package-set` for `in-package`).
+See [Package System](#package-system) for the full function reference. All package functions have `package-` prefixed aliases (e.g., `package-set` for `in-package`).
 
 ### Current Package
 
