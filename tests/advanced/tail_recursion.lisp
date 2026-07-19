@@ -11,13 +11,13 @@
 (assert-equal 3628800 (factorial-tail 10 1) "tail-recursive factorial 10")
 
 ;; Test 2: Very large tail recursion (would stack overflow without TCO)
-;; Note: factorial(1000) overflows int64, resulting in overflow value
-;; Integer overflow behavior is platform-specific (undefined in C), so accept either
-;; minimum (-9223372036854775808) or maximum (9223372036854775807) 64-bit integer
-(let ((result (factorial-tail 1000 1)))
-  (assert-true
-   (or (= result -9223372036854775808) (= result 9223372036854775807))
-   "tail-recursive factorial 1000 (overflows to min or max int64)"))
+;; Recurses 100000 deep but keeps the accumulator small (bounded by N,
+;; never multiplies), so it exercises deep TCO without integer overflow.
+(define count-down-tail
+  (lambda (n acc) (if (= n 0) acc (count-down-tail (- n 1) (+ acc 1)))))
+
+(assert-equal 100000 (count-down-tail 100000 0)
+ "tail-recursive count 100000 (deep TCO)")
 
 ;; Test 3: Tail-recursive sum (count down)
 (define sum-to-n (lambda (n acc) (if (= n 0) acc (sum-to-n (- n 1) (+ n acc)))))
