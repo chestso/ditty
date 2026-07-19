@@ -3926,12 +3926,29 @@ call `provide`), and verifies the feature was provided.
 
 #### Load Path Search Order
 
-1. Current directory (`name.lisp`, then `name/name.lisp`)
+`require` consults the Lisp variable `*load-path*` when it is a non-empty
+list of directory strings; entries are searched in list order (first match
+wins). When `*load-path*` is nil (e.g. embedded use without CLI startup),
+`require` falls back to the environment-derived search list below.
+
+The CLI populates `*load-path*` at startup with, in order:
+
+1. Directory of the entry script (so a self-contained app can `require`
+   libraries sitting next to it, regardless of the current working
+   directory). Only the first file's directory is added when multiple
+   files are given on the command line.
 2. Directories in `DITTY_LISP_PATH` (colon-separated on Unix, semicolon on Windows)
 3. `$XDG_DATA_HOME/ditty/lisp/` (default: `~/.local/share/ditty/lisp/`)
 4. Each dir in `$XDG_DATA_DIRS/ditty/lisp/` (default: `/usr/local/share:/usr/share`)
 
 On Windows: `%APPDATA%\ditty\lisp\` (user) and exe-relative `..\share\ditty\lisp\` (system).
+
+For each directory, `require` tries `<dir>/<name>.lisp` then
+`<dir>/<name>/<name>.lisp`.
+
+Mutating `*load-path*` at runtime (e.g.
+`(set! *load-path* (cons "/path/to/plugins" *load-path*))`) is supported and
+takes effect on the next `require` call.
 
 #### Parameters
 
@@ -4072,11 +4089,22 @@ Initially `nil`.
 
 ### `*load-path*`
 
-A read-only list of directory strings where `require` searches for libraries.
-Populated at startup from `DITTY_LISP_PATH` and XDG data directories.
+A list of directory strings that `require` searches (in order) for libraries.
+Populated at startup by the CLI from the entry script's directory,
+`DITTY_LISP_PATH`, and XDG data directories. In embedded use (no CLI) it
+starts as `nil` and `require` falls back to the environment-derived search.
+
+Mutating `*load-path*` at runtime is supported and affects subsequent
+`require` calls, so an application can add plugin or per-user library
+directories programmatically:
 
 ```lisp
-*load-path* ; => ("/home/me/.local/share/ditty/lisp" "/usr/local/share/ditty/lisp" ...)
+(set! *load-path* (cons "/path/to/plugins" *load-path*))
+(require 'my-plugin) ; now searches /path/to/plugins
+```
+
+```lisp
+*load-path* ; => ("/abs/path/to/script-dir" "/home/me/.local/share/ditty/lisp" "/usr/local/share/ditty/lisp" ...)
 ```
 
 ### `*command-line-args*`

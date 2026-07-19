@@ -1080,7 +1080,10 @@ Both `require` and `provide` accept a string or a symbol. The name may contain s
 
 `require` searches these locations in order (first match wins):
 
-1. Current directory (`name.lisp`, then `name/name.lisp`)
+1. The entry script's directory (set by the CLI at startup, so a self-contained
+   app finds libraries sitting next to it regardless of the current working
+   directory). Only the first file's directory is added when multiple files
+   are given on the command line.
 2. Directories in `DITTY_LISP_PATH` (colon-separated on Unix, semicolon on Windows)
 3. `$XDG_DATA_HOME/ditty/lisp/` (default: `~/.local/share/ditty/lisp/`)
 4. Each dir in `$XDG_DATA_DIRS/ditty/lisp/` (default: `/usr/local/share:/usr/share`)
@@ -1088,6 +1091,12 @@ Both `require` and `provide` accept a string or a symbol. The name may contain s
 On Windows: `%APPDATA%\ditty\lisp\` (user) and exe-relative `..\share\ditty\lisp\` (system).
 
 `DITTY_LISP_PATH` is analogous to Emacs' `load-path` and Common Lisp's `CL_SOURCE_REGISTRY`.
+
+These directories are reflected in the Lisp variable `*load-path*`, which
+`require` consults at call time. Mutating `*load-path*` (e.g.
+`(set! *load-path* (cons "/my/dir" *load-path*))`) is supported and takes
+effect on the next `require` call. When `*load-path*` is nil (embedded use
+without the CLI), `require` falls back to the environment-derived list above.
 
 ### Export and use-package
 
@@ -1108,7 +1117,7 @@ mylib:internal-helper            ; still accessible via qualified access
 ### Introspection
 
 - `*features*` — list of loaded feature symbols
-- `*load-path*` — list of library search directory strings
+- `*load-path*` — list of library search directory strings (consulted by `require`; mutable)
 - `provided?` — check if a feature is loaded
 - `package-exports` — return a package's exported symbols
 

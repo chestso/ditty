@@ -581,9 +581,49 @@ static LispObject *builtin_require(LispObject *args, Environment *env)
     if (feature_provided(env, LISP_SYM_VAL(feature_sym)))
         return feature_sym;
 
-    /* Resolve library file via load-path search. */
+    /* Resolve library file. *load-path* is the source of truth when it is a
+     * non-empty list of directory strings; otherwise (embedded use, or the
+     * CLI before it populates *load-path*) fall back to file_resolve_library
+     * which re-derives the search list from DITTY_LISP_PATH / XDG dirs. */
     char resolved[4096];
-    const char *path = file_resolve_library(name_str, resolved, sizeof(resolved));
+    const char *path = NULL;
+
+    LispObject *load_path = env_lookup(env, LISP_SYM_VAL(sym_star_load_path_star));
+    if (load_path == NULL)
+        load_path = NIL;
+
+    if (load_path != NIL) {
+        /* Collect directory strings from *load-path* into a C array. */
+        int n_dirs = 0;
+        int cap = 8;
+        const char **dirs = malloc(sizeof(char *) * cap);
+        if (dirs) {
+            LispObject *node = load_path;
+            while (node != NIL && LISP_TYPE(node) == LISP_CONS) {
+                LispObject *entry = LISP_CAR(node);
+                if (LISP_TYPE(entry) == LISP_STRING && LISP_STR_VAL(entry) &&
+                    LISP_STR_VAL(entry)[0]) {
+                    if (n_dirs >= cap) {
+                        cap *= 2;
+                        const char **grown = realloc(dirs, sizeof(char *) * cap);
+                        if (!grown)
+                            break;
+                        dirs = grown;
+                    }
+                    dirs[n_dirs++] = LISP_STR_VAL(entry);
+                }
+                node = LISP_CDR(node);
+            }
+            if (n_dirs > 0)
+                path = file_resolve_library_in_dirs(name_str, dirs, n_dirs,
+                                                    resolved, sizeof(resolved));
+            free(dirs);
+        }
+    }
+
+    if (path == NULL)
+        path = file_resolve_library(name_str, resolved, sizeof(resolved));
+
     if (path == NULL) {
         char msg[512];
         snprintf(msg, sizeof(msg), "require: cannot find library '%s'", name_str);

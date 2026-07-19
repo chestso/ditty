@@ -787,7 +787,7 @@ int main(int argc, char **argv)
             }
         }
 #endif
-        env_define(env, LISP_SYM_VAL(lisp_intern("*load-path*")), load_path, pkg_core);
+        env_set(env, LISP_SYM_VAL(sym_star_load_path_star), load_path);
     }
 
     /* Handle -e/--eval/-c flag */
@@ -852,6 +852,33 @@ int main(int argc, char **argv)
                 return 1;
             }
 
+            /* Resolve to an absolute path so *load-pathname* and the script
+             * directory are stable regardless of how the script was invoked
+             * (relative vs absolute, and independent of CWD). */
+            char abs_buf[4096];
+            const char *abs = file_absolute_path(path, abs_buf, sizeof(abs_buf));
+            const char *effective_path = abs ? abs : path;
+
+            /* Register the directory of the first script so `require` finds
+             * sibling libraries without relying on CWD or DITTY_LISP_PATH.
+             * Only the first file is treated as "the app" (multi-file
+             * invocation is rare and accumulating dirs is surprising). */
+            if (i == 1 && abs) {
+                char dir_buf[4096];
+                file_dirname(abs, dir_buf, sizeof(dir_buf));
+                if (dir_buf[0]) {
+                    file_set_main_script_dir(dir_buf);
+                    /* Also reflect it on the Lisp-level *load-path* so the
+                     * variable stays an accurate description of where
+                     * `require` looks. Prepend so it wins over CWD/env. */
+                    LispObject *cur = env_lookup(env, LISP_SYM_VAL(sym_star_load_path_star));
+                    if (cur == NULL)
+                        cur = NIL;
+                    LispObject *new_path_list = lisp_make_cons(lisp_make_string(dir_buf), cur);
+                    env_set(env, LISP_SYM_VAL(sym_star_load_path_star), new_path_list);
+                }
+            }
+
             fseek(file, 0, SEEK_END);
             long size = ftell(file);
             fseek(file, 0, SEEK_SET);
@@ -861,8 +888,8 @@ int main(int argc, char **argv)
             buffer[actual_read] = '\0';
             fclose(file);
 
-            /* Set *load-pathname* to resolved script path */
-            env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), lisp_make_string(path));
+            /* Set *load-pathname* to the absolute script path */
+            env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), lisp_make_string(effective_path));
 
             const char *input = buffer;
 

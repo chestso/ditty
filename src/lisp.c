@@ -28,6 +28,7 @@ LispObject *sym_error = NULL;
 LispObject *sym_unclosed_input = NULL;
 LispObject *sym_star_package_star = NULL;
 LispObject *sym_star_features_star = NULL;
+LispObject *sym_star_load_path_star = NULL;
 LispObject *sym_star_load_pathname_star = NULL;
 
 /* Name array for completion API (third column ignored) */
@@ -737,6 +738,7 @@ Environment *lisp_init(void)
     sym_unclosed_input = lisp_intern("unclosed-input");
     sym_star_package_star = lisp_intern("*package*");
     sym_star_features_star = lisp_intern("*features*");
+    sym_star_load_path_star = lisp_intern("*load-path*");
     sym_star_load_pathname_star = lisp_intern("*load-pathname*");
     pkg_core = LISP_SYM_VAL(lisp_intern("core"));
     pkg_user = LISP_SYM_VAL(lisp_intern("user"));
@@ -749,6 +751,10 @@ Environment *lisp_init(void)
 
     /* Initialize *features* to nil (empty list) */
     env_define(env, LISP_SYM_VAL(sym_star_features_star), NIL, pkg_core);
+
+    /* Initialize *load-path* to nil (populated by the CLI at startup, or by
+     * embedders; require falls back to env-var search when nil). */
+    env_define(env, LISP_SYM_VAL(sym_star_load_path_star), NIL, pkg_core);
 
     /* Initialize *load-pathname* to nil */
     env_define(env, LISP_SYM_VAL(sym_star_load_pathname_star), NIL, pkg_core);

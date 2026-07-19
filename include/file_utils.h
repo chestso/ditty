@@ -97,15 +97,72 @@ int file_mkdir_p(const char *path);
  */
 const char *file_resolve(const char *filename, char *resolved, size_t resolved_size);
 
+/* Set the directory of the main script being executed.
+ * Pass NULL or "" to clear. Used by the CLI so that `require` can find
+ * libraries sitting next to the entry script, independent of CWD.
+ *
+ * Parameters:
+ *   dir - Absolute directory path (UTF-8), or NULL to clear. The value is
+ *         copied into an internal buffer; the caller may free/reuse `dir`.
+ */
+void file_set_main_script_dir(const char *dir);
+
+/* Get the currently-set main script directory.
+ * Returns an empty string if none has been set. The returned pointer is
+ * valid until the next call to file_set_main_script_dir().
+ */
+const char *file_get_main_script_dir(void);
+
+/* Resolve a path to an absolute, normalized form.
+ * On POSIX: uses realpath() (resolves symlinks, "." and ".." components).
+ * On Windows: uses GetFullPathNameW (resolves "." and "..", does not
+ *             resolve symlinks).
+ * The input path must exist for realpath() to succeed on POSIX; on Windows
+ * the path need not exist.
+ *
+ * Parameters:
+ *   path - File path in UTF-8 encoding (relative or absolute)
+ *   buf  - Output buffer for the absolute path
+ *   size - Size of output buffer
+ *
+ * Returns:
+ *   buf on success (NUL-terminated absolute path), NULL on failure
+ *   (path does not exist, buffer too small, or conversion error)
+ */
+const char *file_absolute_path(const char *path, char *buf, size_t size);
+
+/* Compute the directory portion of a path.
+ * Strips the final path component (filename) and returns the directory.
+ * Handles both '/' and '\\' separators (Windows). Examples:
+ *   "/a/b/c.lisp"  -> "/a/b"
+ *   "/a/b/"        -> "/a"      (trailing separator dropped)
+ *   "c.lisp"       -> "."
+ *   "."            -> "."
+ *   "/"            -> "/"
+ *   "C:\\x\\y.lisp" -> "C:\\x"
+ * Always returns a non-NULL, non-empty string. On buffer-too-small or
+ * NULL inputs, writes "." (or nothing) and returns "buf".
+ *
+ * Parameters:
+ *   path - File path in UTF-8 encoding (may be relative or absolute)
+ *   buf  - Output buffer for the directory portion
+ *   size - Size of output buffer
+ *
+ * Returns:
+ *   buf on success (always non-NULL; "." on degenerate input)
+ */
+const char *file_dirname(const char *path, char *buf, size_t size);
+
 /* Resolve a library name by searching load paths for name.lisp or name/name.lisp.
  * Search order (first match wins):
- *   1. Current working directory
- *   2. Each dir in DITTY_LISP_PATH (colon-separated on Unix, semicolon on Windows)
- *   3. $XDG_DATA_HOME/ditty/lisp/ (default: ~/.local/share/ditty/lisp/)
- *   4. Each dir in $XDG_DATA_DIRS/ditty/lisp/ (default: /usr/local/share:/usr/share)
+ *   1. Main script's directory (set via file_set_main_script_dir, if non-empty)
+ *   2. Current working directory
+ *   3. Each dir in DITTY_LISP_PATH (colon-separated on Unix, semicolon on Windows)
+ *   4. $XDG_DATA_HOME/ditty/lisp/ (default: ~/.local/share/ditty/lisp/)
+ *   5. Each dir in $XDG_DATA_DIRS/ditty/lisp/ (default: /usr/local/share:/usr/share)
  * On Windows:
- *   3. %APPDATA%\ditty\lisp\
- *   4. Exe-relative ..\share\ditty\lisp\
+ *   4. %APPDATA%\ditty\lisp\
+ *   5. Exe-relative ..\share\ditty\lisp\
  *
  * For each search directory, tries:
  *   a. <dir>/<name>.lisp        (single-file library)
@@ -120,6 +177,28 @@ const char *file_resolve(const char *filename, char *resolved, size_t resolved_s
  *   resolved on success (points to the found path), NULL if not found
  */
 const char *file_resolve_library(const char *name, char *resolved, size_t resolved_size);
+
+/* Resolve a library name by searching an explicit list of directories.
+ * Walks `dirs` in order and tries, for each directory:
+ *   a. <dir>/<name>.lisp        (single-file library)
+ *   b. <dir>/<name>/<name>.lisp (directory-based library)
+ * Returns the first match. This is the pure core of file_resolve_library
+ * without any env-var / XDG consultation; callers that already have a
+ * directory list (e.g. the Lisp `*load-path*` value) can use it directly.
+ *
+ * Parameters:
+ *   name - Library name (without path or extension)
+ *   dirs - Array of directory path strings (UTF-8)
+ *   n_dirs - Number of entries in `dirs`
+ *   resolved - Output buffer for resolved path
+ *   resolved_size - Size of output buffer
+ *
+ * Returns:
+ *   resolved on success (points to the found path), NULL if not found
+ */
+const char *file_resolve_library_in_dirs(const char *name,
+                                         const char *const *dirs, int n_dirs,
+                                         char *resolved, size_t resolved_size);
 
 /* Get the system temporary file directory (cross-platform).
  * On Unix: $TMPDIR or /tmp

@@ -467,6 +467,141 @@ const char *file_resolve(const char *filename, char *resolved, size_t resolved_s
     return filename;
 }
 
+/* ---- Main script directory (set by the CLI on startup) ---- */
+static char g_main_script_dir[4096] = "";
+
+void file_set_main_script_dir(const char *dir)
+{
+    if (!dir || !dir[0]) {
+        g_main_script_dir[0] = '\0';
+        return;
+    }
+    size_t len = strlen(dir);
+    if (len >= sizeof(g_main_script_dir))
+        len = sizeof(g_main_script_dir) - 1;
+    memcpy(g_main_script_dir, dir, len);
+    g_main_script_dir[len] = '\0';
+}
+
+const char *file_get_main_script_dir(void)
+{
+    return g_main_script_dir;
+}
+
+const char *file_absolute_path(const char *path, char *buf, size_t size)
+{
+    if (!path || !buf || size == 0)
+        return NULL;
+#ifdef _WIN32
+    wchar_t *wpath = utf8_to_utf16(path);
+    if (!wpath)
+        return NULL;
+    wchar_t wfull[MAX_PATH];
+    DWORD len = GetFullPathNameW(wpath, MAX_PATH, wfull, NULL);
+    free(wpath);
+    if (len == 0 || len >= MAX_PATH)
+        return NULL;
+    int needed = WideCharToMultiByte(CP_UTF8, 0, wfull, -1, NULL, 0, NULL, NULL);
+    if (needed == 0 || (size_t)needed > size)
+        return NULL;
+    WideCharToMultiByte(CP_UTF8, 0, wfull, -1, buf, (int)size, NULL, NULL);
+    return buf;
+#else
+    char *resolved = realpath(path, NULL);
+    if (!resolved)
+        return NULL;
+    size_t rlen = strlen(resolved);
+    if (rlen + 1 > size) {
+        free(resolved);
+        return NULL;
+    }
+    memcpy(buf, resolved, rlen + 1);
+    free(resolved);
+    return buf;
+#endif
+}
+
+/* Compute the directory portion of a path (portable).
+ * See file_utils.h for the contract. */
+const char *file_dirname(const char *path, char *buf, size_t size)
+{
+    if (!buf || size == 0)
+        return buf;
+    if (!path || !path[0]) {
+        if (size >= 2) {
+            buf[0] = '.';
+            buf[1] = '\0';
+        }
+        return buf;
+    }
+
+    size_t len = strlen(path);
+    /* Strip trailing separators. Keep at least one char so "/" stays "/". */
+    while (len > 1) {
+        char c = path[len - 1];
+        if (c == '/' || c == '\\')
+            len--;
+        else
+            break;
+    }
+    if (len == 0) {
+        if (size >= 2) {
+            buf[0] = '.';
+            buf[1] = '\0';
+        }
+        return buf;
+    }
+
+    /* Find the last separator. */
+    size_t last_sep = (size_t)-1;
+    for (size_t i = 0; i < len; i++) {
+        char c = path[i];
+        if (c == '/' || c == '\\')
+            last_sep = i;
+    }
+
+    if (last_sep == (size_t)-1) {
+        /* No separator: directory is ".". */
+        if (size >= 2) {
+            buf[0] = '.';
+            buf[1] = '\0';
+        }
+        return buf;
+    }
+
+    if (last_sep == 0) {
+        /* Leading separator only (e.g. "/foo"): directory is the root. */
+        if (size >= 2) {
+            buf[0] = path[0]; /* preserve the separator found */
+            buf[1] = '\0';
+        }
+        return buf;
+    }
+
+    /* Windows drive root: "C:\foo" -> keep "C:\" as the dir. */
+    if (last_sep == 2 && path[1] == ':') {
+        if (last_sep + 1 < size) {
+            memcpy(buf, path, last_sep + 1);
+            buf[last_sep + 1] = '\0';
+        } else if (size >= 2) {
+            buf[0] = '.';
+            buf[1] = '\0';
+        }
+        return buf;
+    }
+
+    if (last_sep >= size) {
+        if (size >= 2) {
+            buf[0] = '.';
+            buf[1] = '\0';
+        }
+        return buf;
+    }
+    memcpy(buf, path, last_sep);
+    buf[last_sep] = '\0';
+    return buf;
+}
+
 /* Try to find a library file in a single directory.
  * Tries <dir>/<name>.lisp, then <dir>/<name>/<name>.lisp.
  * Returns resolved path on success, NULL on failure.
@@ -487,12 +622,37 @@ static const char *try_library_in_dir(const char *dir, const char *name,
     return NULL;
 }
 
+const char *file_resolve_library_in_dirs(const char *name,
+                                         const char *const *dirs, int n_dirs,
+                                         char *resolved, size_t resolved_size)
+{
+    if (!name || !name[0] || !resolved || resolved_size == 0)
+        return NULL;
+    if (!dirs || n_dirs <= 0)
+        return NULL;
+
+    for (int i = 0; i < n_dirs; i++) {
+        const char *dir = dirs[i];
+        if (!dir || !dir[0])
+            continue;
+        if (try_library_in_dir(dir, name, resolved, resolved_size))
+            return resolved;
+    }
+    return NULL;
+}
+
 const char *file_resolve_library(const char *name, char *resolved, size_t resolved_size)
 {
     if (!name || !name[0] || !resolved || resolved_size == 0)
         return NULL;
 
     char path_buf[4096];
+
+    /* 0. Try the main script's directory (set by the CLI on startup). */
+    if (g_main_script_dir[0]) {
+        if (try_library_in_dir(g_main_script_dir, name, resolved, resolved_size))
+            return resolved;
+    }
 
     /* 1. Try current working directory */
     if (try_library_in_dir(".", name, resolved, resolved_size))

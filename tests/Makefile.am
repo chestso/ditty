@@ -10,7 +10,7 @@ FLARE_TESTS = \
     test_api \
     test_roundtrip
 
-check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent $(FLARE_TESTS)
+check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils $(FLARE_TESTS)
 if HAVE_BOBA
 check_PROGRAMS += test_repl_app
 endif
@@ -23,6 +23,18 @@ test_sf_kind_CPPFLAGS = \
     $(GC_CFLAGS) \
     $(PCRE2_CFLAGS)
 test_sf_kind_LDADD = \
+    $(top_builddir)/src/libditty.a \
+    $(GC_LIBS) \
+    $(PCRE2_LIBS)
+
+test_file_utils_SOURCES = test_file_utils.c
+test_file_utils_CPPFLAGS = \
+    -I$(top_srcdir)/include \
+    -I$(top_srcdir)/src \
+    -I$(top_builddir)/src \
+    $(GC_CFLAGS) \
+    $(PCRE2_CFLAGS)
+test_file_utils_LDADD = \
     $(top_builddir)/src/libditty.a \
     $(GC_LIBS) \
     $(PCRE2_LIBS)
@@ -115,6 +127,7 @@ test_repl_app_LDADD = \
 $(test_sf_kind_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_repl_completeness_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_auto_indent_OBJECTS): $(top_builddir)/src/ditty_version.h
+$(test_file_utils_OBJECTS): $(top_builddir)/src/ditty_version.h
 if HAVE_BOBA
 $(test_repl_app_OBJECTS): $(top_builddir)/src/ditty_version.h
 endif
@@ -181,6 +194,7 @@ TESTS = \
     advanced/introspection.lisp \
     advanced/tail_recursion.lisp \
     advanced/utf8.lisp \
+    advanced/load_path.lisp \
     regression/colon_symbol.lisp \
     regression/cond_case_multi_expr.lisp \
     regression/list_ref_type_check.lisp \
@@ -190,6 +204,7 @@ TESTS = \
     test_sf_kind \
     test_repl_completeness \
     test_auto_indent \
+    test_file_utils \
     $(FLARE_TESTS) \
     $(BOBA_TESTS)
 
@@ -205,6 +220,7 @@ EXTRA_DIST = \
     test_sf_kind.c \
     test_repl_completeness.c \
     test_auto_indent.c \
+    test_file_utils.c \
     test_repl_app.c \
     flare_testkit.h \
     test-helpers.lisp \
@@ -262,9 +278,12 @@ EXTRA_DIST = \
     advanced/introspection.lisp \
     advanced/tail_recursion.lisp \
     advanced/utf8.lisp \
+    advanced/load_path.lisp \
     regression/colon_symbol.lisp \
     regression/cond_case_multi_expr.lisp \
     regression/list_ref_type_check.lisp \
     regression/multiline_parsing.lisp \
     regression/nested-unknown-hash-syntax.lisp \
-    regression/tail_call_unwrap.lisp
+    regression/tail_call_unwrap.lisp \
+    fixtures/app_lib/app-helper.lisp \
+    fixtures/extra_lib/extra-lib.lisp
