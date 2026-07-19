@@ -30,6 +30,29 @@
 ;; ditty's special forms (`define', `set!', `defmacro', `do', `case',
 ;; `condition-case', `unwind-protect', ...), reader syntax (`pkg:symbol',
 ;; `:keyword', `#t', `#f', `#\\char'), and its built-in functions.
+;;
+;; Installation:
+;;
+;;   1. Build and install ditty, which copies `ditty-mode.el' to
+;;      `$(datadir)/emacs/site-lisp/ditty/' via `make install'.
+;;
+;;   2. Add to your Emacs init:
+;;
+;;          (add-to-list 'load-path
+;;                       (expand-file-name "site-lisp/ditty" data-directory))
+;;          (require 'ditty-mode)
+;;          (add-to-list 'auto-mode-alist '("\\.lisp\\'" . ditty-mode))
+;;
+;;   Alternatively, copy `ditty-mode.el' to any directory on
+;;   `load-path' and `require' it.
+;;
+;;   Byte-compilation and ERT tests are available as manual make
+;;   targets when building from source (Emacs is not a build
+;;   dependency):
+;;
+;;       make -C build/emacs byte-compile   ; .el -> .elc
+;;       make -C build/emacs test           ; ERT test suite
+;;       make -C build/emacs elisp-format   ; auto-indent .el files
 
 ;;; Code:
 
