@@ -94,10 +94,74 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 1 || 30 }}
 
+  macos:
+    name: macOS (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout ditty
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Checkout boba (dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: chestso/boba
+          path: boba
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          brew install autoconf automake libtool pkg-config \
+            bdw-gc pcre2 librsvg
+
+      - name: Build & install boba
+        working-directory: boba
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          ../configure --prefix="$(brew --prefix)"
+          make -j"$(sysctl -n hw.ncpu)"
+          make check
+          make install
+
+      - name: Build ditty
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            ../configure --enable-release
+          else
+            ../configure
+          fi
+          make -j"$(sysctl -n hw.ncpu)"
+
+      - name: Run tests
+        run: make -C build check VERBOSE=1
+
+      - name: Build portable .app
+        run: make -C build dist-app
+
+      - name: Upload portable .app
+        uses: actions/upload-artifact@v7
+        with:
+          name: ditty-macos-${{ matrix.arch }}
+          path: ditty-*-macos-*.zip
+          if-no-files-found: error
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 1 || 30 }}
+
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows]
+    needs: [windows, macos]
     runs-on: ubuntu-latest
 
     steps:
@@ -127,11 +191,18 @@ jobs:
           name: ditty-windows-x86_64
           path: artifacts/windows
 
+      - name: Download macOS portable .app
+        uses: actions/download-artifact@v6
+        with:
+          name: ditty-macos-arm64
+          path: artifacts/macos
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             build/ditty-*.tar.gz
             artifacts/windows/ditty-*-windows-*.zip
+            artifacts/macos/ditty-*-macos-*.zip
           generate_release_notes: false
           fail_on_unmatched_files: true

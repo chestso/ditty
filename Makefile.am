@@ -30,6 +30,7 @@ EXTRA_DIST = \
     scripts/gen-docstrings.sh \
     scripts/gen-builtin-ref.sh \
     scripts/make-dist-zip.sh \
+    scripts/make-dist-app.sh \
     icons/hicolor/scalable/apps/ditty.svg \
     icons/ditty.ico \
     cli/ditty.rc \
@@ -131,6 +132,13 @@ format:
 .PHONY: dist-portable
 dist-portable:
 	@sh "$(top_srcdir)/scripts/make-dist-zip.sh" "$(abs_builddir)" "$(top_srcdir)"
+
+# Portable macOS .app target — stages the binaries, data files, runtime
+# dylibs, and an Info.plist into a self-contained .app bundle inside a ZIP.
+# Only meaningful on macOS, where otool/install_name_tool are available.
+.PHONY: dist-app
+dist-app:
+	@sh "$(top_srcdir)/scripts/make-dist-app.sh" "$(abs_builddir)" "$(top_srcdir)"
 
 # Bear target — produce compile_commands.json for clangd by intercepting
 # the build. Cleans first so bear sees every compile invocation.
