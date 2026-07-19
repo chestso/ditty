@@ -46,6 +46,7 @@ EXTRA_DIST = \
     doc/packages.md \
     doc/printing.md \
     doc/regex.md \
+    doc/special-forms.md \
     doc/string-ports.md \
     doc/strings.md \
     doc/symbols.md \
