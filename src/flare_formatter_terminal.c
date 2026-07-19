@@ -203,35 +203,35 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
         if (entry.bold) {
             if (need_semi)
                 sgr[sgrpos++] = ';';
-            sglen = sprintf(sgr + sgrpos, "1");
+            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "1");
             sgrpos += sglen;
             need_semi = 1;
         }
         if (entry.faint) {
             if (need_semi)
                 sgr[sgrpos++] = ';';
-            sglen = sprintf(sgr + sgrpos, "2");
+            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "2");
             sgrpos += sglen;
             need_semi = 1;
         }
         if (entry.italic) {
             if (need_semi)
                 sgr[sgrpos++] = ';';
-            sglen = sprintf(sgr + sgrpos, "3");
+            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "3");
             sgrpos += sglen;
             need_semi = 1;
         }
         if (entry.underline) {
             if (need_semi)
                 sgr[sgrpos++] = ';';
-            sglen = sprintf(sgr + sgrpos, "4");
+            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "4");
             sgrpos += sglen;
             need_semi = 1;
         }
         if (entry.strikethrough) {
             if (need_semi)
                 sgr[sgrpos++] = ';';
-            sglen = sprintf(sgr + sgrpos, "9");
+            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "9");
             sgrpos += sglen;
             need_semi = 1;
         }
@@ -242,7 +242,7 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
         if (depth == BFLARE_COLOR_TRUECOLOR) {
             if (need_semi)
                 sgr[sgrpos++] = ';';
-            fglen = sprintf(fgbuf, "38;2;%d;%d;%d", entry.fg_r, entry.fg_g, entry.fg_b);
+            fglen = snprintf(fgbuf, sizeof(fgbuf), "38;2;%d;%d;%d", entry.fg_r, entry.fg_g, entry.fg_b);
             memcpy(sgr + sgrpos, fgbuf, fglen);
             sgrpos += fglen;
             need_semi = 1;
@@ -250,7 +250,7 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
             if (need_semi)
                 sgr[sgrpos++] = ';';
             int idx = flare_color_rgb_to_256(entry.fg_r, entry.fg_g, entry.fg_b);
-            fglen = sprintf(fgbuf, "38;5;%d", idx);
+            fglen = snprintf(fgbuf, sizeof(fgbuf), "38;5;%d", idx);
             memcpy(sgr + sgrpos, fgbuf, fglen);
             sgrpos += fglen;
             need_semi = 1;
@@ -260,9 +260,9 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
             if (need_semi)
                 sgr[sgrpos++] = ';';
             if (idx >= 8) {
-                fglen = sprintf(fgbuf, "%d", 90 + (idx - 8));
+                fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 90 + (idx - 8));
             } else {
-                fglen = sprintf(fgbuf, "%d", 30 + idx);
+                fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + idx);
             }
             memcpy(sgr + sgrpos, fgbuf, fglen);
             sgrpos += fglen;
@@ -276,12 +276,12 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
                 if (!entry.bold) {
                     if (need_semi)
                         sgr[sgrpos++] = ';';
-                    fglen = sprintf(fgbuf, "1;%d", 30 + (idx - 8));
+                    fglen = snprintf(fgbuf, sizeof(fgbuf), "1;%d", 30 + (idx - 8));
                 } else {
                     /* Bold was already emitted as "1" — just append color */
                     if (need_semi)
                         sgr[sgrpos++] = ';';
-                    fglen = sprintf(fgbuf, "%d", 30 + (idx - 8));
+                    fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + (idx - 8));
                 }
                 memcpy(sgr + sgrpos, fgbuf, fglen);
                 sgrpos += fglen;
@@ -289,7 +289,7 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
             } else {
                 if (need_semi)
                     sgr[sgrpos++] = ';';
-                fglen = sprintf(fgbuf, "%d", 30 + idx);
+                fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + idx);
                 memcpy(sgr + sgrpos, fgbuf, fglen);
                 sgrpos += fglen;
                 need_semi = 1;

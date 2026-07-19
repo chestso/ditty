@@ -15,7 +15,7 @@ set -e
 DOC_DIR="${1:?Usage: $0 <doc-directory>}"
 
 cat <<'HEADER'
-/* AUTO-GENERATED from doc/*.md — do not edit */
+// AUTO-GENERATED from doc/*.md — do not edit
 
 #ifndef DOCSTRINGS_GEN_H
 #define DOCSTRINGS_GEN_H
