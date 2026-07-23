@@ -499,6 +499,101 @@ static void test_link_in_context_suppresses_url(void)
     flare_formatter_free(fmt);
 }
 
+/* Bold: **text** should emit SGR 1 (bold) and strip the ** delimiters */
+static void test_bold_produces_sgr_1_and_strips_delimiters(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("**bold**", 8, lex, style, fmt);
+
+    /* Should contain bold SGR (1) within the escape sequence */
+    ASSERT_TRUE(strstr(r.data, ";1;") != NULL || strstr(r.data, "\033[1m") != NULL);
+
+    /* Should not contain asterisks in plain text */
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+    ASSERT_TRUE(strstr(plain, "bold") != NULL);
+    ASSERT_TRUE(strchr(plain, '*') == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Italic: *text* should emit SGR 3 (italic) and strip the * delimiters */
+static void test_italic_produces_sgr_3_and_strips_delimiters(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("*italic*", 8, lex, style, fmt);
+
+    /* Should contain italic SGR (3) within the escape sequence */
+    ASSERT_TRUE(strstr(r.data, ";3;") != NULL || strstr(r.data, "\033[3m") != NULL);
+
+    /* Should not contain asterisks in plain text */
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+    ASSERT_TRUE(strstr(plain, "italic") != NULL);
+    ASSERT_TRUE(strchr(plain, '*') == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Bold+italic: ***text*** should emit both SGR 1 and SGR 3 */
+static void test_bold_italic_combined(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("***both***", 10, lex, style, fmt);
+
+    /* Should contain both bold (1) and italic (3) SGRs */
+    ASSERT_TRUE(strstr(r.data, ";1;") != NULL || strstr(r.data, "\033[1m") != NULL);
+    ASSERT_TRUE(strstr(r.data, ";3;") != NULL || strstr(r.data, "\033[3m") != NULL);
+
+    /* Should not contain asterisks in plain text */
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+    ASSERT_TRUE(strstr(plain, "both") != NULL);
+    ASSERT_TRUE(strchr(plain, '*') == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Underscore variants: __bold__ and _italic_ work same as asterisk */
+static void test_underscore_variants(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("__bold__ _italic_", 17, lex, style, fmt);
+
+    /* Should contain bold (1) and italic (3) SGRs */
+    ASSERT_TRUE(strstr(r.data, ";1;") != NULL || strstr(r.data, "\033[1m") != NULL);
+    ASSERT_TRUE(strstr(r.data, ";3;") != NULL || strstr(r.data, "\033[3m") != NULL);
+
+    /* Should not contain underscores in plain text */
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+    ASSERT_TRUE(strstr(plain, "bold") != NULL);
+    ASSERT_TRUE(strstr(plain, "italic") != NULL);
+    ASSERT_TRUE(strchr(plain, '_') == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
 int main(void)
 {
     env = lisp_init();
@@ -521,6 +616,10 @@ int main(void)
     RUN_TEST(test_link_with_title_renders_only_text);
     RUN_TEST(test_autolink_strips_angle_brackets);
     RUN_TEST(test_link_in_context_suppresses_url);
+    RUN_TEST(test_bold_produces_sgr_1_and_strips_delimiters);
+    RUN_TEST(test_italic_produces_sgr_3_and_strips_delimiters);
+    RUN_TEST(test_bold_italic_combined);
+    RUN_TEST(test_underscore_variants);
     lisp_cleanup();
     TEST_SUMMARY();
 }

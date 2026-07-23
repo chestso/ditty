@@ -405,6 +405,8 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
     int prev_valid = 0;
     int in_fenced = 0;
     int at_line_start = 1; /* track line boundaries across tokens */
+    int bold_depth = 0;    /* nested bold tracking */
+    int italic_depth = 0;  /* nested italic tracking */
 
     for (size_t i = 0; i < count; i++) {
         /* Skip fenced code block structural markers — they are not
@@ -452,7 +454,36 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
             at_line_start = 0;
         }
 
+        /* Handle emphasis/strong delimiter tokens: toggle state and skip.
+         * The lexer emits delimiters separately from content, so we track
+         * depth to apply bold/italic to the TEXT tokens between them.
+         * STRONG with length >= 3 means both bold AND italic (***text***). */
+        if (tokens[i].type == HL_MARKUP_INLINE_STRONG) {
+            if (tokens[i].length >= 3) {
+                /* *** toggles both bold and italic */
+                bold_depth = !bold_depth;
+                italic_depth = !italic_depth;
+            } else {
+                /* ** toggles bold only */
+                bold_depth = !bold_depth;
+            }
+            prev_valid = 0; /* Force style recompute for next token */
+            continue;
+        }
+        if (tokens[i].type == HL_MARKUP_INLINE_EMPHASIS) {
+            /* * or _ toggles italic */
+            italic_depth = !italic_depth;
+            prev_valid = 0;
+            continue;
+        }
+
         FlareStyleEntry entry = flare_style_get(style, tokens[i].type);
+
+        /* Apply bold/italic from delimiter tracking (overriding style defaults) */
+        if (bold_depth)
+            entry.bold = 1;
+        if (italic_depth)
+            entry.italic = 1;
 
         /* Try to extract a hyperlink URI for link/autolink tokens */
         char uri_buf[1024];
