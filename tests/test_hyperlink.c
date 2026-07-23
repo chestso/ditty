@@ -3,9 +3,27 @@
 #include "flare_testkit.h"
 #include "lisp.h"
 #include <ditty/highlight.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef _WIN32
+#include <windows.h>
+/* MinGW UCRT64 lacks setenv/unsetenv; implement them with _putenv_s.
+ * Note: Windows CRT cannot represent an empty environment variable;
+ * _putenv_s(name, "") deletes the variable. */
+static int setenv(const char *name, const char *value, int overwrite)
+{
+    if (!overwrite && getenv(name))
+        return 0;
+    return _putenv_s(name, value);
+}
+static int unsetenv(const char *name)
+{
+    return _putenv_s(name, "");
+}
+#endif
 
 static Environment *env;
 
@@ -138,7 +156,16 @@ static void test_force_hyperlink_empty_enables(void)
 {
     TerminalEnvs e;
     save_all_terminal_envs(&e);
-    setenv("FORCE_HYPERLINK", "", 1);
+    int rc = setenv("FORCE_HYPERLINK", "", 1);
+    fprintf(stderr, "[test_force_hyperlink_empty_enables] setenv() returned %d, getenv()=%p\n",
+            rc, (void *)getenv("FORCE_HYPERLINK"));
+    fflush(stderr);
+#ifdef _WIN32
+    /* Windows CRT cannot represent an empty environment variable; it
+     * deletes the variable instead. Skip the empty-value check on Windows
+     * and just verify a non-empty value still works. */
+    setenv("FORCE_HYPERLINK", "1", 1);
+#endif
     ASSERT_TRUE(flare_terminal_supports_hyperlinks());
     restore_all_terminal_envs(&e);
 }

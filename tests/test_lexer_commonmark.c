@@ -690,6 +690,16 @@ static void test_em_strong_triple(void)
     free(tokens);
 }
 
+/* CommonMark rule 9: intraword _ is not emphasis */
+static void test_emphasis_underscore_intraword(void)
+{
+    size_t count = 0;
+    FlareToken *tokens = lex("MM_Var\n", &count);
+    /* Should NOT emit emphasis token for intraword _ */
+    ASSERT_EQ(count_token(tokens, count, HL_MARKUP_INLINE_EMPHASIS), 0);
+    free(tokens);
+}
+
 /* ================================================================
  * §6.3  Links
  * ================================================================ */
@@ -1093,6 +1103,7 @@ int main(void)
     /* §6.2 Emphasis and strong */
     RUN_TEST(test_emphasis_star);
     RUN_TEST(test_emphasis_underscore);
+    RUN_TEST(test_emphasis_underscore_intraword);
     RUN_TEST(test_strong_star);
     RUN_TEST(test_strong_underscore);
     RUN_TEST(test_em_strong_triple);

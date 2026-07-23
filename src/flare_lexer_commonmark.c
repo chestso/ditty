@@ -665,6 +665,21 @@ static void tokenize_inlines(TokenVec *v, const char *input, size_t start,
                 delim_len++;
                 pos++;
             }
+
+            /* CommonMark rule 9: _ cannot open/close emphasis when
+             * flanked by alphanumeric (or _) on both sides (intraword).
+             * Asterisk has no such restriction. */
+            if (c == '_') {
+                int prev_is_word = (delim_start > 0 &&
+                                    (isalnum((unsigned char)input[delim_start - 1]) ||
+                                     input[delim_start - 1] == '_'));
+                int next_is_word = (pos < end &&
+                                    (isalnum((unsigned char)input[pos]) ||
+                                     input[pos] == '_'));
+                if (prev_is_word && next_is_word)
+                    continue; /* intraword _ — skip delimiter token */
+            }
+
             /* Determine token type based on run length */
             FlareTokenType ttype;
             if (delim_len >= 2)
