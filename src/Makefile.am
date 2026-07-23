@@ -97,6 +97,7 @@ libditty_a_SOURCES = \
     flare_style_github_light.c \
     flare_formatter.c \
     flare_formatter_terminal.c \
+    flare_terminal.c \
     flare_color.c \
     flare_highlight.c
 

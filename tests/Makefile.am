@@ -7,6 +7,7 @@ FLARE_TESTS = \
     test_lexer \
     test_lexer_commonmark \
     test_formatter \
+    test_hyperlink \
     test_api \
     test_roundtrip
 
@@ -83,6 +84,10 @@ test_api_LDADD = $(AM_FLARE_LDADD)
 test_roundtrip_SOURCES = test_roundtrip.c
 test_roundtrip_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
 test_roundtrip_LDADD = $(AM_FLARE_LDADD)
+
+test_hyperlink_SOURCES = test_hyperlink.c
+test_hyperlink_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
+test_hyperlink_LDADD = $(AM_FLARE_LDADD)
 
 test_repl_completeness_SOURCES = test_repl_completeness.c
 test_repl_completeness_CPPFLAGS = \
@@ -223,6 +228,7 @@ EXTRA_DIST = \
     test_file_utils.c \
     test_repl_app.c \
     flare_testkit.h \
+    test_hyperlink.c \
     test-helpers.lisp \
     basic/alists.lisp \
     basic/apply.lisp \

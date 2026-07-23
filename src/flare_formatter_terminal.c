@@ -5,6 +5,176 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* ----- Hyperlink helpers ----------------------------------------------- */
+
+/* Ensure buffer has room for `need` bytes beyond `pos`. */
+static void buf_ensure(char **buf, size_t *cap, size_t pos, size_t need)
+{
+    while (pos + need > *cap) {
+        *cap *= 2;
+        *buf = realloc(*buf, *cap);
+    }
+}
+
+/* Copy a URI into `dst` (at most dst_size-1 bytes + NUL).
+ * Returns the copied length, or 0 if nothing left. */
+static size_t copy_uri(const char *src, size_t len, char *dst, size_t dst_size)
+{
+    if (len >= dst_size)
+        len = dst_size - 1;
+    memcpy(dst, src, len);
+    dst[len] = '\0';
+    return len;
+}
+
+/* Extract URI from an inline link token `[text](url)` or `[text](url "title")`.
+ * Writes the URI into `uri_buf` (at most uri_buf_size-1 bytes + NUL).
+ * Returns the URI length, or 0 if extraction fails. */
+static size_t extract_inline_link_uri(const char *text, size_t len,
+                                      char *uri_buf, size_t uri_buf_size)
+{
+    /* Find the `]` that closes the link text */
+    size_t pos = 0;
+    int depth = 0;
+    while (pos < len) {
+        if (text[pos] == '[')
+            depth++;
+        else if (text[pos] == ']') {
+            depth--;
+            if (depth == 0)
+                break;
+        }
+        pos++;
+    }
+    if (pos >= len || depth != 0)
+        return 0;
+
+    /* Skip `]` */
+    pos++;
+
+    /* Check for `(` — inline link */
+    if (pos >= len || text[pos] != '(')
+        return 0;
+    pos++; /* skip `(` */
+
+    /* Find matching `)` */
+    size_t url_start = pos;
+    int paren_depth = 1;
+    while (pos < len) {
+        if (text[pos] == '(')
+            paren_depth++;
+        else if (text[pos] == ')') {
+            paren_depth--;
+            if (paren_depth == 0)
+                break;
+        }
+        pos++;
+    }
+    if (pos >= len || paren_depth != 0)
+        return 0;
+
+    size_t url_len = pos - url_start;
+
+    /* Strip optional title: `url "title"` or `url 'title'`.
+     * The title is preceded by whitespace. */
+    size_t end = url_start + url_len;
+    for (size_t k = url_start; k < end; k++) {
+        if (text[k] == ' ' || text[k] == '\t') {
+            /* Found whitespace — everything before is the URL */
+            url_len = k - url_start;
+            break;
+        }
+    }
+
+    /* Trim trailing whitespace from URL */
+    while (url_len > 0 && (text[url_start + url_len - 1] == ' ' ||
+                           text[url_start + url_len - 1] == '\t'))
+        url_len--;
+
+    if (url_len == 0)
+        return 0;
+
+    return copy_uri(text + url_start, url_len, uri_buf, uri_buf_size);
+}
+
+/* Extract URI from an autolink token `<url>`.
+ * Writes the URI into `uri_buf` (at most uri_buf_size-1 bytes + NUL).
+ * Returns the URI length, or 0 if extraction fails. */
+static size_t extract_autolink_uri(const char *text, size_t len,
+                                   char *uri_buf, size_t uri_buf_size)
+{
+    /* Token is `<url>` — find `<` and `>` */
+    if (len < 2 || text[0] != '<')
+        return 0;
+
+    size_t end = 0;
+    for (size_t i = 1; i < len; i++) {
+        if (text[i] == '>') {
+            end = i;
+            break;
+        }
+    }
+    if (end == 0)
+        return 0;
+
+    size_t uri_len = end - 1;
+    if (uri_len == 0)
+        return 0;
+
+    return copy_uri(text + 1, uri_len, uri_buf, uri_buf_size);
+}
+
+/* Try to extract a hyperlink URI from a token.
+ * Returns the URI length (written to uri_buf), or 0 if no valid URI. */
+static size_t extract_hyperlink_uri(FlareTokenType type,
+                                    const char *input, size_t offset, size_t length,
+                                    char *uri_buf, size_t uri_buf_size)
+{
+    const char *text = input + offset;
+    size_t uri_len = 0;
+
+    if (type == HL_MARKUP_INLINE_LINK)
+        uri_len = extract_inline_link_uri(text, length, uri_buf, uri_buf_size);
+    else if (type == HL_MARKUP_INLINE_AUTOLINK)
+        uri_len = extract_autolink_uri(text, length, uri_buf, uri_buf_size);
+
+    if (uri_len == 0)
+        return 0;
+
+    return uri_len;
+}
+
+/* Emit an OSC 8 hyperlink opening sequence into the output buffer.
+ * Format: ESC ] 8 ; params ; URI BEL */
+static void emit_osc8_open(char **out, size_t *cap, size_t *pos,
+                           const char *uri, size_t uri_len)
+{
+    /* \x1b]8;;<uri>\x07 */
+    buf_ensure(out, cap, *pos, uri_len + 8);
+    (*out)[(*pos)++] = '\x1b';
+    (*out)[(*pos)++] = ']';
+    (*out)[(*pos)++] = '8';
+    (*out)[(*pos)++] = ';';
+    (*out)[(*pos)++] = ';';
+    memcpy(*out + *pos, uri, uri_len);
+    *pos += uri_len;
+    (*out)[(*pos)++] = '\x07';
+}
+
+/* Emit an OSC 8 hyperlink closing sequence into the output buffer.
+ * Format: ESC ] 8 ; ; BEL */
+static void emit_osc8_close(char **out, size_t *cap, size_t *pos)
+{
+    /* \x1b]8;;\x07 */
+    buf_ensure(out, cap, *pos, 7);
+    (*out)[(*pos)++] = '\x1b';
+    (*out)[(*pos)++] = ']';
+    (*out)[(*pos)++] = '8';
+    (*out)[(*pos)++] = ';';
+    (*out)[(*pos)++] = ';';
+    (*out)[(*pos)++] = '\x07';
+}
+
 /* Format an SGR fg color sequence into buf. Returns bytes written. */
 static int format_fg_color(char *buf, size_t bufsize, const FlareStyleEntry *entry,
                            FlareColorDepth depth)
@@ -48,15 +218,6 @@ static int is_fenced_marker(FlareTokenType type)
 {
     return type == HL_MARKUP_FENCED_OPEN || type == HL_MARKUP_FENCED_INFO ||
            type == HL_MARKUP_FENCED_CLOSE;
-}
-
-/* Ensure buffer has room for `need` bytes beyond `pos`. */
-static void buf_ensure(char **buf, size_t *cap, size_t pos, size_t need)
-{
-    while (pos + need > *cap) {
-        *cap *= 2;
-        *buf = realloc(*buf, *cap);
-    }
 }
 
 /* Copy token text to the output buffer, tracking line boundaries.
@@ -106,10 +267,12 @@ static size_t emit_token_text(char **out, size_t *cap, size_t pos,
     return pos;
 }
 
-/* Format token stream into an ANSI string */
-char *flare_format_terminal(const FlareToken *tokens, size_t count,
-                            const char *input, const FlareStyle *style,
-                            FlareColorDepth depth)
+/* Format token stream into an ANSI string.
+ * When enable_hyperlinks is 1, inline links and autolinks emit OSC 8
+ * escape sequences for clickable hyperlinks on supporting terminals. */
+char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
+                               const char *input, const FlareStyle *style,
+                               FlareColorDepth depth, int enable_hyperlinks)
 {
     if (!tokens || count == 0 || !input || !style) {
         char *empty = malloc(5);
@@ -176,13 +339,33 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
 
         FlareStyleEntry entry = flare_style_get(style, tokens[i].type);
 
+        /* Try to extract a hyperlink URI for link/autolink tokens */
+        char uri_buf[1024];
+        size_t uri_len = 0;
+        int has_hyperlink = 0;
+        if (enable_hyperlinks &&
+            (tokens[i].type == HL_MARKUP_INLINE_LINK ||
+             tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)) {
+            uri_len = extract_hyperlink_uri(tokens[i].type, input,
+                                            tokens[i].offset, tokens[i].length,
+                                            uri_buf, sizeof(uri_buf));
+            has_hyperlink = (uri_len > 0);
+        }
+
         /* Coalesce: if same style as previous, skip the escape */
         if (prev_valid && style_entries_equal(&prev, &entry)) {
+            /* Emit OSC 8 open if this token has a hyperlink */
+            if (has_hyperlink)
+                emit_osc8_open(&out, &cap, &pos, uri_buf, uri_len);
+
             /* Just copy the text */
             size_t tlen = tokens[i].length;
             pos = emit_token_text(&out, &cap, pos, input,
                                   tokens[i].offset, tlen, in_fenced,
                                   &at_line_start);
+
+            if (has_hyperlink)
+                emit_osc8_close(&out, &cap, &pos);
             continue;
         }
 
@@ -298,8 +481,13 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
 
         sgr[sgrpos++] = 'm';
 
-        /* Write SGR + token text */
+        /* Write SGR + token text.
+         * If this token has a hyperlink, wrap it in OSC 8 sequences:
+         *   open URI ... SGR ... text ... close */
         size_t tlen = tokens[i].length;
+        if (has_hyperlink)
+            emit_osc8_open(&out, &cap, &pos, uri_buf, uri_len);
+
         buf_ensure(&out, &cap, pos, sgrpos + tlen + 5);
 
         memcpy(out + pos, sgr, sgrpos);
@@ -307,6 +495,9 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
         pos = emit_token_text(&out, &cap, pos, input,
                               tokens[i].offset, tlen, in_fenced,
                               &at_line_start);
+
+        if (has_hyperlink)
+            emit_osc8_close(&out, &cap, &pos);
 
         prev = entry;
         prev_valid = 1;
@@ -322,4 +513,13 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
     out[pos] = '\0';
 
     return out;
+}
+
+/* Legacy wrapper: auto-detect hyperlink support */
+char *flare_format_terminal(const FlareToken *tokens, size_t count,
+                            const char *input, const FlareStyle *style,
+                            FlareColorDepth depth)
+{
+    return flare_format_terminal_ex(tokens, count, input, style, depth,
+                                    flare_terminal_supports_hyperlinks());
 }

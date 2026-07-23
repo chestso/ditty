@@ -183,6 +183,13 @@ FlareFormatter *flare_formatter_terminal(FlareColorDepth depth);
 
 void flare_formatter_free(FlareFormatter *formatter);
 
+/* Format tokens to ANSI with explicit hyperlink control.
+ * When enable_hyperlinks is 1, inline links and autolinks emit OSC 8
+ * escape sequences.  When 0, links are styled without hyperlinks. */
+char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
+                               const char *input, const FlareStyle *style,
+                               FlareColorDepth depth, int enable_hyperlinks);
+
 /* ----- Color conversion API -------------------------------------------- */
 
 /* Convert 24-bit RGB to closest 256-color palette index (0-255) */
@@ -196,6 +203,17 @@ int flare_color_rgb_to_16(int r, int g, int b);
 
 /* Reverse mapping: 256-color palette index to RGB */
 void flare_color_256_to_rgb(int idx, uint8_t *r, uint8_t *g, uint8_t *b);
+
+/* ----- Terminal capability detection ------------------------------------ */
+
+/* Detect whether the terminal supports OSC 8 hyperlinks.
+ * Checks isatty(), FORCE_HYPERLINK, and known terminal environment vars.
+ * Returns 1 if hyperlinks are supported, 0 otherwise. */
+int flare_terminal_supports_hyperlinks(void);
+
+/* Detect hyperlink support from environment variables only (no isatty check).
+ * Useful for testing the env-var cascade in isolation. */
+int flare_terminal_hyperlinks_env(void);
 
 /* ----- One-shot highlight API ------------------------------------------ */
 
