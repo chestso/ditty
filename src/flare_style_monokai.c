@@ -93,7 +93,7 @@ FlareStyle *flare_style_build_monokai(void)
     e = (FlareStyleEntry){ .fg_r = 248, .fg_g = 248, .fg_b = 248, .bold = 1, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP_INLINE_STRONG, &e);
 
-    e = (FlareStyleEntry){ .fg_r = 230, .fg_g = 219, .fg_b = 116, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
+    e = (FlareStyleEntry){ .fg_r = 230, .fg_g = 219, .fg_b = 116, .bg_r = 45, .bg_g = 45, .bg_b = 45, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP_INLINE_CODE, &e);
 
     e = (FlareStyleEntry){ .fg_r = 166, .fg_g = 226, .fg_b = 46, .bold = 0, .italic = 0, .underline = 1, .faint = 0, .strikethrough = 0 };

@@ -264,6 +264,130 @@ static void test_formatter_fenced_preserves_blank_lines(void)
     flare_formatter_free(fmt);
 }
 
+/* Helper: strip ANSI escapes from `r.data` into `plain`. */
+static void strip_ansi(FlareResult r, char *plain, size_t plain_size)
+{
+    size_t j = 0;
+    for (size_t i = 0; i < r.length && j < plain_size - 1; i++) {
+        if (r.data[i] == '\033') {
+            while (i < r.length && r.data[i] != 'm')
+                i++;
+            continue;
+        }
+        plain[j++] = r.data[i];
+    }
+    plain[j] = '\0';
+}
+
+/* Inline code: backtick delimiters should be replaced with spaces,
+ * and the content should have a gray background applied. */
+static void test_inline_code_backticks_become_spaces(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("`foo`", 5, lex, style, fmt);
+
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+
+    /* Should contain " foo " (spaces where backticks were) */
+    ASSERT_TRUE(strstr(plain, " foo ") != NULL);
+    /* Should NOT contain any backtick character */
+    ASSERT_TRUE(strchr(plain, '`') == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Double backtick code spans: both backticks on each side become spaces */
+static void test_inline_code_double_backticks_become_spaces(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("`` foo ` bar ``", 15, lex, style, fmt);
+
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+
+    /* Two backticks on each side → two spaces on each side */
+    ASSERT_TRUE(strstr(plain, "  foo ` bar  ") != NULL);
+    /* No backtick at the boundaries (the inner ` in "foo ` bar" is content) */
+    ASSERT_TRUE(plain[0] != '`');
+    ASSERT_TRUE(plain[strlen(plain) - 1] != '`');
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Inline code should emit a background color SGR (48;2;R;G;B in truecolor) */
+static void test_inline_code_has_background_color(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("`foo`", 5, lex, style, fmt);
+
+    /* Should contain a 48;2; background color SGR */
+    ASSERT_TRUE(strstr(r.data, "48;2;") != NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Inline code background should not appear on non-code tokens */
+static void test_inline_code_bg_only_on_code(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("hello `world` end", 16, lex, style, fmt);
+
+    /* The "hello" and "end" tokens should NOT have 48;2; */
+    /* Find the SGR for "hello" — it's the first SGR in the output */
+    const char *hello_sgr = strstr(r.data, "\033[");
+    ASSERT_NOT_NULL(hello_sgr);
+    /* Find the 'm' to get the full SGR */
+    const char *m = strchr(hello_sgr, 'm');
+    ASSERT_NOT_NULL(m);
+    /* Check that the first SGR (for "hello") does not contain 48;2; */
+    char first_sgr[128];
+    size_t sgr_len = m - hello_sgr + 1;
+    ASSERT_TRUE(sgr_len < sizeof(first_sgr));
+    memcpy(first_sgr, hello_sgr, sgr_len);
+    first_sgr[sgr_len] = '\0';
+    ASSERT_TRUE(strstr(first_sgr, "48;2;") == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Background color should also work at 256-color depth */
+static void test_inline_code_bg_256_color(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_256);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("`foo`", 5, lex, style, fmt);
+
+    /* Should contain a 48;5; background color SGR */
+    ASSERT_TRUE(strstr(r.data, "48;5;") != NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
 int main(void)
 {
     env = lisp_init();
@@ -277,6 +401,11 @@ int main(void)
     RUN_TEST(test_formatter_plain_fenced_suppresses_markers);
     RUN_TEST(test_formatter_fenced_no_spurious_blank_line);
     RUN_TEST(test_formatter_fenced_preserves_blank_lines);
+    RUN_TEST(test_inline_code_backticks_become_spaces);
+    RUN_TEST(test_inline_code_double_backticks_become_spaces);
+    RUN_TEST(test_inline_code_has_background_color);
+    RUN_TEST(test_inline_code_bg_only_on_code);
+    RUN_TEST(test_inline_code_bg_256_color);
     lisp_cleanup();
     TEST_SUMMARY();
 }

@@ -267,6 +267,48 @@ static size_t emit_token_text(char **out, size_t *cap, size_t pos,
     return pos;
 }
 
+/* Emit inline code text with backtick delimiters replaced by spaces.
+ * The opening and closing backtick runs (same length per CommonMark)
+ * are replaced with that many space characters.  The inner content
+ * is copied verbatim. */
+static size_t emit_inline_code_text(char **out, size_t *cap, size_t pos,
+                                    const char *input, size_t offset, size_t length,
+                                    int *at_line_start)
+{
+    /* Count opening backtick run */
+    size_t bt_len = 0;
+    while (bt_len < length && input[offset + bt_len] == '`')
+        bt_len++;
+
+    if (bt_len == 0 || bt_len >= length) {
+        /* Malformed — emit as-is */
+        return emit_token_text(out, cap, pos, input, offset, length, 0,
+                               at_line_start);
+    }
+
+    /* Emit opening spaces (replacing the backtick delimiters) */
+    buf_ensure(out, cap, pos, bt_len + 1);
+    memset(*out + pos, ' ', bt_len);
+    pos += bt_len;
+
+    /* Emit inner content (between backticks) */
+    size_t inner_off = offset + bt_len;
+    size_t inner_len = length - 2 * bt_len;
+    if (inner_len > 0) {
+        buf_ensure(out, cap, pos, inner_len + 1);
+        memcpy(*out + pos, input + inner_off, inner_len);
+        pos += inner_len;
+    }
+
+    /* Emit closing spaces (replacing the backtick delimiters) */
+    buf_ensure(out, cap, pos, bt_len + 1);
+    memset(*out + pos, ' ', bt_len);
+    pos += bt_len;
+
+    *at_line_start = 0;
+    return pos;
+}
+
 /* Format token stream into an ANSI string.
  * When enable_hyperlinks is 1, inline links and autolinks emit OSC 8
  * escape sequences for clickable hyperlinks on supporting terminals. */
@@ -358,11 +400,16 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
             if (has_hyperlink)
                 emit_osc8_open(&out, &cap, &pos, uri_buf, uri_len);
 
-            /* Just copy the text */
+            /* Just copy the text (inline code: backticks → spaces) */
             size_t tlen = tokens[i].length;
-            pos = emit_token_text(&out, &cap, pos, input,
-                                  tokens[i].offset, tlen, in_fenced,
-                                  &at_line_start);
+            if (tokens[i].type == HL_MARKUP_INLINE_CODE)
+                pos = emit_inline_code_text(&out, &cap, pos, input,
+                                            tokens[i].offset, tlen,
+                                            &at_line_start);
+            else
+                pos = emit_token_text(&out, &cap, pos, input,
+                                      tokens[i].offset, tlen, in_fenced,
+                                      &at_line_start);
 
             if (has_hyperlink)
                 emit_osc8_close(&out, &cap, &pos);
@@ -479,6 +526,50 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
             }
         }
 
+        /* Background color (only if non-zero to avoid resetting bg
+         * on tokens that don't need it) */
+        if (entry.bg_r || entry.bg_g || entry.bg_b) {
+            char bgbuf[32];
+            int bglen;
+            if (depth == BFLARE_COLOR_TRUECOLOR) {
+                if (need_semi)
+                    sgr[sgrpos++] = ';';
+                bglen = snprintf(bgbuf, sizeof(bgbuf), "48;2;%d;%d;%d",
+                                 entry.bg_r, entry.bg_g, entry.bg_b);
+                memcpy(sgr + sgrpos, bgbuf, bglen);
+                sgrpos += bglen;
+                need_semi = 1;
+            } else if (depth == BFLARE_COLOR_256) {
+                if (need_semi)
+                    sgr[sgrpos++] = ';';
+                int bidx = flare_color_rgb_to_256(entry.bg_r, entry.bg_g, entry.bg_b);
+                bglen = snprintf(bgbuf, sizeof(bgbuf), "48;5;%d", bidx);
+                memcpy(sgr + sgrpos, bgbuf, bglen);
+                sgrpos += bglen;
+                need_semi = 1;
+            } else if (depth == BFLARE_COLOR_16) {
+                if (need_semi)
+                    sgr[sgrpos++] = ';';
+                int bidx = flare_color_rgb_to_16(entry.bg_r, entry.bg_g, entry.bg_b);
+                if (bidx >= 8) {
+                    bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 100 + (bidx - 8));
+                } else {
+                    bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 40 + bidx);
+                }
+                memcpy(sgr + sgrpos, bgbuf, bglen);
+                sgrpos += bglen;
+                need_semi = 1;
+            } else {
+                if (need_semi)
+                    sgr[sgrpos++] = ';';
+                int bidx = flare_color_rgb_to_8(entry.bg_r, entry.bg_g, entry.bg_b);
+                bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 40 + bidx);
+                memcpy(sgr + sgrpos, bgbuf, bglen);
+                sgrpos += bglen;
+                need_semi = 1;
+            }
+        }
+
         sgr[sgrpos++] = 'm';
 
         /* Write SGR + token text.
@@ -492,9 +583,14 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
 
         memcpy(out + pos, sgr, sgrpos);
         pos += sgrpos;
-        pos = emit_token_text(&out, &cap, pos, input,
-                              tokens[i].offset, tlen, in_fenced,
-                              &at_line_start);
+        if (tokens[i].type == HL_MARKUP_INLINE_CODE)
+            pos = emit_inline_code_text(&out, &cap, pos, input,
+                                        tokens[i].offset, tlen,
+                                        &at_line_start);
+        else
+            pos = emit_token_text(&out, &cap, pos, input,
+                                  tokens[i].offset, tlen, in_fenced,
+                                  &at_line_start);
 
         if (has_hyperlink)
             emit_osc8_close(&out, &cap, &pos);

@@ -73,7 +73,7 @@ FlareStyle *flare_style_build_github_light(void)
     e = (FlareStyleEntry){ .fg_r = 36, .fg_g = 41, .fg_b = 46, .bold = 1, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP_INLINE_STRONG, &e);
 
-    e = (FlareStyleEntry){ .fg_r = 47, .fg_g = 139, .fg_b = 87, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
+    e = (FlareStyleEntry){ .fg_r = 47, .fg_g = 139, .fg_b = 87, .bg_r = 235, .bg_g = 238, .bg_b = 242, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP_INLINE_CODE, &e);
 
     e = (FlareStyleEntry){ .fg_r = 0, .fg_g = 92, .fg_b = 197, .bold = 0, .italic = 0, .underline = 1, .faint = 0, .strikethrough = 0 };

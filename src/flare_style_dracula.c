@@ -79,7 +79,7 @@ FlareStyle *flare_style_build_dracula(void)
     e = (FlareStyleEntry){ .fg_r = 248, .fg_g = 248, .fg_b = 242, .bold = 1, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP_INLINE_STRONG, &e);
 
-    e = (FlareStyleEntry){ .fg_r = 241, .fg_g = 250, .fg_b = 140, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
+    e = (FlareStyleEntry){ .fg_r = 241, .fg_g = 250, .fg_b = 140, .bg_r = 40, .bg_g = 42, .bg_b = 54, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP_INLINE_CODE, &e);
 
     e = (FlareStyleEntry){ .fg_r = 189, .fg_g = 147, .fg_b = 249, .bold = 0, .italic = 0, .underline = 1, .faint = 0, .strikethrough = 0 };
