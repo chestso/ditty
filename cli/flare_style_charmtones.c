@@ -17,6 +17,14 @@
         (e).fg_b = _c.v.rgb.b;   \
     } while (0)
 
+#define CT_BG(ct_call, e)        \
+    do {                         \
+        TuiColor _c = (ct_call); \
+        (e).bg_r = _c.v.rgb.r;   \
+        (e).bg_g = _c.v.rgb.g;   \
+        (e).bg_b = _c.v.rgb.b;   \
+    } while (0)
+
 FlareStyle *flare_style_charmtones(void)
 {
     FlareStyle *s = flare_style_new();
@@ -169,6 +177,7 @@ FlareStyle *flare_style_charmtones(void)
 
     e = (FlareStyleEntry){ 0 };
     CT_FG(tui_ct_julep(), e);
+    CT_BG(tui_ct_char(), e);
     flare_style_set(s, HL_MARKUP_INLINE_CODE, &e);
 
     e = (FlareStyleEntry){ 0 };
@@ -204,3 +213,4 @@ FlareStyle *flare_style_charmtones(void)
 }
 
 #undef CT_FG
+#undef CT_BG
