@@ -96,9 +96,7 @@ The name as a string, or nil if anonymous.
 
 ## `documentation`
 
-Get documentation string for function, macro, variable, or built-in bound to symbol.
-
-First checks the symbol's own docstring (set via `set-documentation!` or copied from lambda/macro on `define`), then falls back to the value's docstring if bound to a lambda/macro/builtin.
+Get the documentation string stored on a symbol.
 
 ### Parameters
 
@@ -106,11 +104,7 @@ First checks the symbol's own docstring (set via `set-documentation!` or copied 
 
 ### Returns
 
-String containing the documentation, or `nil` if:
-
-- No docstring exists
-- Symbol is unbound
-- Symbol's value is not a function, macro, or built-in
+String containing the documentation, or `nil` if the symbol has no docstring.
 
 ### Examples
 
@@ -118,37 +112,18 @@ String containing the documentation, or `nil` if:
 ; User-defined function
 (define calculate-area
   (lambda (width height)
-    "Calculate the area of a rectangle.
-
-    ## Parameters
-    - `width` - Width of the rectangle
-    - `height` - Height of the rectangle
-
-    ## Returns
-    The area as a number."
+    "Calculate the area of a rectangle."
     (* width height)))
 
 (documentation 'calculate-area)
-; => "Calculate the area of a rectangle.\
-\
-    ## Parameters..."
+; => "Calculate the area of a rectangle."
 
-; Built-in function
-(documentation 'car)
-; => "Get the first element of a list (the car).\
-\
-### Parameters..."
+; Unbound symbol with a docstring
+(set-documentation! 'future-var "Will be defined later.")
+(documentation 'future-var)  ; => "Will be defined later."
 
-; Macro
-(defmacro when (condition . body)
-  "Execute BODY when CONDITION is true."
-  `(if ,condition (progn ,@body) nil))
-
-(documentation 'when)
-; => "Execute BODY when CONDITION is true."
-
-; Undefined symbol
-(documentation 'nonexistent)  ; => ERROR: Undefined symbol
+; Unbound symbol without a docstring
+(documentation 'nonexistent)  ; => nil
 
 ; Function without docstring
 (define no-doc (lambda (x) (* x 2)))
@@ -158,15 +133,16 @@ String containing the documentation, or `nil` if:
 ### Notes
 
 - Similar to Emacs Lisp's `documentation` function
-- Works with lambdas, macros, and built-in functions
+- Docstrings are stored on interned symbols, not on bindings
+- Works with lambdas, macros, and built-in functions only when their docstring is set on the symbol
 - Docstrings use CommonMark (Markdown) format
 
 ### Errors
 
 Returns error if:
 
+- No argument is provided
 - Argument is not a symbol
-- Symbol is undefined
 
 ### See Also
 
