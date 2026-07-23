@@ -138,7 +138,7 @@ The default build enables AddressSanitizer and UndefinedBehaviorSanitizer. Use `
 Ditty builds natively on Windows using MSYS2/UCRT64. The `#ifdef _WIN32`
 guards in the source handle Windows-specific APIs (file paths, timing,
 environment variables). The interactive REPL requires
-[boba](https://codeberg.org/thomasc/boba), which also builds natively
+[boba](https://github.com/chestso/boba), which also builds natively
 on Windows via MSYS2.
 
 ```bash
@@ -200,7 +200,7 @@ Options: `-f`/`--format` (`truecolor`, `256`, `16`, `8`), `-s`/`--style` (`dracu
 ./cli/ditty
 ```
 
-The REPL uses [boba](https://codeberg.org/thomasc/boba) for inline terminal
+The REPL uses [boba](https://github.com/chestso/boba) for inline terminal
 rendering — no alternate screen, output flows into the terminal's own
 scrollback. Syntax highlighting is applied to the input as you type via
 the Flare highlighting engine.
