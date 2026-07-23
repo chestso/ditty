@@ -189,6 +189,16 @@ static FlareToken *ditty_scan(const char *input, size_t len,
             size_t start = pos;
             while (pos < len && input[pos] != '\n')
                 pos++;
+            /* Comment line continuation: if the comment ends with a
+             * backslash, include the following newline and line as part
+             * of the comment (common in docstring output examples). */
+            while (pos > start && input[pos - 1] == '\\' && pos < len) {
+                pos++; /* consume the newline */
+                if (pos >= len)
+                    break;
+                while (pos < len && input[pos] != '\n')
+                    pos++;
+            }
             tv_push(&v, HL_COMMENT_LINE, start, pos - start);
             continue;
         }

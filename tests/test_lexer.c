@@ -40,6 +40,18 @@ static void test_lexer_line_comment(void)
     flare_lexer_free(lex);
 }
 
+static void test_lexer_line_comment_continuation(void)
+{
+    FlareLexer *lex = flare_lexer_ditty(env);
+    size_t count = 0;
+    FlareToken *tokens = flare_lex(lex, "; line one \\\nline two", 20, &count);
+    ASSERT_EQ(count, 1);
+    ASSERT_EQ(tokens[0].type, HL_COMMENT_LINE);
+    ASSERT_EQ(tokens[0].length, 20);
+    free(tokens);
+    flare_lexer_free(lex);
+}
+
 static void test_lexer_string_double_quoted(void)
 {
     FlareLexer *lex = flare_lexer_ditty(env);
@@ -283,6 +295,7 @@ int main(void)
     RUN_TEST(test_lexer_empty_input);
     RUN_TEST(test_lexer_whitespace_only);
     RUN_TEST(test_lexer_line_comment);
+    RUN_TEST(test_lexer_line_comment_continuation);
     RUN_TEST(test_lexer_string_double_quoted);
     RUN_TEST(test_lexer_string_with_escape);
     RUN_TEST(test_lexer_unclosed_string);
