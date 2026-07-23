@@ -309,6 +309,79 @@ static size_t emit_inline_code_text(char **out, size_t *cap, size_t pos,
     return pos;
 }
 
+/* Emit only the title text from an inline link token [text](url),
+ * suppressing the URL and all syntax characters. */
+static size_t emit_link_text(char **out, size_t *cap, size_t pos,
+                             const char *input, size_t offset, size_t length,
+                             int *at_line_start)
+{
+    if (length < 2 || input[offset] != '[')
+        return emit_token_text(out, cap, pos, input, offset, length, 0,
+                               at_line_start);
+
+    /* Find matching `]` with nesting support */
+    size_t p = 1;
+    int depth = 1;
+    while (p < length) {
+        if (input[offset + p] == '[')
+            depth++;
+        else if (input[offset + p] == ']') {
+            depth--;
+            if (depth == 0)
+                break;
+        }
+        p++;
+    }
+    if (depth != 0)
+        return emit_token_text(out, cap, pos, input, offset, length, 0,
+                               at_line_start);
+
+    /* Title text is between offset+1 and offset+p */
+    size_t title_off = offset + 1;
+    size_t title_len = p - 1;
+    if (title_len > 0) {
+        buf_ensure(out, cap, pos, title_len + 1);
+        memcpy(*out + pos, input + title_off, title_len);
+        pos += title_len;
+    }
+
+    *at_line_start = 0;
+    return pos;
+}
+
+/* Emit autolink text <url> with angle brackets stripped. */
+static size_t emit_autolink_text(char **out, size_t *cap, size_t pos,
+                                 const char *input, size_t offset,
+                                 size_t length, int *at_line_start)
+{
+    if (length < 2 || input[offset] != '<')
+        return emit_token_text(out, cap, pos, input, offset, length, 0,
+                               at_line_start);
+
+    /* Find closing `>` */
+    size_t end = 0;
+    for (size_t i = 1; i < length; i++) {
+        if (input[offset + i] == '>') {
+            end = i;
+            break;
+        }
+    }
+    if (end == 0)
+        return emit_token_text(out, cap, pos, input, offset, length, 0,
+                               at_line_start);
+
+    size_t uri_off = offset + 1;
+    size_t uri_len = end - 1;
+    if (uri_len > 0) {
+        buf_ensure(out, cap, pos, uri_len + 1);
+        memcpy(*out + pos, input + uri_off, uri_len);
+        pos += uri_len;
+    }
+
+    *at_line_start = 0;
+    return pos;
+}
+
 /* Format token stream into an ANSI string.
  * When enable_hyperlinks is 1, inline links and autolinks emit OSC 8
  * escape sequences for clickable hyperlinks on supporting terminals. */
@@ -400,12 +473,21 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
             if (has_hyperlink)
                 emit_osc8_open(&out, &cap, &pos, uri_buf, uri_len);
 
-            /* Just copy the text (inline code: backticks → spaces) */
+            /* Just copy the text (inline code: backticks → spaces;
+             * links/autolinks: title-only rendering) */
             size_t tlen = tokens[i].length;
             if (tokens[i].type == HL_MARKUP_INLINE_CODE)
                 pos = emit_inline_code_text(&out, &cap, pos, input,
                                             tokens[i].offset, tlen,
                                             &at_line_start);
+            else if (tokens[i].type == HL_MARKUP_INLINE_LINK)
+                pos = emit_link_text(&out, &cap, pos, input,
+                                     tokens[i].offset, tlen,
+                                     &at_line_start);
+            else if (tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)
+                pos = emit_autolink_text(&out, &cap, pos, input,
+                                         tokens[i].offset, tlen,
+                                         &at_line_start);
             else
                 pos = emit_token_text(&out, &cap, pos, input,
                                       tokens[i].offset, tlen, in_fenced,
@@ -587,6 +669,14 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
             pos = emit_inline_code_text(&out, &cap, pos, input,
                                         tokens[i].offset, tlen,
                                         &at_line_start);
+        else if (tokens[i].type == HL_MARKUP_INLINE_LINK)
+            pos = emit_link_text(&out, &cap, pos, input,
+                                 tokens[i].offset, tlen,
+                                 &at_line_start);
+        else if (tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)
+            pos = emit_autolink_text(&out, &cap, pos, input,
+                                     tokens[i].offset, tlen,
+                                     &at_line_start);
         else
             pos = emit_token_text(&out, &cap, pos, input,
                                   tokens[i].offset, tlen, in_fenced,

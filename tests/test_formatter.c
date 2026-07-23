@@ -264,14 +264,24 @@ static void test_formatter_fenced_preserves_blank_lines(void)
     flare_formatter_free(fmt);
 }
 
-/* Helper: strip ANSI escapes from `r.data` into `plain`. */
+/* Helper: strip ANSI escapes from `r.data` into `plain`.
+ * Handles CSI SGR sequences (\x1b[...m) and OSC 8 sequences
+ * (\x1b]...\x07) used for terminal hyperlinks. */
 static void strip_ansi(FlareResult r, char *plain, size_t plain_size)
 {
     size_t j = 0;
     for (size_t i = 0; i < r.length && j < plain_size - 1; i++) {
         if (r.data[i] == '\033') {
-            while (i < r.length && r.data[i] != 'm')
-                i++;
+            if (i + 1 < r.length && r.data[i + 1] == ']') {
+                /* OSC sequence: skip until BEL (\x07) */
+                i += 2;
+                while (i < r.length && r.data[i] != '\x07')
+                    i++;
+            } else {
+                /* CSI sequence: skip until 'm' */
+                while (i < r.length && r.data[i] != 'm')
+                    i++;
+            }
             continue;
         }
         plain[j++] = r.data[i];
@@ -388,6 +398,107 @@ static void test_inline_code_bg_256_color(void)
     flare_formatter_free(fmt);
 }
 
+/* Inline link: only the title text should be rendered, not the URL
+ * or any markdown syntax characters. */
+static void test_link_renders_only_title(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("[click here](https://example.com)", 33,
+                                    lex, style, fmt);
+
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+
+    /* Should contain the title */
+    ASSERT_TRUE(strstr(plain, "click here") != NULL);
+    /* Should NOT contain the URL */
+    ASSERT_TRUE(strstr(plain, "https://example.com") == NULL);
+    /* Should NOT contain brackets or parens */
+    ASSERT_TRUE(strchr(plain, '[') == NULL);
+    ASSERT_TRUE(strchr(plain, ']') == NULL);
+    ASSERT_TRUE(strchr(plain, '(') == NULL);
+    ASSERT_TRUE(strchr(plain, ')') == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Link with title attribute: [text](url "title") — only text is shown */
+static void test_link_with_title_renders_only_text(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("[foo](https://x.com \"bar\")", 26,
+                                    lex, style, fmt);
+
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+
+    ASSERT_TRUE(strstr(plain, "foo") != NULL);
+    ASSERT_TRUE(strstr(plain, "https://x.com") == NULL);
+    ASSERT_TRUE(strstr(plain, "bar") == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Autolink: <url> renders the URL (it's both title and target) but
+ * strips the angle brackets */
+static void test_autolink_strips_angle_brackets(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("<https://example.com>", 21,
+                                    lex, style, fmt);
+
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+
+    /* URL content should be present */
+    ASSERT_TRUE(strstr(plain, "https://example.com") != NULL);
+    /* Angle brackets should NOT be present */
+    ASSERT_TRUE(strchr(plain, '<') == NULL);
+    ASSERT_TRUE(strchr(plain, '>') == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
+/* Link with surrounding text: the URL is suppressed, surrounding text is fine */
+static void test_link_in_context_suppresses_url(void)
+{
+    FlareFormatter *fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+    FlareStyle *style = flare_style_monokai();
+    FlareLexer *lex = flare_lexer_commonmark(env);
+    FlareResult r = flare_highlight("See [docs](https://docs.x.com) now", 34,
+                                    lex, style, fmt);
+
+    char plain[256];
+    strip_ansi(r, plain, sizeof(plain));
+
+    ASSERT_TRUE(strstr(plain, "See ") != NULL);
+    ASSERT_TRUE(strstr(plain, "docs") != NULL);
+    ASSERT_TRUE(strstr(plain, " now") != NULL);
+    ASSERT_TRUE(strstr(plain, "https://docs.x.com") == NULL);
+    ASSERT_TRUE(strchr(plain, '[') == NULL);
+    ASSERT_TRUE(strchr(plain, '(') == NULL);
+
+    flare_result_free(r);
+    flare_lexer_free(lex);
+    flare_style_free(style);
+    flare_formatter_free(fmt);
+}
+
 int main(void)
 {
     env = lisp_init();
@@ -406,6 +517,10 @@ int main(void)
     RUN_TEST(test_inline_code_has_background_color);
     RUN_TEST(test_inline_code_bg_only_on_code);
     RUN_TEST(test_inline_code_bg_256_color);
+    RUN_TEST(test_link_renders_only_title);
+    RUN_TEST(test_link_with_title_renders_only_text);
+    RUN_TEST(test_autolink_strips_angle_brackets);
+    RUN_TEST(test_link_in_context_suppresses_url);
     lisp_cleanup();
     TEST_SUMMARY();
 }
