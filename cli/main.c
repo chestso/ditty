@@ -249,13 +249,14 @@ static char *highlight_lisp(const char *text, size_t len, void *userdata)
     free(result);
 
 fallback:
-    /* Fallback: return plain copy */
-    char *fallback = malloc(len + 1);
-    if (fallback) {
-        memcpy(fallback, text, len);
-        fallback[len] = '\0';
+    {
+        char *fallback = malloc(len + 1);
+        if (fallback) {
+            memcpy(fallback, text, len);
+            fallback[len] = '\0';
+        }
+        return fallback;
     }
-    return fallback;
 }
 
 /* --- Completion --- */
