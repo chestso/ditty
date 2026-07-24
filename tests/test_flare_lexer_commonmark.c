@@ -6,6 +6,7 @@
 #include "ditty/flare_token_source.h"
 #include "ditty/highlight.h"
 #include "lisp.h"
+#include <stdio.h>
 #include <string.h>
 
 static Environment *g_env;
@@ -580,6 +581,187 @@ static void test_cm_setext_heading(void)
     teardown();
 }
 
+/* Test that lisp code blocks are sub-lexed with ditty lexer */
+static void test_cm_fenced_lisp_block(void)
+{
+    setup();
+    FlareTokenSource *ts = lex_string("```lisp\n(define x 42)\n```\n");
+    FlareToken tok;
+
+    /* Opening fence */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_OPEN);
+
+    /* Info string */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_INFO);
+    ASSERT_EQ(tok.length, 4);
+    ASSERT_TRUE(memcmp(tok.text, "lisp", 4) == 0);
+
+    /* Newline after info */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+    ASSERT_EQ(tok.length, 1);
+    ASSERT_TRUE(memcmp(tok.text, "\n", 1) == 0);
+
+    /* Sub-lexed lisp: '(' punctuation */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_PUNCT_OPEN_PAREN);
+
+    /* Sub-lexed lisp: 'define' keyword */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_KEYWORD_DEFINE);
+
+    /* Skip whitespace tokens from ditty lexer */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT); /* space */
+
+    /* Sub-lexed lisp: 'x' - unbound symbol, classified as variable */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_TRUE(tok.type == HL_NAME_VARIABLE || tok.type == HL_NAME_BUILTIN);
+
+    /* Skip whitespace */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT); /* space */
+
+    /* Sub-lexed lisp: '42' number */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_LITERAL_NUMBER);
+
+    /* Sub-lexed lisp: ')' punctuation */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_PUNCT_CLOSE_PAREN);
+
+    /* Newline after code */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+    ASSERT_EQ(tok.length, 1);
+    ASSERT_TRUE(memcmp(tok.text, "\n", 1) == 0);
+
+    /* Closing fence */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_CLOSE);
+
+    /* Final newline */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+    ASSERT_EQ(tok.length, 1);
+
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 0);
+    flare_token_source_free(ts);
+    teardown();
+}
+
+/* Test that ditty code blocks are also sub-lexed */
+static void test_cm_fenced_ditty_block(void)
+{
+    setup();
+    FlareTokenSource *ts = lex_string("```ditty\n(+ 1 2)\n```\n");
+    FlareToken tok;
+
+    /* Opening fence */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_OPEN);
+
+    /* Info string */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_INFO);
+    ASSERT_EQ(tok.length, 5);
+    ASSERT_TRUE(memcmp(tok.text, "ditty", 5) == 0);
+
+    /* Newline after info */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+
+    /* Sub-lexed ditty: '(' punctuation */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_PUNCT_OPEN_PAREN);
+
+    /* Sub-lexed ditty: '+' operator */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_NAME_BUILTIN);
+
+    /* Skip whitespace */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT); /* space */
+
+    /* Sub-lexed ditty: '1' number */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_LITERAL_NUMBER);
+
+    /* Skip whitespace */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT); /* space */
+
+    /* Sub-lexed ditty: '2' number */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_LITERAL_NUMBER);
+
+    /* Sub-lexed ditty: ')' punctuation */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_PUNCT_CLOSE_PAREN);
+
+    /* Newline after code */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+    ASSERT_EQ(tok.length, 1);
+
+    /* Closing fence */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_CLOSE);
+
+    /* Final newline after closing fence */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+    ASSERT_EQ(tok.length, 1);
+
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 0);
+    flare_token_source_free(ts);
+    teardown();
+}
+
+/* Test that non-lisp code blocks are NOT sub-lexed */
+static void test_cm_fenced_other_block(void)
+{
+    setup();
+    FlareTokenSource *ts = lex_string("```python\nprint('hi')\n```\n");
+    FlareToken tok;
+
+    /* Opening fence */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_OPEN);
+
+    /* Info string */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_INFO);
+
+    /* Newline after info */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+
+    /* Content as plain code (not sub-lexed) */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_INDENTED_CODE);
+    ASSERT_TRUE(strstr(tok.text, "print") != NULL);
+
+    /* Newline after code */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+
+    /* Closing fence */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_MARKUP_FENCED_CLOSE);
+
+    /* Final newline after closing fence */
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 1);
+    ASSERT_EQ(tok.type, HL_TEXT);
+    ASSERT_EQ(tok.length, 1);
+
+    ASSERT_EQ(flare_token_source_pull(ts, &tok), 0);
+    flare_token_source_free(ts);
+    teardown();
+}
+
 int main(void)
 {
     RUN_TEST(test_cm_empty);
@@ -591,6 +773,9 @@ int main(void)
     RUN_TEST(test_cm_inline_code);
     RUN_TEST(test_cm_inline_code_with_backtick);
     RUN_TEST(test_cm_fenced_code_block);
+    RUN_TEST(test_cm_fenced_lisp_block);
+    RUN_TEST(test_cm_fenced_ditty_block);
+    RUN_TEST(test_cm_fenced_other_block);
     RUN_TEST(test_cm_bullet_list);
     RUN_TEST(test_cm_ordered_list);
     RUN_TEST(test_cm_loose_bullet_list);

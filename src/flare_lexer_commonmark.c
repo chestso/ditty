@@ -996,11 +996,67 @@ static void cm_emit_fenced_code(CommonmarkLexer *lex, const CmBlock *block)
         cm_push(lex, HL_MARKUP_FENCED_INFO, block->text, block->text_len);
     cm_push_newline(lex);
 
-    /* Content lines */
-    for (CmBlock *child = block->first_child; child; child = child->next_sibling) {
-        if (child->text_len > 0)
-            cm_push(lex, HL_MARKUP_INDENTED_CODE, child->text, child->text_len);
+    /* Check if this is a lisp/ditty code block that should be sub-lexed */
+    int is_lisp_block = 0;
+    if (block->text_len > 0 && lex->env) {
+        const char *info = block->text;
+        size_t info_len = block->text_len;
+        /* Check for "lisp" or "ditty" info string (case-insensitive) */
+        if ((info_len == 4 && strncasecmp(info, "lisp", 4) == 0) ||
+            (info_len == 5 && strncasecmp(info, "ditty", 5) == 0)) {
+            is_lisp_block = 1;
+        }
+    }
+
+    if (is_lisp_block) {
+        /* Sub-lex with ditty lexer */
+        /* First, collect all content into a single string */
+        size_t total_len = 0;
+        for (CmBlock *child = block->first_child; child; child = child->next_sibling) {
+            total_len += child->text_len;
+            if (child->next_sibling)
+                total_len += 1; /* newline between lines */
+        }
+
+        if (total_len > 0) {
+            char *code = GC_MALLOC_ATOMIC(total_len + 1);
+            if (code) {
+                size_t pos = 0;
+                for (CmBlock *child = block->first_child; child; child = child->next_sibling) {
+                    if (child->text_len > 0) {
+                        memcpy(code + pos, child->text, child->text_len);
+                        pos += child->text_len;
+                    }
+                    if (child->next_sibling) {
+                        code[pos++] = '\n';
+                    }
+                }
+                code[pos] = '\0';
+
+                /* Create string source and ditty lexer */
+                FlareSource *code_src = flare_source_string(code, pos, 0);
+                if (code_src) {
+                    FlareTokenSource *ditty = flare_lexer_ditty(code_src, lex->env);
+                    if (ditty) {
+                        FlareToken tok;
+                        while (flare_token_source_pull(ditty, &tok) > 0) {
+                            cm_push(lex, tok.type, tok.text, tok.length);
+                        }
+                        flare_token_source_free(ditty);
+                    } else {
+                        flare_source_free(code_src);
+                    }
+                }
+            }
+        }
         cm_push_newline(lex);
+    } else {
+        /* Content lines as plain text */
+        for (CmBlock *child = block->first_child; child; child = child->next_sibling) {
+            if (child->text_len > 0)
+                cm_push(lex, HL_MARKUP_INDENTED_CODE, child->text, child->text_len);
+            cm_push_newline(lex);
+        }
     }
 
     /* Closing fence line */
