@@ -220,7 +220,7 @@ static int is_fenced_marker(FlareTokenType type)
 }
 
 /* Copy token text to the output buffer, tracking line boundaries.
- * When `indent` is true, prepend 2 spaces at the start of each line
+ * When `indent > 0`, prepend `indent` spaces at the start of each line
  * (after every \n). Returns the new output position. */
 static size_t emit_token_text(char **out, size_t *cap, size_t pos,
                               const char *text, size_t length,
@@ -228,7 +228,7 @@ static size_t emit_token_text(char **out, size_t *cap, size_t pos,
 {
     const char *src = text;
 
-    if (!indent) {
+    if (indent == 0) {
         buf_ensure(out, cap, pos, length + 5);
         memcpy(*out + pos, src, length);
         pos += length;
@@ -238,23 +238,24 @@ static size_t emit_token_text(char **out, size_t *cap, size_t pos,
             const char *nl = memchr(src + src_pos, '\n', length - src_pos);
             if (!nl) {
                 size_t chunk = length - src_pos;
-                buf_ensure(out, cap, pos, chunk + 3);
+                buf_ensure(out, cap, pos, chunk + indent + 1);
                 memcpy(*out + pos, src + src_pos, chunk);
                 pos += chunk;
                 break;
             }
             size_t chunk = (size_t)(nl - (src + src_pos)) + 1;
-            buf_ensure(out, cap, pos, chunk + 3);
+            buf_ensure(out, cap, pos, chunk + indent + 1);
             memcpy(*out + pos, src + src_pos, chunk);
             pos += chunk;
             src_pos += chunk;
             /* Emit indentation after the newline (unless it's the
              * very end of the token — the next token will handle it
              * via the at_line_start mechanism). */
-            if (src_pos < length) {
-                buf_ensure(out, cap, pos, 3);
-                memcpy(*out + pos, "  ", 2);
-                pos += 2;
+            if (src_pos < length && indent > 0) {
+                buf_ensure(out, cap, pos, indent);
+                for (int s = 0; s < indent; s++) {
+                    (*out)[pos++] = ' ';
+                }
             }
         }
     }
@@ -359,12 +360,24 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
                             const FlareStyle *style, FlareColorDepth depth,
                             int enable_hyperlinks)
 {
+    FlareTerminalStyle ts = FLARE_TERMINAL_STYLE_DEFAULT;
+    ts.enable_hyperlinks = enable_hyperlinks;
+    return flare_format_terminal_with_style(tokens, count, style, depth, enable_hyperlinks, &ts);
+}
+
+char *flare_format_terminal_with_style(const FlareToken *tokens, size_t count,
+                                       const FlareStyle *style, FlareColorDepth depth,
+                                       int enable_hyperlinks,
+                                       const FlareTerminalStyle *term_style)
+{
     if (!tokens || count == 0 || !style) {
         char *empty = malloc(5);
         if (empty)
             memcpy(empty, "\033[0m", 4), empty[4] = '\0';
         return empty;
     }
+
+    FlareTerminalStyle ts = term_style ? *term_style : FLARE_TERMINAL_STYLE_DEFAULT;
 
     /* Grow-only buffer */
     size_t cap = 256;
@@ -386,22 +399,42 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
 
     for (size_t i = 0; i < count; i++) {
         /* Block-level spacing. Tokens that begin a new block can request
-         * blank lines above/below via their stylesheet margins. Do this
+         * blank lines above/below via their terminal style margins. Do this
          * before fenced-marker skipping so HL_MARKUP_FENCED_OPEN can
          * request a leading blank line. */
         if (tokens[i].type == HL_MARKUP_HEADING_MARKER ||
             tokens[i].type == HL_MARKUP_PARAGRAPH ||
             tokens[i].type == HL_MARKUP_THEMATIC_BREAK ||
             tokens[i].type == HL_MARKUP_FENCED_OPEN) {
-            FlareStyleEntry entry = flare_style_get(style, tokens[i].type);
+            int margin_top = 0, margin_bottom = 0;
+            switch (tokens[i].type) {
+            case HL_MARKUP_HEADING_MARKER:
+                margin_top = ts.heading_margin_top;
+                margin_bottom = ts.heading_margin_bottom;
+                break;
+            case HL_MARKUP_PARAGRAPH:
+                margin_top = 0;
+                margin_bottom = ts.paragraph_margin_bottom;
+                break;
+            case HL_MARKUP_THEMATIC_BREAK:
+                margin_top = ts.thematic_break_margin;
+                margin_bottom = ts.thematic_break_margin;
+                break;
+            case HL_MARKUP_FENCED_OPEN:
+                margin_top = ts.fenced_margin_top;
+                margin_bottom = ts.fenced_margin_bottom;
+                break;
+            default:
+                break;
+            }
             if (!first_block) {
-                int spacing = prev_margin_bottom > entry.margin_top ? prev_margin_bottom : entry.margin_top;
+                int spacing = prev_margin_bottom > margin_top ? prev_margin_bottom : margin_top;
                 for (int s = 0; s < spacing; s++) {
                     buf_ensure(&out, &cap, pos, 1);
                     out[pos++] = '\n';
                 }
             }
-            prev_margin_bottom = entry.margin_bottom;
+            prev_margin_bottom = margin_bottom;
             first_block = 0;
             if (tokens[i].type == HL_MARKUP_PARAGRAPH)
                 continue;
@@ -453,12 +486,13 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
             continue;
         }
 
-        /* Emit 2-space indentation at the start of each line inside
+        /* Emit indentation at the start of each line inside
          * a fenced code block, before the first styled token. */
-        if (in_fenced && at_line_start) {
-            buf_ensure(&out, &cap, pos, 2);
-            memcpy(out + pos, "  ", 2);
-            pos += 2;
+        if (in_fenced && at_line_start && ts.fenced_indent > 0) {
+            buf_ensure(&out, &cap, pos, ts.fenced_indent);
+            for (int s = 0; s < ts.fenced_indent; s++) {
+                out[pos++] = ' ';
+            }
             at_line_start = 0;
         }
 
@@ -497,7 +531,7 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
         char uri_buf[1024];
         size_t uri_len = 0;
         int has_hyperlink = 0;
-        if (enable_hyperlinks &&
+        if (ts.enable_hyperlinks &&
             (tokens[i].type == HL_MARKUP_INLINE_LINK ||
              tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)) {
             uri_len = extract_hyperlink_uri(tokens[i].type, tokens[i].text, tokens[i].length,
@@ -524,7 +558,8 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
                 pos = emit_autolink_text(&out, &cap, pos, tokens[i].text, tlen,
                                          &at_line_start);
             else
-                pos = emit_token_text(&out, &cap, pos, tokens[i].text, tlen, in_fenced,
+                pos = emit_token_text(&out, &cap, pos, tokens[i].text, tlen,
+                                      in_fenced ? ts.fenced_indent : 0,
                                       &at_line_start);
 
             if (has_hyperlink)
@@ -710,7 +745,8 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
             pos = emit_autolink_text(&out, &cap, pos, tokens[i].text, tlen,
                                      &at_line_start);
         else
-            pos = emit_token_text(&out, &cap, pos, tokens[i].text, tlen, in_fenced,
+            pos = emit_token_text(&out, &cap, pos, tokens[i].text, tlen,
+                                  in_fenced ? ts.fenced_indent : 0,
                                   &at_line_start);
 
         if (has_hyperlink)
@@ -730,4 +766,23 @@ char *flare_format_terminal(const FlareToken *tokens, size_t count,
     out[pos] = '\0';
 
     return out;
+}
+
+char *flare_format_terminal_reflow(const FlareToken *tokens, size_t count,
+                                   const FlareStyle *style,
+                                   FlareColorDepth depth, int enable_hyperlinks,
+                                   const FlareReflowOptions *reflow)
+{
+    (void)reflow;
+    return flare_format_terminal(tokens, count, style, depth, enable_hyperlinks);
+}
+
+char *flare_format_terminal_reflow_ex(const FlareToken *tokens, size_t count,
+                                      const FlareStyle *style,
+                                      FlareColorDepth depth, int enable_hyperlinks,
+                                      const FlareTerminalStyle *term_style,
+                                      const FlareReflowOptions *reflow)
+{
+    (void)reflow;
+    return flare_format_terminal_with_style(tokens, count, style, depth, enable_hyperlinks, term_style);
 }

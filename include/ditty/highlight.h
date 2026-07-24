@@ -118,8 +118,6 @@ typedef struct
     uint8_t fg_r, fg_g, fg_b;
     uint8_t bg_r, bg_g, bg_b;
     int bold, italic, underline, faint, strikethrough;
-    int margin_top;    /* blank lines before a block-level token */
-    int margin_bottom; /* blank lines after a block-level token */
 } FlareStyleEntry;
 
 /* A complete style (collection of type → entry mappings) */
@@ -168,6 +166,39 @@ void flare_style_set(FlareStyle *style, FlareTokenType type,
 
 void flare_style_free(FlareStyle *style);
 
+/* ----- Terminal style options ------------------------------------------- */
+
+/* Terminal layout options (independent of color theme) */
+typedef struct
+{
+    /* Block spacing (in blank lines) */
+    int heading_margin_top;      /* before headings (default 1) */
+    int heading_margin_bottom;   /* after headings (default 1) */
+    int paragraph_margin_bottom; /* after paragraphs (default 1) */
+    int fenced_margin_top;       /* before fenced code blocks (default 1) */
+    int fenced_margin_bottom;    /* after fenced code blocks (default 1) */
+    int thematic_break_margin;   /* around thematic breaks (default 1) */
+    int setext_underline_margin; /* around setext underlines (default 1) */
+
+    /* Indentation */
+    int fenced_indent; /* spaces inside fenced blocks (default 2) */
+
+    /* Hyperlinks */
+    int enable_hyperlinks; /* emit OSC 8 hyperlinks (default 0) */
+} FlareTerminalStyle;
+
+/* Default terminal style: margins=1, indent=2, hyperlinks=off */
+#define FLARE_TERMINAL_STYLE_DEFAULT ((FlareTerminalStyle){ \
+    .heading_margin_top = 1,                                \
+    .heading_margin_bottom = 1,                             \
+    .paragraph_margin_bottom = 1,                           \
+    .fenced_margin_top = 1,                                 \
+    .fenced_margin_bottom = 1,                              \
+    .thematic_break_margin = 1,                             \
+    .setext_underline_margin = 1,                           \
+    .fenced_indent = 2,                                     \
+    .enable_hyperlinks = 0 })
+
 /* ----- Reflow options -------------------------------------------------- */
 
 /* Reflow options for terminal formatter */
@@ -205,6 +236,7 @@ typedef enum
  * the new pull-based pipeline receives options via the caller. */
 FlareFormatter *flare_formatter_terminal(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style);
 FlareFormatter *flare_formatter_terminal_ex(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style,
+                                            const FlareTerminalStyle *term_style,
                                             const FlareReflowOptions *reflow);
 
 void flare_formatter_free(FlareFormatter *formatter);
@@ -216,17 +248,33 @@ int flare_formatter_format(FlareFormatter *fmt, FlareTokenSource *src);
 /* Format tokens to ANSI with explicit hyperlink control.
  * When enable_hyperlinks is 1, inline links and autolinks emit OSC 8
  * escape sequences.  When 0, links are styled without hyperlinks.
- * Tokens must use the text-based representation (text/length). */
+ * Tokens must use the text-based representation (text/length).
+ * Uses default terminal style (margins=1, indent=2). */
 char *flare_format_terminal(const FlareToken *tokens, size_t count,
                             const FlareStyle *style, FlareColorDepth depth,
                             int enable_hyperlinks);
 
+/* Format tokens with custom terminal style.
+ * NULL term_style = defaults (margins=1, indent=2, hyperlinks from enable_hyperlinks param). */
+char *flare_format_terminal_with_style(const FlareToken *tokens, size_t count,
+                                       const FlareStyle *style, FlareColorDepth depth,
+                                       int enable_hyperlinks,
+                                       const FlareTerminalStyle *term_style);
+
 /* Format tokens with reflow.
- * NULL reflow = source-faithful layout (no reflow). */
+ * NULL reflow = source-faithful layout (no reflow).
+ * Uses default terminal style. */
 char *flare_format_terminal_reflow(const FlareToken *tokens, size_t count,
                                    const FlareStyle *style,
                                    FlareColorDepth depth, int enable_hyperlinks,
                                    const FlareReflowOptions *reflow);
+
+/* Format tokens with reflow and custom terminal style. */
+char *flare_format_terminal_reflow_ex(const FlareToken *tokens, size_t count,
+                                      const FlareStyle *style,
+                                      FlareColorDepth depth, int enable_hyperlinks,
+                                      const FlareTerminalStyle *term_style,
+                                      const FlareReflowOptions *reflow);
 
 /* ----- Color conversion API -------------------------------------------- */
 

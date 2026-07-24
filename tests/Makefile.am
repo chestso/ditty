@@ -8,6 +8,7 @@ FLARE_TESTS = \
     test_flare_lexer_ditty_classifier \
     test_flare_lexer_ditty \
     test_flare_lexer_commonmark \
+    test_flare_terminal_style \
     test_highlight_sequence
 
 check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils $(FLARE_TESTS)
@@ -67,6 +68,10 @@ test_style_LDADD = $(AM_FLARE_LDADD)
 test_flare_SOURCES = test_flare.c
 test_flare_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
 test_flare_LDADD = $(AM_FLARE_LDADD)
+
+test_flare_terminal_style_SOURCES = test_flare_terminal_style.c
+test_flare_terminal_style_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
+test_flare_terminal_style_LDADD = $(AM_FLARE_LDADD)
 
 test_flare_lexer_ditty_classifier_SOURCES = test_flare_lexer_ditty_classifier.c
 test_flare_lexer_ditty_classifier_CPPFLAGS = $(AM_FLARE_CPPFLAGS)

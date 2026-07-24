@@ -12,6 +12,7 @@ struct FlareFormatter
 {
     FlareColorDepth depth;
     FlareStyle *style;
+    FlareTerminalStyle term_style;
     FlareWriter *writer;
     FlareLayout *layout;
     int prev_valid;
@@ -236,10 +237,11 @@ static int format_token(FlareFormatter *fmt, const FlareToken *token)
 
 FlareFormatter *flare_formatter_terminal(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style)
 {
-    return flare_formatter_terminal_ex(depth, writer, style, NULL);
+    return flare_formatter_terminal_ex(depth, writer, style, NULL, NULL);
 }
 
 FlareFormatter *flare_formatter_terminal_ex(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style,
+                                            const FlareTerminalStyle *term_style,
                                             const FlareReflowOptions *reflow)
 {
     FlareFormatter *f = calloc(1, sizeof(FlareFormatter));
@@ -248,6 +250,7 @@ FlareFormatter *flare_formatter_terminal_ex(FlareColorDepth depth, FlareWriter *
     f->depth = depth;
     f->writer = writer;
     f->style = style;
+    f->term_style = term_style ? *term_style : FLARE_TERMINAL_STYLE_DEFAULT;
     (void)reflow;
     return f;
 }
