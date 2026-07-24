@@ -83,6 +83,23 @@ char *flare_writer_buffer_steal(FlareWriter *w, size_t *out_len)
     if (!bw)
         return NULL;
     char *data = bw->data;
+
+    /* Ensure null-termination for the caller */
+    if (data && bw->len > 0) {
+        /* Check if we have room for null terminator */
+        if (bw->cap > bw->len) {
+            data[bw->len] = '\0';
+        } else {
+            /* Need to grow buffer by 1 to fit null terminator */
+            char *new_data = realloc(data, bw->len + 1);
+            if (new_data) {
+                data = new_data;
+                data[bw->len] = '\0';
+            }
+            /* If realloc fails, the buffer is not null-terminated but we return it anyway */
+        }
+    }
+
     if (out_len)
         *out_len = bw->len;
     bw->data = NULL;

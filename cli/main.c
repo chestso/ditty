@@ -139,10 +139,8 @@ static char *highlight_lisp(const char *text, size_t len, void *userdata)
         goto fallback;
 
     FlareTokenSource *lexer = flare_lexer_ditty(source, g_env);
-    if (!lexer) {
-        flare_source_free(source);
+    if (!lexer)
         goto fallback;
-    }
 
     FlareWriter *writer = flare_writer_buffer();
     if (!writer) {

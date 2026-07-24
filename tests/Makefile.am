@@ -7,7 +7,8 @@ FLARE_TESTS = \
     test_flare \
     test_flare_lexer_ditty_classifier \
     test_flare_lexer_ditty \
-    test_flare_lexer_commonmark
+    test_flare_lexer_commonmark \
+    test_highlight_sequence
 
 check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils $(FLARE_TESTS)
 if HAVE_BOBA
@@ -78,6 +79,10 @@ test_flare_lexer_ditty_LDADD = $(AM_FLARE_LDADD)
 test_flare_lexer_commonmark_SOURCES = test_flare_lexer_commonmark.c
 test_flare_lexer_commonmark_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
 test_flare_lexer_commonmark_LDADD = $(AM_FLARE_LDADD)
+
+test_highlight_sequence_SOURCES = test_highlight_sequence.c
+test_highlight_sequence_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
+test_highlight_sequence_LDADD = $(AM_FLARE_LDADD)
 
 test_repl_completeness_SOURCES = test_repl_completeness.c
 test_repl_completeness_CPPFLAGS = \
