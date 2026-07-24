@@ -1,8 +1,8 @@
 # Built-in Function Reference
 
-This reference is auto-generated from `doc/*.md`. Each section corresponds to a
+This reference is auto-generated from `docstrings/*.md`. Each section corresponds to a
 documentation category, and each subsection documents a single built-in function,
-macro, or variable. The source files in `doc/` are also used to generate runtime
+macro, or variable. The source files in `docstrings/` are also used to generate runtime
 docstrings via `scripts/gen-docstrings.sh`.
 
 ## Table of Contents
@@ -5844,7 +5844,7 @@ The following aliases are defined in the standard library for naming consistency
 
 Symbol and keyword operations.
 
-See also: `symbol?` in [Type Predicates](doc/type-predicates.md), `documentation` and `set-documentation!` in [Functions](doc/functions.md).
+See also: `symbol?` in [Type Predicates](docstrings/type-predicates.md), `documentation` and `set-documentation!` in [Functions](docstrings/functions.md).
 
 ### `symbol->string`
 

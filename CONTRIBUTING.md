@@ -142,13 +142,13 @@ src/               Library source → builds libditty.a
   print.c          Print/princ/prin1 output
   env.c            Environment frames, profiling, call stack
   builtins.c       Dispatches to per-category registration, assigns SF docstrings
-  builtins_*.c     Category-specific builtins (one file per doc/ category)
+  builtins_*.c     Category-specific builtins (one file per docstrings/ category)
   builtins_internal.h  Shared header for all builtins_*.c files
   flare_*.c        Flare pipeline: lexer, style, formatter, highlight, color
   hash_table.c     Hash table implementation (used for env bindings, intern tables)
   utf8.c / regex.c / file_utils.c  Utility implementations
 
-  docstrings.gen.h  AUTO-GENERATED from doc/*.md (by scripts/gen-docstrings.sh)
+  docstrings.gen.h  AUTO-GENERATED from docstrings/*.md (by scripts/gen-docstrings.sh)
   ditty_version.h   AUTO-GENERATED from git state on every make
 
 cli/               REPL executable
@@ -156,7 +156,7 @@ cli/               REPL executable
   repl_app.c/h     TUI REPL (requires boba library)
 flare/             Standalone flare CLI (cat-like syntax highlighter)
 lisp/              Lisp libraries shipped with ditty (lisp-fmt.lisp source formatter)
-doc/               Per-function markdown docs (source of truth for runtime docstrings)
+docstrings/               Per-function markdown docs (source of truth for runtime docstrings)
 tests/             Test suite (basic/, advanced/, regression/, C unit tests)
 emacs/             Emacs major mode (ditty-mode.el), not a build dependency
 scripts/           Build/codegen helpers (gen-docstrings.sh, gen-builtin-ref.sh, etc.)
@@ -211,7 +211,7 @@ Each `builtins_*.c` file defines `register_*_builtins(Environment *env)` which u
 
 1. Implement `LispObject *my_func(LispObject *args, Environment *env)` in the appropriate `src/builtins_*.c` (or create a new category file and call its `register_*_builtins` from `src/builtins.c`).
 2. Add `REGISTER("my-func", my_func)` inside that file's `register_*_builtins` function.
-3. Document it in the matching `doc/*.md` so the docstring lands in `(documentation 'my-func)` automatically.
+3. Document it in the matching `docstrings/*.md` so the docstring lands in `(documentation 'my-func)` automatically.
 
 See `src/builtins_internal.h` for the `REGISTER` macro, `CHECK_ARGS_n` arity guards, and the `LIST_APPEND` helper.
 
@@ -221,14 +221,14 @@ Two files are auto-generated during `make` and should never be edited directly:
 
 | File                   | Source                     | Generator                   |
 | ---------------------- | -------------------------- | --------------------------- |
-| `src/docstrings.gen.h` | `doc/*.md`                 | `scripts/gen-docstrings.sh` |
+| `src/docstrings.gen.h` | `docstrings/*.md`          | `scripts/gen-docstrings.sh` |
 | `src/ditty_version.h`  | git state / `version` file | `build-aux/git-version.sh`  |
 
 To manually regenerate docstrings: `scripts/gen-docstrings.sh doc > src/docstrings.gen.h`
 
 To regenerate `BUILTIN_REFERENCE.md`: `scripts/gen-builtin-ref.sh doc > BUILTIN_REFERENCE.md`
 
-`BUILTIN_REFERENCE.md` is fully auto-generated from `doc/*.md`. Do not edit it by hand; update the per-function docs in `doc/` and rerun the generator.
+`BUILTIN_REFERENCE.md` is fully auto-generated from `docstrings/*.md`. Do not edit it by hand; update the per-function docs in `docstrings/` and rerun the generator.
 
 `NEWS` is intentionally not maintained in this repository; do not update it.
 
@@ -240,7 +240,7 @@ To regenerate `BUILTIN_REFERENCE.md`: `scripts/gen-builtin-ref.sh doc > BUILTIN_
 - **`#f` is `NIL`**: `lisp_make_boolean(0)` returns `NIL`, not a distinct false object. `LISP_TRUE` (`0xB`) is the only truthy boolean. This means `nil?` and `boolean?` have overlapping behavior for false.
 - **Fixnum overflow**: Integers in the range `[-2^60, 2^60-1]` are tagged fixnums (no allocation). Outside that range, they fall back to heap-allocated `LISP_INTEGER`. Code must handle both paths (use `LISP_INT_VAL()` which decodes both).
 - **Boba is optional**: The TUI REPL (`repl_app.c`) and `test_repl_app` only compile when `pkg-config` finds boba. Without it, `ditty` falls back to a simple non-interactive mode. Tests gating: `if HAVE_BOBA` in Makefile.am.
-- **Docstring format**: Runtime docstrings are CommonMark markdown stored in `Symbol->docstring` and `LambdaInfo->docstring`. They're generated from `doc/*.md` where `` ## `func-name` `` headings delimit entries.
+- **Docstring format**: Runtime docstrings are CommonMark markdown stored in `Symbol->docstring` and `LambdaInfo->docstring`. They're generated from `docstrings/*.md` where `` ## `func-name` `` headings delimit entries.
 - **File stream EOL**: File streams auto-detect LF vs CRLF on read and transparently preserve on write. `write-string` translates `\n` to the stream's stored EOL. Don't manually handle `\r`.
 - **ASan leak detection disabled**: `__asan_default_options()` returns `"detect_leaks=0"` because Boehm GC finalizers don't guarantee cleanup at exit, causing LSan false positives.
 - **Test environment**: Lisp tests are executed via `run-test.sh` which `cd`s to the project root so `(load "tests/...")` paths resolve correctly. The `DITTY_BIN` env var points to the built binary.
@@ -252,7 +252,7 @@ To regenerate `BUILTIN_REFERENCE.md`: `scripts/gen-builtin-ref.sh doc > BUILTIN_
 
 1. **Branch**: Create a feature branch from `master`.
 2. **Build & test**: Ensure `make check` passes and `make format` produces no changes.
-3. **Docs**: If you add or change a builtin, update the corresponding `doc/*.md` file. Regenerate `BUILTIN_REFERENCE.md` with `scripts/gen-builtin-ref.sh doc > BUILTIN_REFERENCE.md`.
+3. **Docs**: If you add or change a builtin, update the corresponding `docstrings/*.md` file. Regenerate `BUILTIN_REFERENCE.md` with `scripts/gen-builtin-ref.sh doc > BUILTIN_REFERENCE.md`.
 4. **Tests**: Add tests for new behavior — Lisp tests in `tests/basic/` or `tests/advanced/`, C unit tests where appropriate. Add new test files to `TESTS` and `EXTRA_DIST` in `tests/Makefile.am`.
 5. **Commit**: Write clear commit messages that explain why a change was made, not just what changed. See the existing commit history for style.
 6. **Push**: Push to your fork and open a pull request on [GitHub](https://github.com/chestso/ditty/pulls) or [Codeberg](https://codeberg.org/chestso/ditty/pulls).

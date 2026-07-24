@@ -31,29 +31,29 @@ ditty_version.h: ditty_version_force
 ditty_version_force:
 
 DOC_FILES = \
-    $(top_srcdir)/doc/arithmetic.md \
-    $(top_srcdir)/doc/characters.md \
-    $(top_srcdir)/doc/comparison.md \
-    $(top_srcdir)/doc/errors.md \
-    $(top_srcdir)/doc/file-io.md \
-    $(top_srcdir)/doc/filesystem.md \
-    $(top_srcdir)/doc/functions.md \
-    $(top_srcdir)/doc/hash-tables.md \
-    $(top_srcdir)/doc/lists.md \
-    $(top_srcdir)/doc/packages.md \
-    $(top_srcdir)/doc/printing.md \
-    $(top_srcdir)/doc/regex.md \
-    $(top_srcdir)/doc/special-forms.md \
-    $(top_srcdir)/doc/string-ports.md \
-    $(top_srcdir)/doc/strings.md \
-    $(top_srcdir)/doc/symbols.md \
-    $(top_srcdir)/doc/time-and-profiling.md \
-    $(top_srcdir)/doc/tui.md \
-    $(top_srcdir)/doc/type-predicates.md \
-    $(top_srcdir)/doc/vectors.md
+    $(top_srcdir)/docstrings/arithmetic.md \
+    $(top_srcdir)/docstrings/characters.md \
+    $(top_srcdir)/docstrings/comparison.md \
+    $(top_srcdir)/docstrings/errors.md \
+    $(top_srcdir)/docstrings/file-io.md \
+    $(top_srcdir)/docstrings/filesystem.md \
+    $(top_srcdir)/docstrings/functions.md \
+    $(top_srcdir)/docstrings/hash-tables.md \
+    $(top_srcdir)/docstrings/lists.md \
+    $(top_srcdir)/docstrings/packages.md \
+    $(top_srcdir)/docstrings/printing.md \
+    $(top_srcdir)/docstrings/regex.md \
+    $(top_srcdir)/docstrings/special-forms.md \
+    $(top_srcdir)/docstrings/string-ports.md \
+    $(top_srcdir)/docstrings/strings.md \
+    $(top_srcdir)/docstrings/symbols.md \
+    $(top_srcdir)/docstrings/time-and-profiling.md \
+    $(top_srcdir)/docstrings/tui.md \
+    $(top_srcdir)/docstrings/type-predicates.md \
+    $(top_srcdir)/docstrings/vectors.md
 
 docstrings.gen.h: $(top_srcdir)/scripts/gen-docstrings.sh $(DOC_FILES)
-	$(top_srcdir)/scripts/gen-docstrings.sh $(top_srcdir)/doc > $@
+	$(top_srcdir)/scripts/gen-docstrings.sh $(top_srcdir)/docstrings > $@
 
 # Main lisp library
 libditty_a_SOURCES = \
@@ -86,8 +86,8 @@ libditty_a_SOURCES = \
     regex.c \
     hash_table.c \
     file_utils.c \
-    flare_lexer.c \
     flare_lexer_ditty.c \
+    flare_lexer_ditty_classifier.c \
     flare_lexer_commonmark.c \
     flare_token_type.c \
     flare_style.c \
@@ -99,7 +99,11 @@ libditty_a_SOURCES = \
     flare_formatter_terminal.c \
     flare_terminal.c \
     flare_color.c \
-    flare_highlight.c
+    flare_highlight.c \
+    flare_source.c \
+    flare_writer.c \
+    flare_token_source.c \
+    flare_iterator_reflow.c
 
 libditty_a_CPPFLAGS = \
     -I$(top_srcdir)/include \

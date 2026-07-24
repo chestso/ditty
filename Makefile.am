@@ -34,26 +34,26 @@ EXTRA_DIST = \
     icons/hicolor/scalable/apps/ditty.svg \
     icons/ditty.ico \
     cli/ditty.rc \
-    doc/arithmetic.md \
-    doc/characters.md \
-    doc/comparison.md \
-    doc/errors.md \
-    doc/file-io.md \
-    doc/filesystem.md \
-    doc/functions.md \
-    doc/hash-tables.md \
-    doc/lists.md \
-    doc/packages.md \
-    doc/printing.md \
-    doc/regex.md \
-    doc/special-forms.md \
-    doc/string-ports.md \
-    doc/strings.md \
-    doc/symbols.md \
-    doc/time-and-profiling.md \
-    doc/tui.md \
-    doc/type-predicates.md \
-    doc/vectors.md \
+    docstrings/arithmetic.md \
+    docstrings/characters.md \
+    docstrings/comparison.md \
+    docstrings/errors.md \
+    docstrings/file-io.md \
+    docstrings/filesystem.md \
+    docstrings/functions.md \
+    docstrings/hash-tables.md \
+    docstrings/lists.md \
+    docstrings/packages.md \
+    docstrings/printing.md \
+    docstrings/regex.md \
+    docstrings/special-forms.md \
+    docstrings/string-ports.md \
+    docstrings/strings.md \
+    docstrings/symbols.md \
+    docstrings/time-and-profiling.md \
+    docstrings/tui.md \
+    docstrings/type-predicates.md \
+    docstrings/vectors.md \
     emacs/README.md \
     emacs/COPYING \
     emacs/ditty-mode.el \

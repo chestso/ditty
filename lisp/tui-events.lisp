@@ -1,6 +1,6 @@
 ;; TUI event parsing library.
 ;;
-;; This library is built on top of the C primitives in `doc/tui.md` and
+;; This library is built on top of the C primitives in `docstrings/tui.md` and
 ;; implements the higher-level terminal features that cannot be done in pure
 ;; Lisp without raw byte access: keyboard decoding, mouse events, focus
 ;; events, bracketed paste, and clipboard integration via OSC 52.

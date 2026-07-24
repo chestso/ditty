@@ -1,7 +1,7 @@
 #!/bin/bash
-# gen-builtin-ref.sh - Generate BUILTIN_REFERENCE.md from doc/*.md files
+# gen-builtin-ref.sh - Generate BUILTIN_REFERENCE.md from docstrings/*.md files
 #
-# Assembles all per-function documentation from doc/*.md into a single
+# Assembles all per-function documentation from docstrings/*.md into a single
 # reference file with a table of contents. Headings are demoted by one
 # level (H1 -> H2 for category titles, H2 -> H3 for function entries,
 # H3 -> H4 for subsections) so the output is a valid single-document
@@ -26,9 +26,9 @@ fi
 cat <<'HEADER'
 # Built-in Function Reference
 
-This reference is auto-generated from `doc/*.md`. Each section corresponds to a
+This reference is auto-generated from `docstrings/*.md`. Each section corresponds to a
 documentation category, and each subsection documents a single built-in function,
-macro, or variable. The source files in `doc/` are also used to generate runtime
+macro, or variable. The source files in `docstrings/` are also used to generate runtime
 docstrings via `scripts/gen-docstrings.sh`.
 
 ## Table of Contents

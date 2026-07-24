@@ -1588,4 +1588,4 @@ vec ; => #(10 99)
 - [BUILTIN_REFERENCE.md](BUILTIN_REFERENCE.md) - Auto-generated reference for all built-in functions, macros, and variables
 - [README.md](README.md) - Project overview, building, embedding, and C API reference
 - [tests/](tests/) - Test files with more examples
-- [doc/](doc/) - Per-function documentation source files
+- [docstrings/](docstrings/) - Per-function documentation source files
