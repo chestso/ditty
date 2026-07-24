@@ -1,345 +1,241 @@
-/* lexer_ditty.c - Ditty Lisp scanner
- *
- * Classification uses the ditty runtime as the single source of truth:
- *   - Special forms: lisp_sf_kind() from ditty (auto-generated from
- *     the SPECIAL_FORMS X-macro, maps each form to its semantic kind).
- *   - Builtins/functions: resolved via env_lookup on the Environment.
- *
- * An Environment* is required. Pass the result of lisp_init().
- */
+/* flare_lexer_ditty.c - Flare streaming Ditty Lisp lexer */
 
-#include "../include/ditty/highlight.h"
-#include "../include/lisp.h"
-#include <ctype.h>
+#include "ditty/flare_lexer.h"
+#include "ditty/flare_lexer_ditty_classifier.h"
+#include "ditty/highlight.h"
+#include <gc.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
-/* Forward declaration from lexer.c */
-extern FlareLexer *flare_lexer_alloc(const char *name, void *ctx,
-                                     FlareToken *(*scan)(const char *, size_t, void *, size_t *),
-                                     void (*free_ctx)(void *));
+#define LEXER_BUFFER_SIZE 4096
 
-typedef struct
-{
-    Environment *env;
-} DittyLispCtx;
-
-/* Map ditty's SfKind to ditty-flare's token subcategory */
-static FlareTokenType sf_kind_to_type(SfKind kind)
-{
-    switch (kind) {
-    case SF_KIND_DEFINE:
-        return HL_KEYWORD_DEFINE;
-    case SF_KIND_CONTROL:
-        return HL_KEYWORD_CONTROL;
-    case SF_KIND_MACRO_DEF:
-        return HL_KEYWORD_MACRO_DEF;
-    default:
-        return HL_KEYWORD_SPECIAL_FORM;
-    }
-}
-
-/* ----- Atom classification ----- */
-
-static int is_delimiter(char c)
-{
-    return c == '\0' || isspace((unsigned char)c) ||
-           c == '(' || c == ')' || c == ';' ||
-           c == '"' || c == '\'' || c == '`' || c == ',';
-}
+/* ===== Ditty Lexer ===== */
 
 typedef struct
 {
-    FlareToken *items;
-    size_t count;
-    size_t capacity;
-} TokenVec;
+    FlareTokenSource base;
+    FlareSource *src;     /* Owned: will free on destruction */
+    Environment *env;     /* Borrowed: caller owns this */
+    char *buffer;         /* Reusable read buffer */
+    size_t buffer_pos;    /* Current position in buffer */
+    size_t buffer_len;    /* Valid bytes in buffer */
+    size_t source_offset; /* Offset in source stream */
+    int eof;              /* End of input reached */
+} DittyLexer;
 
-static void tv_push(TokenVec *v, FlareTokenType type, size_t offset, size_t length)
+static int ditty_pull(FlareTokenSource *src, FlareToken *out)
 {
-    if (v->count >= v->capacity) {
-        v->capacity = v->capacity ? v->capacity * 2 : 16;
-        v->items = realloc(v->items, v->capacity * sizeof(FlareToken));
+    DittyLexer *lex = (DittyLexer *)src;
+
+    if (lex->eof) {
+        return 0; /* EOF */
     }
-    v->items[v->count].type = type;
-    v->items[v->count].offset = offset;
-    v->items[v->count].length = length;
-    v->count++;
-}
 
-static void tv_push_text(TokenVec *v, size_t start, size_t end)
-{
-    if (end > start)
-        tv_push(v, HL_TEXT, start, end - start);
-}
-
-static FlareTokenType classify_atom(const char *input, size_t offset, size_t length,
-                                    const DittyLispCtx *ctx)
-{
-    const char *s = input + offset;
-
-    if (s[0] == ':' && length > 1)
-        return HL_NAME_KEYWORD_ARG;
-
-    if (length == 3 && strncmp(s, "nil", 3) == 0)
-        return HL_LITERAL_NIL;
-    if (length == 2 && strncmp(s, "#f", 2) == 0)
-        return HL_LITERAL_NIL;
-    if (length == 2 && strncmp(s, "#t", 2) == 0)
-        return HL_LITERAL_BOOLEAN;
-
-    /* Number check */
-    {
-        const char *p = s;
-        int is_num = 1, has_dot = 0;
-        size_t remain = length;
-
-        if (*p == '-' || *p == '+') {
-            p++;
-            remain--;
+    /* Ensure we have data in buffer */
+    if (lex->buffer_pos >= lex->buffer_len) {
+        ssize_t n = flare_source_read(lex->src, lex->buffer, LEXER_BUFFER_SIZE);
+        if (n <= 0) {
+            lex->eof = 1;
+            return 0; /* EOF or error */
         }
-        if (remain == 0)
-            is_num = 0;
-        while (remain > 0 && is_num) {
-            if (*p == '.') {
-                if (has_dot) {
-                    is_num = 0;
-                    break;
-                }
-                has_dot = 1;
-            } else if (!isdigit((unsigned char)*p)) {
-                is_num = 0;
-            }
-            p++;
-            remain--;
+        lex->buffer_len = n;
+        lex->buffer_pos = 0;
+    }
+
+    /* Find token end */
+    size_t start = lex->buffer_pos;
+    char c = lex->buffer[start];
+    size_t end = start;
+    FlareTokenType type = HL_TEXT;
+
+    /* Whitespace */
+    if (isspace((unsigned char)c)) {
+        end = start + 1;
+        while (end < lex->buffer_len &&
+               isspace((unsigned char)lex->buffer[end])) {
+            end++;
         }
-        if (is_num && length > 0)
-            return HL_LITERAL_NUMBER;
+        type = HL_TEXT;
     }
-
-    /* Symbol classification via runtime.
-     * Match the reader's pkg:sym handling: if the token contains a colon
-     * (not at start/end), intern it as a qualified symbol so the environment
-     * lookup matches what the evaluator would see. */
-    char buf[256];
-    if (length >= sizeof(buf))
-        return HL_NAME_VARIABLE;
-
-    memcpy(buf, s, length);
-    buf[length] = '\0';
-
-    char *colon = strchr(buf, ':');
-    LispObject *sym;
-    if (colon && colon != buf && colon[1] != '\0') {
-        *colon = '\0';
-        sym = lisp_intern_qualified(buf, colon + 1);
-    } else {
-        sym = lisp_intern(buf);
+    /* Punctuation */
+    else if (c == '(' || c == ')' || c == '[' || c == ']' ||
+             c == '{' || c == '}') {
+        end = start + 1;
+        if (c == '(')
+            type = HL_PUNCT_OPEN_PAREN;
+        else if (c == ')')
+            type = HL_PUNCT_CLOSE_PAREN;
+        else
+            type = HL_PUNCTUATION;
     }
-
-    /* Special forms: ask ditty.
-     * Returns -1 for non-special-forms; must cast to int because
-     * SfKind is an enum and GCC may treat the comparison as unsigned. */
-    int kind = (int)lisp_sf_kind(sym);
-    if (kind >= 0)
-        return sf_kind_to_type(kind);
-
-    /* Environment lookup: builtin, function, macro, or variable.
-     * For qualified symbols, env_lookup finds bindings stored directly under
-     * the qualified Symbol (e.g., (define a:b 1)); if that misses, fall back
-     * to env_lookup_in_package for cross-package access (e.g., math:math-add). */
-    Symbol *symval = LISP_SYM_VAL(sym);
-    LispObject *val = env_lookup(ctx->env, symval);
-    if (val == NULL && symval->namespace != NULL) {
-        val = env_lookup_in_package(ctx->env,
-                                    LISP_SYM_VAL(lisp_intern(symval->name)),
-                                    LISP_SYM_VAL(lisp_intern(symval->namespace)));
-    }
-    if (val) {
-        LispType t = LISP_TYPE(val);
-        if (t == LISP_BUILTIN)
-            return HL_NAME_BUILTIN;
-        if (t == LISP_LAMBDA || t == LISP_MACRO)
-            return HL_NAME_FUNCTION;
-    }
-
-    return HL_NAME_VARIABLE;
-}
-
-/* Main scan function */
-static FlareToken *ditty_scan(const char *input, size_t len,
-                              void *ctx, size_t *out_count)
-{
-    TokenVec v = { NULL, 0, 0 };
-    size_t pos = 0;
-    DittyLispCtx *lctx = ctx;
-
-    while (pos < len) {
-        char c = input[pos];
-
-        if (isspace((unsigned char)c)) {
-            size_t start = pos;
-            while (pos < len && isspace((unsigned char)input[pos]))
-                pos++;
-            tv_push_text(&v, start, pos);
-            continue;
-        }
-
-        if (c == ';') {
-            size_t start = pos;
-            while (pos < len && input[pos] != '\n')
-                pos++;
-            /* Comment line continuation: if the comment ends with a
-             * backslash, include the following newline and line as part
-             * of the comment (common in docstring output examples). */
-            while (pos > start && input[pos - 1] == '\\' && pos < len) {
-                pos++; /* consume the newline */
-                if (pos >= len)
-                    break;
-                while (pos < len && input[pos] != '\n')
-                    pos++;
-            }
-            tv_push(&v, HL_COMMENT_LINE, start, pos - start);
-            continue;
-        }
-
-        if (c == '"') {
-            size_t start = pos;
-            pos++;
-            while (pos < len && input[pos] != '"') {
-                if (input[pos] == '\\' && pos + 1 < len)
-                    pos++;
-                pos++;
-            }
-            if (pos < len) {
-                pos++;
-                tv_push(&v, HL_LITERAL_STRING, start, pos - start);
+    /* String literal */
+    else if (c == '"') {
+        end = start + 1;
+        while (end < lex->buffer_len) {
+            if (lex->buffer[end] == '\\' && end + 1 < lex->buffer_len) {
+                end += 2; /* Skip escape sequence */
+            } else if (lex->buffer[end] == '"') {
+                end++;
+                break;
             } else {
-                tv_push(&v, HL_ERROR_UNCLOSED_STRING, start, pos - start);
+                end++;
             }
-            continue;
         }
-
-        if (c == '#') {
-            if (pos + 1 < len) {
-                char next = input[pos + 1];
-                if (next == '\\') {
-                    size_t start = pos;
-                    pos += 2;
-                    if (pos < len) {
-                        if (isalpha((unsigned char)input[pos])) {
-                            while (pos < len && !is_delimiter(input[pos]) &&
-                                   input[pos] != ')' && input[pos] != '(')
-                                pos++;
-                        } else {
-                            if (pos < len)
-                                pos++;
+        type = HL_LITERAL_STRING;
+    }
+    /* Comment */
+    else if (c == ';') {
+        end = start;
+        while (end < lex->buffer_len && lex->buffer[end] != '\n') {
+            end++;
+        }
+        type = HL_COMMENT_LINE;
+    }
+    /* Hash dispatch: #\char, #(, #t, #f, etc. */
+    else if (c == '#') {
+        end = start + 1;
+        if (end < lex->buffer_len) {
+            char next = lex->buffer[end];
+            if (next == '\\') {
+                /* Character literal: #\x ... */
+                end++;
+                if (end < lex->buffer_len) {
+                    if (isalpha((unsigned char)lex->buffer[end])) {
+                        end++;
+                        while (end < lex->buffer_len &&
+                               !ditty_is_delimiter(lex->buffer[end]) &&
+                               lex->buffer[end] != '(' &&
+                               lex->buffer[end] != ')') {
+                            end++;
                         }
+                    } else {
+                        end++;
                     }
-                    tv_push(&v, HL_LITERAL_CHARACTER, start, pos - start);
-                    continue;
                 }
-                if (next == '(') {
-                    tv_push(&v, HL_PUNCT_HASH, pos, 1);
-                    pos++;
-                    tv_push(&v, HL_PUNCT_OPEN_PAREN, pos, 1);
-                    pos++;
-                    continue;
-                }
-                if (next == 't') {
-                    tv_push(&v, HL_LITERAL_BOOLEAN, pos, 2);
-                    pos += 2;
-                    continue;
-                }
-                if (next == 'f') {
-                    tv_push(&v, HL_LITERAL_NIL, pos, 2);
-                    pos += 2;
-                    continue;
-                }
-            }
-            tv_push(&v, HL_PUNCT_HASH, pos, 1);
-            pos++;
-            continue;
-        }
-
-        if (c == '(') {
-            tv_push(&v, HL_PUNCT_OPEN_PAREN, pos, 1);
-            pos++;
-            continue;
-        }
-        if (c == ')') {
-            tv_push(&v, HL_PUNCT_CLOSE_PAREN, pos, 1);
-            pos++;
-            continue;
-        }
-
-        if (c == '\'') {
-            tv_push(&v, HL_OPERATOR_QUOTE, pos, 1);
-            pos++;
-            continue;
-        }
-        if (c == '`') {
-            tv_push(&v, HL_OPERATOR_BACKQUOTE, pos, 1);
-            pos++;
-            continue;
-        }
-        if (c == ',') {
-            if (pos + 1 < len && input[pos + 1] == '@') {
-                tv_push(&v, HL_OPERATOR_UNQUOTE_SPLICING, pos, 2);
-                pos += 2;
+                type = HL_LITERAL_CHARACTER;
+            } else if (next == '(') {
+                end++;
+                type = HL_PUNCT_HASH;
+            } else if (next == 't') {
+                end = start + 2;
+                type = HL_LITERAL_BOOLEAN;
+            } else if (next == 'f') {
+                end = start + 2;
+                type = HL_LITERAL_NIL;
             } else {
-                tv_push(&v, HL_OPERATOR_UNQUOTE, pos, 1);
-                pos++;
+                /* Unknown # sequence, treat as single punctuation */
+                end = start + 1;
+                type = HL_PUNCT_HASH;
             }
-            continue;
-        }
-
-        if (c == '.' && pos + 1 < len &&
-            (isspace((unsigned char)input[pos + 1]) || input[pos + 1] == ')')) {
-            tv_push(&v, HL_PUNCT_DOT, pos, 1);
-            pos++;
-            continue;
-        }
-
-        /* Atom */
-        {
-            size_t start = pos;
-            while (pos < len && !is_delimiter(input[pos]) &&
-                   !(input[pos] == '.' && pos + 1 < len &&
-                     (isspace((unsigned char)input[pos + 1]) || input[pos + 1] == ')')))
-                pos++;
-
-            if (pos > start) {
-                FlareTokenType t = classify_atom(input, start, pos - start, lctx);
-                tv_push(&v, t, start, pos - start);
-            } else {
-                tv_push(&v, HL_TEXT, pos, 1);
-                pos++;
-            }
+        } else {
+            end = start + 1;
+            type = HL_PUNCT_HASH;
         }
     }
+    /* Quote / backtick / unquote operators */
+    else if (c == '\'' || c == '`' || c == ',') {
+        end = start + 1;
+        if (c == '\'')
+            type = HL_OPERATOR_QUOTE;
+        else if (c == '`')
+            type = HL_OPERATOR_BACKQUOTE;
+        else if (end < lex->buffer_len && lex->buffer[end] == '@') {
+            end++;
+            type = HL_OPERATOR_UNQUOTE_SPLICING;
+        } else {
+            type = HL_OPERATOR_UNQUOTE;
+        }
+    }
+    /* Number */
+    else if (isdigit((unsigned char)c) ||
+             ((c == '-' || c == '+') &&
+              start + 1 < lex->buffer_len &&
+              isdigit((unsigned char)lex->buffer[start + 1]))) {
+        end = start + 1;
+        while (end < lex->buffer_len &&
+               (isdigit((unsigned char)lex->buffer[end]) ||
+                lex->buffer[end] == '.')) {
+            end++;
+        }
+        type = HL_LITERAL_NUMBER;
+    }
+    /* Atom / symbol / identifier */
+    else {
+        end = start + 1;
+        while (end < lex->buffer_len &&
+               !isspace((unsigned char)lex->buffer[end]) &&
+               !ditty_is_delimiter(lex->buffer[end])) {
+            end++;
+        }
+        size_t len = end - start;
+        type = ditty_classify_atom(lex->buffer + start, len, lex->env);
+    }
 
-    *out_count = v.count;
-    return v.items;
+    /* Allocate token text */
+    size_t len = end - start;
+    char *text = GC_MALLOC_ATOMIC(len + 1);
+    if (!text) {
+        return -1; /* Error */
+    }
+    memcpy(text, lex->buffer + start, len);
+    text[len] = '\0';
+
+    /* Update state */
+    lex->buffer_pos = end;
+    lex->source_offset = end;
+
+    /* Fill output token */
+    out->type = type;
+    out->text = text;
+    out->length = len;
+
+    return 1; /* Success */
 }
 
-static void lctx_free(void *p)
+static void ditty_free(FlareTokenSource *src)
 {
-    free(p);
+    DittyLexer *lex = (DittyLexer *)src;
+    if (lex->src) {
+        flare_source_free(lex->src);
+    }
+    if (lex->buffer) {
+        free(lex->buffer);
+    }
+    free(lex);
 }
 
-FlareLexer *flare_lexer_ditty(Environment *env)
+static const FlareTokenSourceVTable ditty_vtable = {
+    .pull = ditty_pull,
+    .error = NULL,
+    .free = ditty_free,
+};
+
+FlareTokenSource *flare_lexer_ditty(FlareSource *src, Environment *env)
 {
-    if (!env)
+    if (!src) {
         return NULL;
+    }
 
-    DittyLispCtx *ctx = calloc(1, sizeof(DittyLispCtx));
-    if (!ctx)
+    DittyLexer *lex = calloc(1, sizeof(DittyLexer));
+    if (!lex) {
+        flare_source_free(src);
         return NULL;
+    }
 
-    ctx->env = env;
+    lex->base.vtable = &ditty_vtable;
+    lex->src = src; /* Take ownership */
+    lex->env = env;
+    lex->buffer = malloc(LEXER_BUFFER_SIZE);
+    if (!lex->buffer) {
+        flare_source_free(src);
+        free(lex);
+        return NULL;
+    }
+    lex->buffer_pos = 0;
+    lex->buffer_len = 0;
+    lex->source_offset = 0;
+    lex->eof = 0;
 
-    return flare_lexer_alloc("ditty", ctx,
-                             ditty_scan,
-                             lctx_free);
+    return &lex->base;
 }

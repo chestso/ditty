@@ -1,1353 +1,1199 @@
-/* lexer_commonmark.c - CommonMark/Markdown scanner
+/* flare_lexer_commonmark.c - Flare streaming CommonMark lexer
  *
- * Implements the CommonMark spec (v0.31.2) two-phase parsing:
- *   Phase 1 — Block structure: identify block types line-by-line
- *   Phase 2 — Inline structure: tokenize emphasis, links, etc. within text
+ * Two-phase CommonMark lexer:
+ *   Phase 1 - Block parser: classify lines into a tree of block nodes.
+ *   Phase 2 - Inline parser + emitter: walk the tree, tokenize inline
+ *             markup inside headings/paragraphs/list items, and emit a
+ *             stream of FlareTokens (one per pull()).
  *
- * Fenced code blocks with an info string of "lisp", "ditty",
- * are sub-lexed through the ditty lexer for
- * syntax highlighting.
+ * The lexer still reads the whole source eagerly because CommonMark
+ * block structure can depend on later lines, but the public API is the
+ * streaming FlareTokenSource.
  */
 
-#include "../include/ditty/highlight.h"
-#include "../include/lisp.h"
-#include <ctype.h>
+#include "ditty/highlight.h"
+#include <gc.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
-/* Forward declaration from lexer.c */
-extern FlareLexer *flare_lexer_alloc(const char *name, void *ctx,
-                                     FlareToken *(*scan)(const char *, size_t, void *, size_t *),
-                                     void (*free_ctx)(void *));
+/* --------------------------------------------------------------------------
+ * Block node tree
+ * -------------------------------------------------------------------------- */
+
+typedef enum
+{
+    CM_BLOCK_PARAGRAPH,
+    CM_BLOCK_HEADING,
+    CM_BLOCK_THEMATIC_BREAK,
+    CM_BLOCK_FENCED_CODE,
+    CM_BLOCK_LIST,
+    CM_BLOCK_LIST_ITEM,
+    CM_BLOCK_BLOCKQUOTE,
+} CmBlockType;
+
+typedef struct CmBlock CmBlock;
+struct CmBlock
+{
+    CmBlockType type;
+    size_t level; /* heading level, list indentation, etc. */
+    char *text;   /* owned, raw content for leaf blocks */
+    size_t text_len;
+    int closed; /* for fenced code: has closing fence */
+    int setext; /* for headings: 1 if created from a setext underline */
+
+    CmBlock *parent;
+    CmBlock *first_child;
+    CmBlock *last_child;
+    CmBlock *next_sibling;
+};
+
+/* --------------------------------------------------------------------------
+ * Lexer state
+ * -------------------------------------------------------------------------- */
 
 typedef struct
 {
+    FlareTokenSource base;
+    FlareSource *src;
     Environment *env;
-} CommonmarkCtx;
-
-/* ----- TokenVec --------------------------------------------------------- */
-
-typedef struct
-{
-    FlareToken *items;
+    FlareToken *tokens;
     size_t count;
     size_t capacity;
-} TokenVec;
-
-static void tv_push(TokenVec *v, FlareTokenType type, size_t offset, size_t length)
-{
-    if (v->count >= v->capacity) {
-        v->capacity = v->capacity ? v->capacity * 2 : 64;
-        v->items = realloc(v->items, v->capacity * sizeof(FlareToken));
-    }
-    v->items[v->count].type = type;
-    v->items[v->count].offset = offset;
-    v->items[v->count].length = length;
-    v->count++;
-}
-
-static void tv_push_text(TokenVec *v, size_t start, size_t end)
-{
-    if (end > start)
-        tv_push(v, HL_TEXT, start, end - start);
-}
-
-/* ----- Line iterator ---------------------------------------------------- */
-
-typedef struct
-{
-    const char *input;
-    size_t input_len;
     size_t pos;
-} LineIter;
+} CommonmarkLexer;
 
-/* Advance to next line. Returns pointer to line start, sets *line_len.
- * Strips trailing \r. Returns NULL when exhausted. */
-static const char *line_next(LineIter *it, size_t *line_len)
+/* --------------------------------------------------------------------------
+ * Token buffer
+ * -------------------------------------------------------------------------- */
+
+static void cm_push(CommonmarkLexer *lex, FlareTokenType type,
+                    const char *text, size_t length)
 {
-    if (it->pos >= it->input_len) {
-        *line_len = 0;
-        return NULL;
+    if (length == 0 && type != HL_TEXT && type != HL_MARKUP_PARAGRAPH)
+        return;
+    if (lex->count >= lex->capacity) {
+        lex->capacity = lex->capacity ? lex->capacity * 2 : 32;
+        lex->tokens = realloc(lex->tokens, lex->capacity * sizeof(FlareToken));
     }
-    const char *start = it->input + it->pos;
-    const char *nl = memchr(start, '\n', it->input_len - it->pos);
-    size_t len;
-    if (nl) {
-        len = (size_t)(nl - start);
-        it->pos += len + 1;
-    } else {
-        len = it->input_len - it->pos;
-        it->pos += len;
+    char *copy = GC_MALLOC_ATOMIC(length + 1);
+    if (copy) {
+        memcpy(copy, text, length);
+        copy[length] = '\0';
     }
-    if (len > 0 && start[len - 1] == '\r')
-        len--;
-    *line_len = len;
-    return start;
+    lex->tokens[lex->count].type = type;
+    lex->tokens[lex->count].text = copy;
+    lex->tokens[lex->count].length = length;
+    lex->count++;
 }
 
-static size_t line_offset(const LineIter *it, const char *line_start)
+static void cm_push_text(CommonmarkLexer *lex, const char *text, size_t length)
 {
-    return (size_t)(line_start - it->input);
+    if (length > 0)
+        cm_push(lex, HL_TEXT, text, length);
 }
 
-/* ----- Blank line check ------------------------------------------------- */
-
-static int is_blank_line(const char *line, size_t line_len)
+static void cm_push_newline(CommonmarkLexer *lex)
 {
-    for (size_t i = 0; i < line_len; i++) {
-        if (line[i] != ' ' && line[i] != '\t')
+    cm_push_text(lex, "\n", 1);
+}
+
+/* --------------------------------------------------------------------------
+ * Line classification helpers
+ * -------------------------------------------------------------------------- */
+
+static int cm_is_blank(const char *line, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (line[i] != ' ' && line[i] != '\t' && line[i] != '\r')
             return 0;
     }
     return 1;
 }
 
-/* ----- Indent counting (tab stop = 4, per spec §2.2) -------------------- */
-
-static size_t count_indent(const char *line, size_t line_len, size_t *out_col)
+/* Returns the bullet character and content offset for a list item line,
+ * or 0 if the line is not a list item.  Indentation is not checked here;
+ * callers that care about the spec's "up to three spaces" rule enforce it
+ * themselves. */
+static char cm_is_bullet_item(const char *line, size_t len, size_t *content_off)
 {
-    size_t col = 0;
     size_t i = 0;
-    while (i < line_len) {
-        if (line[i] == ' ') {
-            col++;
-            i++;
-        } else if (line[i] == '\t') {
-            col += 4 - (col % 4);
-            i++;
-        } else {
-            break;
-        }
+    while (i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
+    if (i + 2 > len)
+        return 0;
+    char c = line[i];
+    if ((c == '-' || c == '*' || c == '+') && (line[i + 1] == ' ' || line[i + 1] == '\t')) {
+        *content_off = i + 2;
+        return c;
     }
-    if (out_col)
-        *out_col = col;
-    return i;
+    return 0;
 }
 
-/* ----- Block detection helpers ------------------------------------------ */
-
-/* §4.1 Thematic break: 0-3 spaces indent, then 3+ matching -, _, or *
- * with optional spaces/tabs between. */
-static int is_thematic_break(const char *line, size_t line_len)
+/* Returns 1 and writes the content offset if the line starts with an ordered
+ * list marker like "1. " or "2) ".  Indentation is not checked here. */
+static int cm_is_ordered_item(const char *line, size_t len, size_t *content_off)
 {
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
+    size_t i = 0;
+    while (i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
+    size_t num_start = i;
+    size_t num_count = 0;
+    while (i < len && line[i] >= '0' && line[i] <= '9') {
+        num_count++;
+        i++;
+    }
+    if (num_count == 0 || num_count > 9 || i + 2 > len)
         return 0;
-    if (i >= line_len)
+    char delim = line[i];
+    if (delim != '.' && delim != ')')
         return 0;
+    if (line[i + 1] != ' ' && line[i + 1] != '\t')
+        return 0;
+    *content_off = i + 2;
+    (void)num_start;
+    return 1;
+}
 
+static int cm_is_thematic_break(const char *line, size_t len)
+{
+    size_t i = 0;
+    while (i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
+    if (i > 3 || i >= len)
+        return 0;
     char c = line[i];
-    if (c != '-' && c != '_' && c != '*')
+    if (c != '-' && c != '*' && c != '_')
         return 0;
-
     int count = 0;
-    while (i < line_len) {
-        if (line[i] == c) {
+    for (; i < len; i++) {
+        if (line[i] == c)
             count++;
-            i++;
-        } else if (line[i] == ' ' || line[i] == '\t') {
-            i++;
-        } else {
+        else if (line[i] != ' ' && line[i] != '\t')
             return 0;
-        }
     }
     return count >= 3;
 }
 
-/* §4.2 ATX heading: 0-3 spaces indent, 1-6 #, followed by space/tab/EOL. */
-static int is_atx_heading(const char *line, size_t line_len,
-                          size_t *out_indent_bytes, size_t *out_marker_len)
+/* Detect a setext heading underline.  Returns 1 for level 1 (=), 2 for level
+ * 2 (-), or 0 if the line is not a valid setext underline. */
+static int cm_setext_level(const char *line, size_t len)
 {
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
+    size_t i = 0;
+    while (i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
+    if (i > 3 || i >= len)
         return 0;
-    if (i >= line_len || line[i] != '#')
-        return 0;
-
-    size_t mlen = 0;
-    while (i + mlen < line_len && line[i + mlen] == '#' && mlen < 7)
-        mlen++;
-
-    if (mlen < 1 || mlen > 6)
-        return 0;
-
-    /* Must be followed by space/tab or EOL */
-    if (i + mlen < line_len && line[i + mlen] != ' ' && line[i + mlen] != '\t')
-        return 0;
-
-    *out_indent_bytes = i;
-    *out_marker_len = mlen;
-    return 1;
-}
-
-/* §4.3 Setext heading underline: 0-3 spaces indent, then 1+ = or -. */
-static int is_setext_underline(const char *line, size_t line_len,
-                               size_t *out_indent_bytes, size_t *out_underline_len,
-                               int *out_level)
-{
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
-        return 0;
-    if (i >= line_len)
-        return 0;
-
     char c = line[i];
     if (c != '=' && c != '-')
         return 0;
-
-    size_t ulen = 0;
-    while (i + ulen < line_len && line[i + ulen] == c)
-        ulen++;
-    if (ulen < 1)
-        return 0;
-
-    /* Only trailing spaces/tabs allowed */
-    for (size_t j = i + ulen; j < line_len; j++) {
-        if (line[j] != ' ' && line[j] != '\t')
+    size_t count = 0;
+    for (; i < len; i++) {
+        if (line[i] == c)
+            count++;
+        else if (line[i] != ' ' && line[i] != '\t')
             return 0;
     }
-
-    *out_indent_bytes = i;
-    *out_underline_len = ulen;
-    *out_level = (c == '=') ? 1 : 2;
-    return 1;
+    if (count < 1)
+        return 0;
+    return (c == '=') ? 1 : 2;
 }
 
-/* §4.5 Fenced code block opening: 0-3 spaces indent, 3+ ` or ~. */
-static int is_opening_fence(const char *line, size_t line_len,
-                            size_t *out_indent_bytes, char *out_fence_char,
-                            size_t *out_fence_len,
-                            size_t *out_info_start, size_t *out_info_len)
+/* Returns heading level 1-6, or 0 if not an ATX heading. */
+static size_t cm_atx_level(const char *line, size_t len)
 {
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
+    size_t i = 0;
+    while (i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
+    if (i > 3)
         return 0;
-
-    if (i >= line_len)
+    size_t start = i;
+    while (i < len && line[i] == '#')
+        i++;
+    size_t hashes = i - start;
+    if (hashes < 1 || hashes > 6)
         return 0;
-
-    char fc = line[i];
-    if (fc != '`' && fc != '~')
+    if (i < len && line[i] != ' ' && line[i] != '\t')
         return 0;
-
-    size_t fl = 0;
-    while (i + fl < line_len && line[i + fl] == fc)
-        fl++;
-    if (fl < 3)
-        return 0;
-
-    /* Backtick fences: info string cannot contain backticks */
-    size_t istart = i + fl;
-    while (istart < line_len && (line[istart] == ' ' || line[istart] == '\t'))
-        istart++;
-
-    size_t ilen = line_len - istart;
-    while (ilen > 0 && (line[istart + ilen - 1] == ' ' || line[istart + ilen - 1] == '\t'))
-        ilen--;
-
-    if (fc == '`') {
-        for (size_t j = istart; j < istart + ilen; j++) {
-            if (line[j] == '`')
-                return 0;
-        }
-    }
-
-    *out_indent_bytes = i;
-    *out_fence_char = fc;
-    *out_fence_len = fl;
-    *out_info_start = istart;
-    *out_info_len = ilen;
-    return 1;
+    return hashes;
 }
 
-/* §4.5 Closing fence: 0-3 spaces indent, same char, ≥ opening fence length,
- * only trailing spaces/tabs. */
-static int is_closing_fence(const char *line, size_t line_len,
-                            char fence_char, size_t open_fence_len)
+/* --------------------------------------------------------------------------
+ * Block node helpers
+ * -------------------------------------------------------------------------- */
+
+static CmBlock *cm_block_new(CmBlockType type)
 {
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
-        return 0;
-    if (i >= line_len || line[i] != fence_char)
-        return 0;
-
-    size_t fl = 0;
-    while (i + fl < line_len && line[i + fl] == fence_char)
-        fl++;
-    if (fl < 3 || fl < open_fence_len)
-        return 0;
-
-    for (size_t j = i + fl; j < line_len; j++) {
-        if (line[j] != ' ' && line[j] != '\t')
-            return 0;
-    }
-    return 1;
+    CmBlock *b = calloc(1, sizeof(CmBlock));
+    if (!b)
+        return NULL;
+    b->type = type;
+    return b;
 }
 
-/* §4.4 Indented code block: ≥4 spaces indent, non-blank. */
-static int is_indented_code(const char *line, size_t line_len,
-                            size_t *out_indent_bytes)
+static void cm_block_append_child(CmBlock *parent, CmBlock *child)
 {
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col < 4)
-        return 0;
-    if (i >= line_len || is_blank_line(line, line_len))
-        return 0;
-    *out_indent_bytes = i;
-    return 1;
-}
-
-/* §5.1 Block quote: 0-3 spaces indent, then >. */
-static int is_block_quote(const char *line, size_t line_len,
-                          size_t *out_indent_bytes, size_t *out_marker_len)
-{
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
-        return 0;
-    if (i >= line_len || line[i] != '>')
-        return 0;
-
-    /* Marker is > optionally followed by one space */
-    size_t mlen = 1;
-    if (i + 1 < line_len && (line[i + 1] == ' ' || line[i + 1] == '\t'))
-        mlen = 2;
-
-    *out_indent_bytes = i;
-    *out_marker_len = mlen;
-    return 1;
-}
-
-/* §5.2 List item: 0-3 spaces indent, then bullet (-, +, *) or ordered
- * (1-9 digits + . or )). */
-static int is_list_item(const char *line, size_t line_len,
-                        size_t *out_indent_bytes, size_t *out_marker_len)
-{
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
-        return 0;
-    if (i >= line_len)
-        return 0;
-
-    /* Bullet list */
-    if (line[i] == '-' || line[i] == '+' || line[i] == '*') {
-        /* Must be followed by at least one space */
-        if (i + 1 >= line_len || (line[i + 1] != ' ' && line[i + 1] != '\t'))
-            return 0;
-        *out_indent_bytes = i;
-        *out_marker_len = 1;
-        return 1;
-    }
-
-    /* Ordered list: 1-9 digits + . or ) */
-    size_t dstart = i;
-    size_t dlen = 0;
-    while (i + dlen < line_len && isdigit((unsigned char)line[i + dlen]) && dlen < 9)
-        dlen++;
-    if (dlen < 1)
-        return 0;
-    if (i + dlen >= line_len)
-        return 0;
-    if (line[i + dlen] != '.' && line[i + dlen] != ')')
-        return 0;
-    /* Must be followed by at least one space */
-    if (i + dlen + 1 >= line_len || (line[i + dlen + 1] != ' ' && line[i + dlen + 1] != '\t'))
-        return 0;
-
-    *out_indent_bytes = i;
-    *out_marker_len = dlen + 1;
-    return 1;
-}
-
-/* §4.6 HTML block start conditions (types 1-7). */
-static int is_html_block_start(const char *line, size_t line_len)
-{
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
-        return 0;
-    if (i >= line_len || line[i] != '<')
-        return 0;
-
-    /* Check for start tags we care about (simplified check) */
-    static const char *type1_starts[] = { "<pre", "<script", "<style", "<textarea", NULL };
-    static const char *type6_tags[] = {
-        "address", "article", "aside", "base", "basefont", "blockquote",
-        "body", "caption", "center", "col", "colgroup", "dd", "details",
-        "dialog", "dir", "div", "dl", "dt", "fieldset", "figcaption",
-        "figure", "footer", "form", "frame", "frameset", "h1", "h2", "h3",
-        "h4", "h5", "h6", "head", "header", "hr", "html", "iframe",
-        "legend", "li", "link", "main", "menu", "menuitem", "nav",
-        "noframes", "ol", "optgroup", "option", "p", "param", "search",
-        "section", "summary", "table", "tbody", "td", "tfoot", "th",
-        "thead", "title", "tr", "track", "ul", NULL
-    };
-
-    /* Type 1: <pre, <script, <style, <textarea (case-insensitive) */
-    for (int t = 0; type1_starts[t]; t++) {
-        size_t tlen = strlen(type1_starts[t]);
-        if (i + tlen <= line_len) {
-            int match = 1;
-            for (size_t k = 0; k < tlen; k++) {
-                if (tolower((unsigned char)line[i + k]) != tolower((unsigned char)type1_starts[t][k])) {
-                    match = 0;
-                    break;
-                }
-            }
-            if (match && (i + tlen >= line_len || line[i + tlen] == ' ' ||
-                          line[i + tlen] == '\t' || line[i + tlen] == '>' ||
-                          line[i + tlen] == '/'))
-                return 1;
-        }
-    }
-
-    /* Type 2: <!-- */
-    if (i + 4 <= line_len && memcmp(line + i, "<!--", 4) == 0)
-        return 1;
-
-    /* Type 3: <? */
-    if (i + 2 <= line_len && memcmp(line + i, "<?", 2) == 0)
-        return 1;
-
-    /* Type 4: <! + ASCII letter */
-    if (i + 2 <= line_len && line[i + 1] == '!' && i + 2 < line_len &&
-        isalpha((unsigned char)line[i + 2]) && line[i + 2] != '-')
-        return 1;
-
-    /* Type 5: <![CDATA[ */
-    if (i + 9 <= line_len && memcmp(line + i, "<![CDATA[", 9) == 0)
-        return 1;
-
-    /* Type 6: < or </ + block-level tag */
-    size_t ti = i + 1;
-    int is_closing = 0;
-    if (ti < line_len && line[ti] == '/') {
-        is_closing = 1;
-        ti++;
-    }
-    for (int t = 0; type6_tags[t]; t++) {
-        size_t tlen = strlen(type6_tags[t]);
-        if (ti + tlen <= line_len) {
-            int match = 1;
-            for (size_t k = 0; k < tlen; k++) {
-                if (tolower((unsigned char)line[ti + k]) != tolower((unsigned char)type6_tags[t][k])) {
-                    match = 0;
-                    break;
-                }
-            }
-            if (match && (ti + tlen >= line_len || line[ti + tlen] == ' ' ||
-                          line[ti + tlen] == '\t' || line[ti + tlen] == '>' ||
-                          line[ti + tlen] == '/'))
-                return 1;
-        }
-    }
-
-    /* Type 7: complete open tag or closing tag on its own line.
-     * Exclude autolinks like <https://...> or <user@host> — these
-     * have a colon-slash-slash or at-sign in the tag name portion. */
-    if (ti < line_len && isalpha((unsigned char)line[ti])) {
-        size_t j = ti + 1;
-        while (j < line_len && (isalnum((unsigned char)line[j]) || line[j] == '-' ||
-                                line[j] == ':' || line[j] == '/' || line[j] == '.'))
-            j++;
-        /* If tag-name-like portion contains :// or @, it's a URL autolink */
-        int is_url = 0;
-        for (size_t k = ti; k < j; k++) {
-            if (line[k] == ':' && k + 2 < j && line[k + 1] == '/' && line[k + 2] == '/')
-                is_url = 1;
-            if (line[k] == '@')
-                is_url = 1;
-        }
-        if (is_url)
-            return 0;
-        /* Reset j to just past the tag name (alphanum + hyphen only) */
-        j = ti + 1;
-        while (j < line_len && (isalnum((unsigned char)line[j]) || line[j] == '-'))
-            j++;
-        /* Must be followed by attributes then > or />  — simplified check */
-        while (j < line_len && line[j] != '>')
-            j++;
-        if (j < line_len && line[j] == '>') {
-            /* Only trailing spaces after > */
-            for (size_t k = j + 1; k < line_len; k++) {
-                if (line[k] != ' ' && line[k] != '\t')
-                    return 0;
-            }
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-/* §4.7 Link reference definition: [label]: <url> "title"
- * Simplified detection — looks for leading [ at indent ≤3. */
-static int is_link_ref_def(const char *line, size_t line_len,
-                           size_t *out_indent_bytes)
-{
-    size_t col;
-    size_t i = count_indent(line, line_len, &col);
-    if (col > 3)
-        return 0;
-    if (i >= line_len || line[i] != '[')
-        return 0;
-
-    /* Find matching ]: */
-    size_t j = i + 1;
-    while (j < line_len && line[j] != ']')
-        j++;
-    if (j >= line_len)
-        return 0;
-    if (j + 1 >= line_len || line[j + 1] != ':')
-        return 0;
-
-    *out_indent_bytes = i;
-    return 1;
-}
-
-/* Check if the info string indicates ditty code */
-static int is_lisp_info(const char *line, size_t info_start, size_t info_len)
-{
-    if (info_len == 0)
-        return 0;
-
-    size_t word_end = info_start;
-    while (word_end < info_start + info_len && line[word_end] != ' ' &&
-           line[word_end] != '\t')
-        word_end++;
-
-    size_t word_len = word_end - info_start;
-
-    return (word_len == 4 && strncmp(line + info_start, "lisp", 4) == 0) ||
-           (word_len == 5 && strncmp(line + info_start, "ditty", 5) == 0);
-}
-
-/* ----- Inline tokenizer ------------------------------------------------- */
-
-/* Tokenize inline content within a text range.
- * This implements CommonMark §6 inline parsing rules.
- * `base_offset` is added to all emitted token offsets. */
-static void tokenize_inlines(TokenVec *v, const char *input, size_t start,
-                             size_t end, size_t base_offset)
-{
-    size_t pos = start;
-
-    while (pos < end) {
-        char c = input[pos];
-
-        /* §2.4 Backslash escape: \ before ASCII punctuation */
-        if (c == '\\' && pos + 1 < end) {
-            char next = input[pos + 1];
-            if (isalpha((unsigned char)next) || isdigit((unsigned char)next)) {
-                /* Not punctuation — literal backslash */
-                pos++;
-                continue;
-            }
-            /* ASCII punctuation: ! " # $ % & ' ( ) * + , - . / : ;
-             * < = > ? @ [ \ ] ^ _ ` { | } ~ */
-            if (next == '!' || next == '"' || next == '#' || next == '$' ||
-                next == '%' || next == '&' || next == '\'' || next == '(' ||
-                next == ')' || next == '*' || next == '+' || next == ',' ||
-                next == '-' || next == '.' || next == '/' || next == ':' ||
-                next == ';' || next == '<' || next == '=' || next == '>' ||
-                next == '?' || next == '@' || next == '[' || next == ']' ||
-                next == '^' || next == '_' || next == '`' || next == '{' ||
-                next == '|' || next == '}' || next == '~' || next == '\\') {
-                tv_push(v, HL_MARKUP_INLINE_ESCAPE,
-                        base_offset + pos, 2);
-                pos += 2;
-                continue;
-            }
-            /* Not before punctuation — literal */
-            pos++;
-            continue;
-        }
-
-        /* §2.5 Entity reference: &...; */
-        if (c == '&') {
-            size_t amp = pos;
-            pos++;
-            /* Numeric: &#123; or &#x1F; */
-            if (pos < end && input[pos] == '#') {
-                pos++;
-                if (pos < end && (input[pos] == 'x' || input[pos] == 'X')) {
-                    pos++;
-                    size_t hex_start = pos;
-                    while (pos < end && isxdigit((unsigned char)input[pos]))
-                        pos++;
-                    if (pos > hex_start && pos < end && input[pos] == ';' && pos - hex_start <= 6) {
-                        tv_push(v, HL_MARKUP_INLINE_ENTITY,
-                                base_offset + amp, pos + 1 - amp);
-                        pos++;
-                        continue;
-                    }
-                } else {
-                    size_t dec_start = pos;
-                    while (pos < end && isdigit((unsigned char)input[pos]))
-                        pos++;
-                    if (pos > dec_start && pos < end && input[pos] == ';' && pos - dec_start <= 7) {
-                        tv_push(v, HL_MARKUP_INLINE_ENTITY,
-                                base_offset + amp, pos + 1 - amp);
-                        pos++;
-                        continue;
-                    }
-                }
-            } else {
-                /* Named entity: &name; */
-                size_t name_start = pos;
-                while (pos < end && isalpha((unsigned char)input[pos]))
-                    pos++;
-                if (pos > name_start && pos < end && input[pos] == ';') {
-                    tv_push(v, HL_MARKUP_INLINE_ENTITY,
-                            base_offset + amp, pos + 1 - amp);
-                    pos++;
-                    continue;
-                }
-            }
-            /* Not a valid entity */
-            pos = amp + 1;
-            continue;
-        }
-
-        /* §6.1 Code span: `...` or ``...`` etc. */
-        if (c == '`') {
-            size_t opener_start = pos;
-            size_t opener_len = 0;
-            while (pos < end && input[pos] == '`') {
-                opener_len++;
-                pos++;
-            }
-            /* Must not be preceded or followed by backtick (per spec) */
-            if (opener_start > 0 && input[opener_start - 1] == '`')
-                goto not_code_span;
-            /* Search for closing delimiter of same length */
-            while (pos < end) {
-                if (input[pos] == '`') {
-                    size_t close_start = pos;
-                    size_t close_len = 0;
-                    while (pos < end && input[pos] == '`') {
-                        close_len++;
-                        pos++;
-                    }
-                    if (close_len == opener_len) {
-                        /* Found matching closer */
-                        tv_push(v, HL_MARKUP_INLINE_CODE,
-                                base_offset + opener_start,
-                                pos - opener_start);
-                        goto next_inline;
-                    }
-                    /* Mismatched — keep scanning */
-                    continue;
-                }
-                pos++;
-            }
-            /* Unclosed code span — treat opener as literal text */
-            pos = opener_start + opener_len;
-            continue;
-        not_code_span:;
-            pos = opener_start + opener_len;
-            continue;
-        next_inline:;
-            continue;
-        }
-
-        /* §6.2 Emphasis/strong: * or _ delimiter runs */
-        if (c == '*' || c == '_') {
-            size_t delim_start = pos;
-            size_t delim_len = 0;
-            while (pos < end && input[pos] == c) {
-                delim_len++;
-                pos++;
-            }
-
-            /* CommonMark rule 9: _ cannot open/close emphasis when
-             * flanked by alphanumeric (or _) on both sides (intraword).
-             * Asterisk has no such restriction. */
-            if (c == '_') {
-                int prev_is_word = (delim_start > 0 &&
-                                    (isalnum((unsigned char)input[delim_start - 1]) ||
-                                     input[delim_start - 1] == '_'));
-                int next_is_word = (pos < end &&
-                                    (isalnum((unsigned char)input[pos]) ||
-                                     input[pos] == '_'));
-                if (prev_is_word && next_is_word)
-                    continue; /* intraword _ — skip delimiter token */
-            }
-
-            /* Determine token type based on run length */
-            FlareTokenType ttype;
-            if (delim_len >= 2)
-                ttype = HL_MARKUP_INLINE_STRONG;
-            else
-                ttype = HL_MARKUP_INLINE_EMPHASIS;
-            tv_push(v, ttype, base_offset + delim_start, delim_len);
-            continue;
-        }
-
-        /* §6.5 Autolink: <url> or <email> */
-        if (c == '<') {
-            size_t lt = pos;
-            pos++;
-            /* Try to find matching > without whitespace */
-            size_t content_start = pos;
-            int is_valid = 0;
-            while (pos < end && input[pos] != '>' && input[pos] != ' ' &&
-                   input[pos] != '\t' && input[pos] != '\n' && input[pos] != '\r') {
-                pos++;
-            }
-            if (pos < end && input[pos] == '>' && pos > content_start) {
-                /* Check it looks like a URL or email */
-                size_t content_len = pos - content_start;
-                const char *content = input + content_start;
-                /* Simple heuristic: contains : or @ */
-                for (size_t k = 0; k < content_len; k++) {
-                    if (content[k] == ':' || content[k] == '@') {
-                        is_valid = 1;
-                        break;
-                    }
-                }
-                if (is_valid) {
-                    pos++;
-                    tv_push(v, HL_MARKUP_INLINE_AUTOLINK,
-                            base_offset + lt, pos - lt);
-                    continue;
-                }
-            }
-            /* Not a valid autolink — reset and maybe parse as HTML */
-            pos = lt + 1;
-
-            /* §6.6 Inline HTML tag */
-            {
-                size_t tag_start = lt;
-                pos = lt + 1;
-                int is_closing = 0;
-                if (pos < end && input[pos] == '/') {
-                    is_closing = 1;
-                    pos++;
-                }
-                if (pos < end && isalpha((unsigned char)input[pos])) {
-                    pos++;
-                    while (pos < end && (isalnum((unsigned char)input[pos]) ||
-                                         input[pos] == '-'))
-                        pos++;
-                    /* Skip attributes until > */
-                    while (pos < end && input[pos] != '>')
-                        pos++;
-                    if (pos < end && input[pos] == '>') {
-                        pos++;
-                        tv_push(v, HL_MARKUP_INLINE_HTML,
-                                base_offset + tag_start, pos - tag_start);
-                        continue;
-                    }
-                }
-                /* Not a valid HTML tag */
-                pos = lt + 1;
-            }
-            continue;
-        }
-
-        /* §6.3 Links and §6.4 Images: ![alt](url) or [text](url)
-         * Simplified: recognize the brackets and parens as link structure. */
-        if (c == '!') {
-            if (pos + 1 < end && input[pos + 1] == '[') {
-                /* Possible image */
-                size_t img_start = pos;
-                pos += 2;
-                /* Find matching ] */
-                while (pos < end && input[pos] != ']')
-                    pos++;
-                if (pos < end && pos + 1 < end && input[pos + 1] == '(') {
-                    pos += 2;
-                    /* Find matching ) */
-                    int depth = 1;
-                    while (pos < end && depth > 0) {
-                        if (input[pos] == '(')
-                            depth++;
-                        else if (input[pos] == ')')
-                            depth--;
-                        if (depth > 0)
-                            pos++;
-                    }
-                    if (pos < end && depth == 0) {
-                        pos++;
-                        tv_push(v, HL_MARKUP_INLINE_IMAGE,
-                                base_offset + img_start, pos - img_start);
-                        continue;
-                    }
-                }
-                pos = img_start + 1;
-                continue;
-            }
-            pos++;
-            continue;
-        }
-
-        if (c == '[') {
-            /* Possible link */
-            size_t link_start = pos;
-            pos++;
-            /* Find matching ] — handle nesting */
-            int bracket_depth = 1;
-            while (pos < end && bracket_depth > 0) {
-                if (input[pos] == '[')
-                    bracket_depth++;
-                else if (input[pos] == ']')
-                    bracket_depth--;
-                if (bracket_depth > 0)
-                    pos++;
-            }
-            if (pos < end && bracket_depth == 0) {
-                /* Check for inline link: ]( */
-                if (pos + 1 < end && input[pos + 1] == '(') {
-                    size_t after_bracket = pos + 1;
-                    pos = after_bracket + 1;
-                    int depth = 1;
-                    while (pos < end && depth > 0) {
-                        if (input[pos] == '(')
-                            depth++;
-                        else if (input[pos] == ')')
-                            depth--;
-                        if (depth > 0)
-                            pos++;
-                    }
-                    if (pos < end && depth == 0) {
-                        pos++;
-                        tv_push(v, HL_MARKUP_INLINE_LINK,
-                                base_offset + link_start, pos - link_start);
-                        continue;
-                    }
-                }
-                /* Reference/collapsed/shortcut link: just the brackets */
-                /* For shortcut links, the [text] itself is a link */
-                pos++; /* skip ] */
-                /* Check for collapsed [text][] or full [text][label] */
-                if (pos < end && input[pos] == '[') {
-                    pos++;
-                    while (pos < end && input[pos] != ']')
-                        pos++;
-                    if (pos < end) {
-                        pos++;
-                        tv_push(v, HL_MARKUP_INLINE_LINK,
-                                base_offset + link_start, pos - link_start);
-                        continue;
-                    }
-                }
-                /* Shortcut link: [text] standing alone */
-                tv_push(v, HL_MARKUP_INLINE_LINK,
-                        base_offset + link_start,
-                        pos - link_start);
-                continue;
-            }
-            pos = link_start + 1;
-            continue;
-        }
-
-        /* §6.7 Hard line break: two+ spaces at EOL (handled by block layer) */
-        /* We don't handle hard line breaks at the inline level since
-         * we process line-by-line in the block phase. The block layer
-         * emits HL_MARKUP_INLINE_BREAK for backslash-EOL. */
-
-        pos++;
-    }
-}
-
-/* ----- Helper: emit a line as tokens with inline parsing ---------------- */
-
-static void emit_line_with_inlines(TokenVec *v, const char *input,
-                                   size_t line_off, size_t line_len)
-{
-    /* First try inline tokenization; if no inlines found, emit as HL_TEXT */
-    TokenVec iv = { NULL, 0, 0 };
-    tokenize_inlines(&iv, input, line_off, line_off + line_len, 0);
-
-    if (iv.count == 0) {
-        tv_push_text(v, line_off, line_off + line_len);
-        free(iv.items);
+    if (!parent || !child)
         return;
-    }
-
-    /* Interleave HL_TEXT gaps between inline tokens */
-    size_t cur = line_off;
-    for (size_t i = 0; i < iv.count; i++) {
-        if (iv.items[i].offset > cur)
-            tv_push_text(v, cur, iv.items[i].offset);
-        tv_push(v, iv.items[i].type, iv.items[i].offset, iv.items[i].length);
-        cur = iv.items[i].offset + iv.items[i].length;
-    }
-    if (cur < line_off + line_len)
-        tv_push_text(v, cur, line_off + line_len);
-
-    free(iv.items);
-}
-
-/* ----- Helper: sub-lex fenced code content through ditty ---------- */
-
-static void emit_sublexed_code(TokenVec *v, const char *input,
-                               size_t code_start, size_t code_len,
-                               Environment *env)
-{
-    if (!env || code_len == 0) {
-        tv_push_text(v, code_start, code_start + code_len);
-        return;
-    }
-
-    FlareLexer *sub = flare_lexer_ditty(env);
-    if (!sub) {
-        tv_push_text(v, code_start, code_start + code_len);
-        return;
-    }
-
-    size_t sub_count = 0;
-    FlareToken *sub_tokens = flare_lex(sub, input + code_start, code_len, &sub_count);
-    if (sub_tokens && sub_count > 0) {
-        for (size_t j = 0; j < sub_count; j++) {
-            tv_push(v, sub_tokens[j].type,
-                    sub_tokens[j].offset + code_start,
-                    sub_tokens[j].length);
-        }
-        free(sub_tokens);
+    child->parent = parent;
+    child->next_sibling = NULL;
+    if (!parent->first_child) {
+        parent->first_child = child;
+        parent->last_child = child;
     } else {
-        tv_push_text(v, code_start, code_start + code_len);
-        free(sub_tokens);
+        parent->last_child->next_sibling = child;
+        parent->last_child = child;
     }
-    flare_lexer_free(sub);
 }
 
-/* ----- Main scan function ---------------------------------------------- */
-
-static FlareToken *commonmark_scan(const char *input, size_t len,
-                                   void *ctx, size_t *out_count)
+static void cm_block_free(CmBlock *b)
 {
-    TokenVec v = { NULL, 0, 0 };
-    CommonmarkCtx *mctx = ctx;
-    LineIter it = { input, len, 0 };
+    if (!b)
+        return;
+    CmBlock *child = b->first_child;
+    while (child) {
+        CmBlock *next = child->next_sibling;
+        cm_block_free(child);
+        child = next;
+    }
+    free(b->text);
+    free(b);
+}
 
-    /* Track whether previous line was non-blank paragraph text,
-     * for setext heading detection. */
-    int prev_was_text = 0;
-    size_t prev_text_off = 0;
-    size_t prev_text_len = 0;
+/* Duplicate a slice of text; caller frees. */
+static char *cm_dup(const char *s, size_t len)
+{
+    char *out = malloc(len + 1);
+    if (!out)
+        return NULL;
+    memcpy(out, s, len);
+    out[len] = '\0';
+    return out;
+}
 
-    while (it.pos < len) {
-        size_t line_len = 0;
-        size_t line_off = it.pos;
-        const char *line = line_next(&it, &line_len);
+/* --------------------------------------------------------------------------
+ * Phase 1: Block parser
+ * -------------------------------------------------------------------------- */
 
-        if (!line) {
-            if (line_off < len)
-                tv_push_text(&v, line_off, len);
+/* Forward declarations */
+static size_t cm_indent_of(const char *line, size_t len);
+static CmBlock *cm_parse_list(const char **lines, size_t *line_lens,
+                              size_t line_count, size_t start, size_t *out_end,
+                              size_t base_indent);
+static CmBlock *cm_parse_blockquote(const char **lines, size_t *line_lens,
+                                    size_t line_count, size_t start, size_t *out_end);
+static size_t cm_parse_fenced_code_block(const char **lines, size_t *line_lens,
+                                         size_t line_count, size_t i, CmBlock **out);
+static CmBlock *cm_parse_heading(const char *line, size_t len);
+
+/* Build a sequence of blocks from lines[start..line_count).  A line whose
+ * indentation is less than base_indent ends the block sequence (it belongs
+ * to an outer container).  *out_end receives the first unconsumed index. */
+static CmBlock *cm_build_blocks(const char **lines, size_t *line_lens,
+                                size_t line_count, size_t start, size_t *out_end,
+                                size_t base_indent)
+{
+    CmBlock *root = cm_block_new(CM_BLOCK_LIST);
+    if (!root) {
+        *out_end = start;
+        return NULL;
+    }
+
+    size_t i = start;
+    while (i < line_count) {
+        const char *line = lines[i];
+        size_t len = line_lens[i];
+
+        if (cm_is_blank(line, len)) {
+            i++;
+            continue;
+        }
+
+        size_t indent = cm_indent_of(line, len);
+        if (indent < base_indent) {
+            /* Belongs to an outer container. */
             break;
         }
 
-        line_off = line_offset(&it, line);
-
-        /* Blank line */
-        if (is_blank_line(line, line_len)) {
-            tv_push_text(&v, line_off, line_off + line_len);
-            size_t nl_off = line_off + line_len;
-            if (nl_off < len && input[nl_off] == '\n')
-                tv_push_text(&v, nl_off, nl_off + 1);
-            prev_was_text = 0;
+        if (cm_is_thematic_break(line, len)) {
+            CmBlock *tb = cm_block_new(CM_BLOCK_THEMATIC_BREAK);
+            if (tb) {
+                tb->text = cm_dup(line, len);
+                tb->text_len = len;
+                cm_block_append_child(root, tb);
+            }
+            i++;
             continue;
         }
 
-        /* --- §4.3 Setext heading (must precede thematic break check,
-         *     per spec setext takes precedence when preceded by text) --- */
-        {
-            size_t indent_bytes = 0, underline_len = 0;
-            int heading_level = 0;
-            if (is_setext_underline(line, line_len, &indent_bytes,
-                                    &underline_len, &heading_level)) {
-                if (prev_was_text) {
-                    tv_push(&v, HL_MARKUP_SETEXT_UNDERLINE, line_off, line_len);
-                    size_t nl_off = line_off + line_len;
-                    if (nl_off < len && input[nl_off] == '\n')
-                        tv_push_text(&v, nl_off, nl_off + 1);
-                    prev_was_text = 0;
-                    continue;
-                }
-                /* Not preceded by text — falls through to thematic break or text */
-            }
-        }
-
-        /* --- §4.1 Thematic break --- */
-        if (is_thematic_break(line, line_len)) {
-            tv_push(&v, HL_MARKUP_THEMATIC_BREAK, line_off, line_len);
-            size_t nl_off = line_off + line_len;
-            if (nl_off < len && input[nl_off] == '\n')
-                tv_push_text(&v, nl_off, nl_off + 1);
-            prev_was_text = 0;
+        if (cm_atx_level(line, len) > 0) {
+            CmBlock *h = cm_parse_heading(line, len);
+            if (h)
+                cm_block_append_child(root, h);
+            i++;
             continue;
         }
 
-        /* --- §4.2 ATX heading --- */
-        {
-            size_t indent_bytes = 0, marker_len = 0;
-            if (is_atx_heading(line, line_len, &indent_bytes, &marker_len)) {
-                if (indent_bytes > 0)
-                    tv_push_text(&v, line_off, line_off + indent_bytes);
-
-                tv_push(&v, HL_MARKUP_HEADING_MARKER,
-                        line_off + indent_bytes, marker_len);
-
-                size_t after_marker = indent_bytes + marker_len;
-                /* Space after markers */
-                if (after_marker < line_len &&
-                    (line[after_marker] == ' ' || line[after_marker] == '\t')) {
-                    size_t space_end = after_marker + 1;
-                    while (space_end < line_len &&
-                           (line[space_end] == ' ' || line[space_end] == '\t'))
-                        space_end++;
-                    tv_push_text(&v, line_off + after_marker, line_off + space_end);
-                    after_marker = space_end;
-                }
-
-                /* Heading text — check for optional closing # sequence */
-                if (after_marker < line_len) {
-                    /* Look for trailing #s preceded by space(s) */
-                    size_t text_end = line_len;
-                    /* Trim trailing spaces */
-                    while (text_end > after_marker &&
-                           (line[text_end - 1] == ' ' || line[text_end - 1] == '\t'))
-                        text_end--;
-
-                    /* Check if what's left ends with #s preceded by space */
-                    size_t closing_hash_start = text_end;
-                    while (closing_hash_start > after_marker &&
-                           line[closing_hash_start - 1] == '#')
-                        closing_hash_start--;
-
-                    if (closing_hash_start < text_end && closing_hash_start > after_marker &&
-                        (line[closing_hash_start - 1] == ' ' || line[closing_hash_start - 1] == '\t')) {
-                        /* Emit text before closing #s */
-                        emit_line_with_inlines(&v, input,
-                                               line_off + after_marker,
-                                               closing_hash_start - after_marker);
-                        /* Emit closing #s as marker */
-                        tv_push(&v, HL_MARKUP_HEADING_MARKER,
-                                line_off + closing_hash_start,
-                                text_end - closing_hash_start);
-                    } else {
-                        /* No closing #s — all text is heading content */
-                        emit_line_with_inlines(&v, input,
-                                               line_off + after_marker,
-                                               text_end - after_marker);
-                    }
-                }
-
-                size_t nl_off = line_off + line_len;
-                if (nl_off < len && input[nl_off] == '\n')
-                    tv_push_text(&v, nl_off, nl_off + 1);
-                prev_was_text = 0;
-                continue;
-            }
+        CmBlock *fence = NULL;
+        size_t next = cm_parse_fenced_code_block(lines, line_lens, line_count, i, &fence);
+        if (next > i) {
+            cm_block_append_child(root, fence);
+            i = next;
+            continue;
         }
 
-        /* --- §4.5 Fenced code block --- */
-        {
-            size_t indent_bytes = 0;
-            char fence_char = 0;
-            size_t fence_len = 0, info_start = 0, info_len = 0;
-
-            if (is_opening_fence(line, line_len, &indent_bytes, &fence_char,
-                                 &fence_len, &info_start, &info_len)) {
-                int sub_lex = is_lisp_info(line, info_start, info_len);
-
-                /* Opening fence line */
-                if (indent_bytes > 0)
-                    tv_push_text(&v, line_off, line_off + indent_bytes);
-
-                tv_push(&v, HL_MARKUP_FENCED_OPEN,
-                        line_off + indent_bytes, fence_len);
-
-                if (info_start > indent_bytes + fence_len)
-                    tv_push_text(&v, line_off + indent_bytes + fence_len,
-                                 line_off + info_start);
-
-                if (info_len > 0)
-                    tv_push(&v, HL_MARKUP_FENCED_INFO,
-                            line_off + info_start, info_len);
-
-                size_t info_end = info_start + info_len;
-                if (info_end < line_len)
-                    tv_push_text(&v, line_off + info_end, line_off + line_len);
-
-                /* Newline after opening fence */
-                size_t nl_off = line_off + line_len;
-                if (nl_off < len && input[nl_off] == '\n')
-                    tv_push_text(&v, nl_off, nl_off + 1);
-
-                /* Collect code content until closing fence */
-                size_t code_start = it.pos;
-
-                while (it.pos < len) {
-                    size_t inner_off = it.pos;
-                    size_t inner_len = 0;
-                    const char *inner_line = line_next(&it, &inner_len);
-                    if (!inner_line)
-                        break;
-
-                    if (is_closing_fence(inner_line, inner_len,
-                                         fence_char, fence_len)) {
-                        /* Emit code content */
-                        size_t code_content_len = inner_off - code_start;
-                        if (code_content_len > 0 && input[inner_off - 1] == '\n')
-                            code_content_len--;
-
-                        if (sub_lex && code_content_len > 0)
-                            emit_sublexed_code(&v, input, code_start,
-                                               code_content_len, mctx->env);
-                        else if (code_content_len > 0)
-                            tv_push_text(&v, code_start,
-                                         code_start + code_content_len);
-
-                        /* Newline before closing fence */
-                        if (code_content_len > 0)
-                            tv_push_text(&v, code_start + code_content_len,
-                                         code_start + code_content_len + 1);
-
-                        /* Closing fence */
-                        tv_push(&v, HL_MARKUP_FENCED_CLOSE,
-                                line_offset(&it, inner_line), inner_len);
-
-                        size_t close_nl = line_offset(&it, inner_line) + inner_len;
-                        if (close_nl < len && input[close_nl] == '\n')
-                            tv_push_text(&v, close_nl, close_nl + 1);
-
-                        goto next_line;
-                    }
-                }
-
-                /* Unclosed fence */
-                if (it.pos > code_start) {
-                    size_t rem = it.pos - code_start;
-                    if (sub_lex)
-                        emit_sublexed_code(&v, input, code_start, rem, mctx->env);
-                    else
-                        tv_push_text(&v, code_start, it.pos);
-                }
-
-                prev_was_text = 0;
-                continue;
+        /* List item at the current base indent starts a list. */
+        size_t content_off = 0;
+        if (cm_is_bullet_item(line, len, &content_off) ||
+            cm_is_ordered_item(line, len, &content_off)) {
+            CmBlock *list = cm_parse_list(lines, line_lens, line_count, i, &i, base_indent);
+            if (list) {
+                if (list->first_child)
+                    cm_block_append_child(root, list);
+                else
+                    cm_block_free(list);
             }
+            continue;
         }
 
-        /* --- §4.6 HTML block --- */
-        if (is_html_block_start(line, line_len)) {
-            tv_push(&v, HL_MARKUP_HTML_BLOCK, line_off, line_len);
-            size_t nl_off = line_off + line_len;
-            if (nl_off < len && input[nl_off] == '\n')
-                tv_push_text(&v, nl_off, nl_off + 1);
+        /* Block quote: a line starting with '>' at any indentation. */
+        if (len > 0 && line[0] == '>') {
+            CmBlock *quote = cm_parse_blockquote(lines, line_lens, line_count, i, &i);
+            if (quote) {
+                cm_block_append_child(root, quote);
+            }
+            continue;
+        }
 
-            /* Continue until blank line (simplified — types 6 & 7)
-             * or matching end tag (types 1-5). For simplicity we just
-             * emit until a blank line. */
-            while (it.pos < len) {
-                size_t inner_off = it.pos;
-                size_t inner_len = 0;
-                const char *inner_line = line_next(&it, &inner_len);
-                if (!inner_line)
+        /* Paragraph: collect consecutive non-blank lines.  A list item at
+         * the current indentation interrupts a paragraph (CommonMark
+         * example 303).  A setext heading underline also ends the current
+         * paragraph and turns it into a heading. */
+        size_t para_start = i;
+        size_t para_len = 0;
+        int setext_level = 0;
+        while (i < line_count && !cm_is_blank(lines[i], line_lens[i])) {
+            if (i != para_start) {
+                size_t off = 0;
+                if (cm_is_bullet_item(lines[i], line_lens[i], &off) ||
+                    cm_is_ordered_item(lines[i], line_lens[i], &off))
                     break;
-                if (is_blank_line(inner_line, inner_len)) {
-                    /* Don't consume the blank line */
-                    it.pos = inner_off;
-                    break;
-                }
-                tv_push(&v, HL_MARKUP_HTML_BLOCK, inner_off, inner_len);
-                size_t inner_nl = inner_off + inner_len;
-                if (inner_nl < len && input[inner_nl] == '\n')
-                    tv_push_text(&v, inner_nl, inner_nl + 1);
             }
-            prev_was_text = 0;
-            continue;
-        }
-
-        /* --- §4.4 Indented code block --- */
-        {
-            size_t indent_bytes = 0;
-            if (is_indented_code(line, line_len, &indent_bytes)) {
-                /* Indent (4 spaces) */
-                tv_push_text(&v, line_off, line_off + 4);
-                /* Code content (the rest minus indent) */
-                tv_push(&v, HL_MARKUP_INDENTED_CODE,
-                        line_off + 4, line_len - 4);
-                size_t nl_off = line_off + line_len;
-                if (nl_off < len && input[nl_off] == '\n')
-                    tv_push_text(&v, nl_off, nl_off + 1);
-
-                /* Continue while indented or blank */
-                while (it.pos < len) {
-                    size_t inner_off = it.pos;
-                    size_t inner_len = 0;
-                    const char *inner_line = line_next(&it, &inner_len);
-                    if (!inner_line)
-                        break;
-                    if (is_blank_line(inner_line, inner_len)) {
-                        tv_push_text(&v, inner_off, inner_off + inner_len);
-                        size_t inner_nl = inner_off + inner_len;
-                        if (inner_nl < len && input[inner_nl] == '\n')
-                            tv_push_text(&v, inner_nl, inner_nl + 1);
-                        continue;
-                    }
-                    size_t ib = 0;
-                    if (!is_indented_code(inner_line, inner_len, &ib)) {
-                        it.pos = inner_off;
-                        break;
-                    }
-                    tv_push_text(&v, inner_off, inner_off + 4);
-                    tv_push(&v, HL_MARKUP_INDENTED_CODE,
-                            inner_off + 4, inner_len - 4);
-                    size_t inner_nl = inner_off + inner_len;
-                    if (inner_nl < len && input[inner_nl] == '\n')
-                        tv_push_text(&v, inner_nl, inner_nl + 1);
-                }
-                prev_was_text = 0;
-                continue;
+            i++;
+            if (i < line_count && cm_setext_level(lines[i], line_lens[i])) {
+                /* The line we just consumed is the last content line; the
+                 * next line is the underline, which will be consumed below. */
+                break;
             }
         }
 
-        /* --- §5.1 Block quote --- */
-        {
-            size_t indent_bytes = 0, marker_len = 0;
-            if (is_block_quote(line, line_len, &indent_bytes, &marker_len)) {
-                if (indent_bytes > 0)
-                    tv_push_text(&v, line_off, line_off + indent_bytes);
-                tv_push(&v, HL_MARKUP_BLOCKQUOTE_MARKER,
-                        line_off + indent_bytes, marker_len);
-                /* Rest of line as text with inlines */
-                size_t rest_start = indent_bytes + marker_len;
-                if (rest_start < line_len)
-                    emit_line_with_inlines(&v, input,
-                                           line_off + rest_start,
-                                           line_len - rest_start);
-                size_t nl_off = line_off + line_len;
-                if (nl_off < len && input[nl_off] == '\n')
-                    tv_push_text(&v, nl_off, nl_off + 1);
-
-                /* Lazy continuation: subsequent lines without > that
-                 * could be paragraph continuation. We just emit them
-                 * as regular lines (the block quote context is visual). */
-                prev_was_text = 0;
-                continue;
+        /* Check whether the current line is a setext heading underline.
+         * If so, the previously collected lines form the heading content. */
+        size_t para_end = i;
+        if (i < line_count) {
+            setext_level = cm_setext_level(lines[i], line_lens[i]);
+            if (setext_level > 0) {
+                para_end = i;
+                i++; /* consume the underline */
             }
         }
 
-        /* --- §5.2 List item --- */
-        {
-            size_t indent_bytes = 0, marker_len = 0;
-            if (is_list_item(line, line_len, &indent_bytes, &marker_len)) {
-                if (indent_bytes > 0)
-                    tv_push_text(&v, line_off, line_off + indent_bytes);
-                tv_push(&v, HL_MARKUP_LIST_MARKER,
-                        line_off + indent_bytes, marker_len);
-                /* Rest of line as text with inlines */
-                size_t rest_start = indent_bytes + marker_len;
-                if (rest_start < line_len)
-                    emit_line_with_inlines(&v, input,
-                                           line_off + rest_start,
-                                           line_len - rest_start);
-                size_t nl_off = line_off + line_len;
-                if (nl_off < len && input[nl_off] == '\n')
-                    tv_push_text(&v, nl_off, nl_off + 1);
-                prev_was_text = 1;
-                prev_text_off = line_off;
-                prev_text_len = line_len;
-                continue;
+        for (size_t pidx = para_start; pidx < para_end; pidx++) {
+            if (pidx > para_start)
+                para_len += 1;
+            para_len += line_lens[pidx];
+        }
+        char *para = malloc(para_len + 1);
+        if (para) {
+            size_t pos = 0;
+            for (size_t pidx = para_start; pidx < para_end; pidx++) {
+                if (pidx > para_start)
+                    para[pos++] = ' ';
+                memcpy(para + pos, lines[pidx], line_lens[pidx]);
+                pos += line_lens[pidx];
+            }
+            para[pos] = '\0';
+            CmBlock *p = cm_block_new(setext_level ? CM_BLOCK_HEADING : CM_BLOCK_PARAGRAPH);
+            if (p) {
+                p->text = para;
+                p->text_len = pos;
+                p->level = (size_t)(setext_level ? setext_level : 0);
+                p->setext = setext_level ? 1 : 0;
+                cm_block_append_child(root, p);
+            } else {
+                free(para);
             }
         }
-
-        /* --- §4.7 Link reference definition --- */
-        {
-            size_t indent_bytes = 0;
-            if (is_link_ref_def(line, line_len, &indent_bytes)) {
-                if (indent_bytes > 0)
-                    tv_push_text(&v, line_off, line_off + indent_bytes);
-                tv_push(&v, HL_MARKUP_LINKREF_DEF,
-                        line_off + indent_bytes, line_len - indent_bytes);
-                size_t nl_off = line_off + line_len;
-                if (nl_off < len && input[nl_off] == '\n')
-                    tv_push_text(&v, nl_off, nl_off + 1);
-                prev_was_text = 0;
-                continue;
-            }
-        }
-
-        /* --- §4.8 Paragraph (default) --- */
-        {
-            /* Check for hard line break at end: two+ trailing spaces or
-             * backslash before newline */
-            size_t text_end = line_len;
-            int hard_break = 0;
-            if (text_end > 0) {
-                /* Check for trailing backslash */
-                if (line[text_end - 1] == '\\') {
-                    hard_break = 1;
-                    text_end--;
-                } else {
-                    /* Check for two+ trailing spaces */
-                    size_t trailing = 0;
-                    while (trailing < text_end &&
-                           (line[text_end - 1 - trailing] == ' ' ||
-                            line[text_end - 1 - trailing] == '\t'))
-                        trailing++;
-                    if (trailing >= 2) {
-                        hard_break = 1;
-                        text_end = line_len - trailing;
-                    }
-                }
-            }
-
-            emit_line_with_inlines(&v, input, line_off, text_end);
-
-            if (hard_break) {
-                tv_push(&v, HL_MARKUP_INLINE_BREAK,
-                        line_off + text_end, line_len - text_end);
-            }
-
-            size_t nl_off = line_off + line_len;
-            if (nl_off < len && input[nl_off] == '\n')
-                tv_push_text(&v, nl_off, nl_off + 1);
-
-            prev_was_text = 1;
-            prev_text_off = line_off;
-            prev_text_len = line_len;
-            continue;
-        }
-
-    next_line:
-        prev_was_text = 0;
-        continue;
     }
 
-    *out_count = v.count;
-    return v.items;
+    *out_end = i;
+    return root;
 }
 
-/* ----- Context lifecycle ------------------------------------------------ */
-
-static void commonmark_ctx_free(void *p)
+/* Count leading spaces of a line (tabs count as one character for simplicity). */
+static size_t cm_indent_of(const char *line, size_t len)
 {
-    free(p);
+    size_t i = 0;
+    while (i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
+    return i;
 }
 
-/* ----- Public constructor ----------------------------------------------- */
-
-FlareLexer *flare_lexer_commonmark(Environment *env)
+/* Parse a list starting at line start.  The list continues while each new
+ * item marker has indentation == base_indent and is of the same type as the
+ * first item.  Lines indented beyond the item content column become children
+ * of the current item.  Returns the list block and writes the index of the
+ * first unconsumed line in *out_end. */
+static CmBlock *cm_parse_list(const char **lines, size_t *line_lens,
+                              size_t line_count, size_t start, size_t *out_end,
+                              size_t base_indent)
 {
-    if (!env)
+    const char *first = lines[start];
+    size_t first_len = line_lens[start];
+    char bullet = 0;
+    int ordered = 0;
+    char ordered_delim = 0;
+    size_t first_marker_end = 0;
+
+    {
+        size_t k = 0;
+        while (k < first_len && (first[k] == ' ' || first[k] == '\t'))
+            k++;
+        if (k < first_len && (first[k] == '-' || first[k] == '*' || first[k] == '+')) {
+            bullet = first[k];
+            first_marker_end = k + 1;
+        } else {
+            ordered = 1;
+            size_t d = k;
+            while (d < first_len && first[d] >= '0' && first[d] <= '9')
+                d++;
+            ordered_delim = (d < first_len) ? first[d] : 0;
+            first_marker_end = d + 1;
+        }
+    }
+
+    CmBlock *list = cm_block_new(CM_BLOCK_LIST);
+    if (!list)
+        return NULL;
+    list->level = bullet ? 1 : 2;
+
+    size_t i = start;
+    while (i < line_count) {
+        const char *l = lines[i];
+        size_t ll = line_lens[i];
+
+        if (cm_is_blank(l, ll)) {
+            i++;
+            continue;
+        }
+
+        size_t indent = cm_indent_of(l, ll);
+        if (indent < base_indent)
+            break;
+        if (indent > base_indent)
+            break; /* belongs to a parent container, not this list */
+
+        size_t off = 0;
+        int is_bullet = cm_is_bullet_item(l, ll, &off);
+        int is_ordered = 0;
+        if (!is_bullet)
+            is_ordered = cm_is_ordered_item(l, ll, &off);
+        if (!is_bullet && !is_ordered)
+            break;
+
+        if (is_bullet) {
+            size_t k = indent;
+            if (k < ll)
+                k++;
+            (void)k;
+        }
+
+        if (is_bullet && bullet) {
+            char c = l[indent];
+            if (c != bullet)
+                break;
+        } else if (is_ordered && ordered) {
+            size_t k = indent;
+            while (k < ll && l[k] >= '0' && l[k] <= '9')
+                k++;
+            char delim = (k < ll) ? l[k] : 0;
+            if (delim != ordered_delim)
+                break;
+        } else {
+            break;
+        }
+
+        CmBlock *item = cm_block_new(CM_BLOCK_LIST_ITEM);
+        if (!item)
+            break;
+        item->text = cm_dup(l, ll);
+        item->text_len = ll;
+        item->level = off;
+        cm_block_append_child(list, item);
+        i++;
+
+        /* Determine the content column: the column of the first non-space
+         * character after the marker.  Child blocks must be indented by at
+         * least this amount to belong to this item. */
+        size_t content_col = off;
+        while (content_col < ll && (l[content_col] == ' ' || l[content_col] == '\t'))
+            content_col++;
+
+        /* Collect any blank lines before child blocks.  A blank line itself
+         * is not stored, but it may separate item content from nested blocks. */
+        while (i < line_count && cm_is_blank(lines[i], line_lens[i]))
+            i++;
+
+        if (i < line_count && cm_indent_of(lines[i], line_lens[i]) >= content_col) {
+            size_t child_end = i;
+            CmBlock *children = cm_build_blocks(lines, line_lens, line_count,
+                                                i, &child_end, content_col);
+            if (children) {
+                CmBlock *c = children->first_child;
+                while (c) {
+                    CmBlock *next = c->next_sibling;
+                    c->parent = item;
+                    c->next_sibling = NULL;
+                    if (!item->first_child) {
+                        item->first_child = c;
+                        item->last_child = c;
+                    } else {
+                        item->last_child->next_sibling = c;
+                        item->last_child = c;
+                    }
+                    c = next;
+                }
+                children->first_child = NULL;
+                children->last_child = NULL;
+                cm_block_free(children);
+                i = child_end;
+            }
+        }
+    }
+
+    *out_end = i;
+    return list;
+}
+
+/* Parse a block quote starting at line start.  Each line must begin with
+ * '>' (after optional leading spaces, which we ignore here).  The stripped
+ * content of each line becomes a child paragraph or heading of the quote. */
+static CmBlock *cm_parse_blockquote(const char **lines, size_t *line_lens,
+                                    size_t line_count, size_t start, size_t *out_end)
+{
+    CmBlock *quote = cm_block_new(CM_BLOCK_BLOCKQUOTE);
+    if (!quote) {
+        *out_end = start;
+        return NULL;
+    }
+
+    size_t i = start;
+    while (i < line_count) {
+        const char *line = lines[i];
+        size_t len = line_lens[i];
+
+        if (cm_is_blank(line, len))
+            break;
+
+        size_t indent = 0;
+        while (indent < len && (line[indent] == ' ' || line[indent] == '\t'))
+            indent++;
+        if (indent >= len || line[indent] != '>')
+            break;
+
+        /* Strip the '>' and one optional following space. */
+        size_t content_start = indent + 1;
+        if (content_start < len && line[content_start] == ' ')
+            content_start++;
+        size_t content_len = len - content_start;
+        while (content_len > 0 && line[content_start + content_len - 1] == ' ')
+            content_len--;
+
+        CmBlock *child = NULL;
+        size_t atx = cm_atx_level(line + content_start, content_len);
+        if (atx > 0) {
+            child = cm_parse_heading(line + content_start, content_len);
+        } else {
+            child = cm_block_new(CM_BLOCK_PARAGRAPH);
+            if (child) {
+                child->text = cm_dup(line + content_start, content_len);
+                child->text_len = content_len;
+            }
+        }
+        if (child)
+            cm_block_append_child(quote, child);
+        i++;
+    }
+
+    *out_end = i;
+    return quote;
+}
+
+/* Try to parse a fenced code block starting at line i. If successful,
+ * returns the new line index and stores the block in *out. */
+static size_t cm_parse_fenced_code_block(const char **lines, size_t *line_lens,
+                                         size_t line_count, size_t i, CmBlock **out)
+{
+    const char *line = lines[i];
+    size_t len = line_lens[i];
+    size_t k = 0;
+    while (k < len && (line[k] == ' ' || line[k] == '\t'))
+        k++;
+    if (k > 3)
+        return i;
+    char fence = line[k];
+    if (fence != '`' && fence != '~')
+        return i;
+    size_t fence_start = k;
+    size_t fence_len = 0;
+    while (k < len && line[k] == fence) {
+        fence_len++;
+        k++;
+    }
+    if (fence_len < 3)
+        return i;
+
+    CmBlock *block = cm_block_new(CM_BLOCK_FENCED_CODE);
+    if (!block)
+        return i;
+    block->level = fence_len;
+
+    /* Info string is the rest of the opening line, trimmed. */
+    while (k < len && (line[k] == ' ' || line[k] == '\t'))
+        k++;
+    size_t info_start = k;
+    size_t info_end = len;
+    while (info_end > info_start &&
+           (line[info_end - 1] == ' ' || line[info_end - 1] == '\t'))
+        info_end--;
+    if (info_end > info_start) {
+        block->text = cm_dup(line + info_start, info_end - info_start);
+        block->text_len = info_end - info_start;
+    }
+
+    size_t j = i + 1;
+    while (j < line_count) {
+        const char *cl = lines[j];
+        size_t cl_len = line_lens[j];
+        size_t m = 0;
+        while (m < cl_len && (cl[m] == ' ' || cl[m] == '\t'))
+            m++;
+        if (cl[m] == fence) {
+            size_t fl = 0;
+            while (m + fl < cl_len && cl[m + fl] == fence)
+                fl++;
+            if (fl >= fence_len) {
+                block->closed = 1;
+                j++;
+                break;
+            }
+        }
+
+        /* Store content lines as child text nodes.  Preserve the source
+         * indentation; the formatter decides how to indent the block. */
+        CmBlock *content = cm_block_new(CM_BLOCK_PARAGRAPH);
+        content->text = cm_dup(cl, cl_len);
+        content->text_len = cl_len;
+        cm_block_append_child(block, content);
+        j++;
+    }
+
+    *out = block;
+    return j;
+}
+
+/* Parse a single-line ATX heading. */
+static CmBlock *cm_parse_heading(const char *line, size_t len)
+{
+    size_t level = cm_atx_level(line, len);
+    if (level == 0)
         return NULL;
 
-    CommonmarkCtx *ctx = malloc(sizeof(CommonmarkCtx));
-    if (!ctx)
+    CmBlock *block = cm_block_new(CM_BLOCK_HEADING);
+    if (!block)
         return NULL;
-    ctx->env = env;
+    block->level = level;
 
-    return flare_lexer_alloc("commonmark", ctx, commonmark_scan,
-                             commonmark_ctx_free);
+    /* Trim leading marker and trailing optional marker. */
+    size_t i = 0;
+    while (i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
+    while (i < len && line[i] == '#')
+        i++;
+    while (i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
+
+    size_t end = len;
+    while (end > i && (line[end - 1] == ' ' || line[end - 1] == '\t'))
+        end--;
+    while (end > i && line[end - 1] == '#')
+        end--;
+    while (end > i && (line[end - 1] == ' ' || line[end - 1] == '\t'))
+        end--;
+
+    block->text = cm_dup(line + i, end - i);
+    block->text_len = end - i;
+    return block;
+}
+
+/* --------------------------------------------------------------------------
+ * Phase 2: Inline parser
+ * -------------------------------------------------------------------------- */
+
+/* Append a literal text token made of characters that were skipped because
+ * they did not form a valid inline construct. */
+static void cm_emit_literal(CommonmarkLexer *lex, const char *text, size_t len)
+{
+    if (len > 0)
+        cm_push_text(lex, text, len);
+}
+
+/* Parse inline markup inside a heading or paragraph.  Supports emphasis
+ * delimited by '*' and code spans delimited by backticks (including runs
+ * of multiple backticks).  Unclosed delimiters are emitted as plain text. */
+static void cm_parse_inline(CommonmarkLexer *lex, const char *text, size_t len)
+{
+    size_t i = 0;
+    while (i < len) {
+        /* Emphasis / strong with '*' runs.  Match opening and closing runs
+         * of equal length.  1 asterisk = emphasis, 2+ = strong. */
+        if (text[i] == '*') {
+            size_t run = 0;
+            while (i + run < len && text[i + run] == '*')
+                run++;
+
+            /* Find a matching closing run of the same length. */
+            size_t close = i + run;
+            size_t matched = 0;
+            while (close < len) {
+                if (text[close] == '*') {
+                    size_t r = 0;
+                    while (close + r < len && text[close + r] == '*')
+                        r++;
+                    if (r == run) {
+                        matched = r;
+                        break;
+                    }
+                    close += r;
+                } else {
+                    close++;
+                }
+            }
+
+            if (matched > 0) {
+                FlareTokenType delim_type = (run >= 2) ? HL_MARKUP_INLINE_STRONG : HL_MARKUP_INLINE_EMPHASIS;
+                size_t content_start = i + run;
+                size_t content_len = close - content_start;
+
+                cm_push(lex, delim_type, text + i, run);
+                if (content_len > 0)
+                    cm_push_text(lex, text + content_start, content_len);
+                cm_push(lex, delim_type, text + close, run);
+                i = close + run;
+                continue;
+            }
+
+            /* No matching closing run: emit the leading asterisks as plain text. */
+            cm_emit_literal(lex, text + i, run);
+            i += run;
+            continue;
+        }
+
+        /* Code span with one or more backticks.  Find a matching closing
+         * backtick run of the same length, extract the content, and apply
+         * CommonMark normalization. */
+        if (text[i] == '`') {
+            size_t start = i;
+            size_t backticks = 0;
+            while (i < len && text[i] == '`') {
+                backticks++;
+                i++;
+            }
+            size_t content_start = i;
+            size_t close = content_start;
+            int found = 0;
+            while (close < len) {
+                if (text[close] == '`') {
+                    size_t run = 0;
+                    size_t k = close;
+                    while (k < len && text[k] == '`') {
+                        run++;
+                        k++;
+                    }
+                    if (run == backticks) {
+                        found = 1;
+                        break;
+                    }
+                    close = k;
+                } else {
+                    close++;
+                }
+            }
+
+            if (found) {
+                size_t content_len = close - content_start;
+                char *content = malloc(content_len + 1);
+                if (content) {
+                    /* Copy content and convert line endings to spaces. */
+                    for (size_t k = 0; k < content_len; k++) {
+                        char c = text[content_start + k];
+                        content[k] = (c == '\n' || c == '\r') ? ' ' : c;
+                    }
+                    content[content_len] = '\0';
+
+                    /* CommonMark normalization: if the content both begins
+                     * and ends with a space, and is not entirely spaces,
+                     * remove one space from each end. */
+                    if (content_len >= 2) {
+                        int all_spaces = 1;
+                        for (size_t k = 0; k < content_len; k++) {
+                            if (content[k] != ' ') {
+                                all_spaces = 0;
+                                break;
+                            }
+                        }
+                        if (!all_spaces && content[0] == ' ' &&
+                            content[content_len - 1] == ' ') {
+                            memmove(content, content + 1, content_len - 2);
+                            content_len -= 2;
+                            content[content_len] = '\0';
+                        }
+                    }
+
+                    cm_push(lex, HL_MARKUP_INLINE_CODE, content, content_len);
+                    free(content);
+                }
+                i = close + backticks;
+                continue;
+            }
+
+            /* No matching close: emit the backticks as plain text. */
+            cm_emit_literal(lex, text + start, backticks);
+            continue;
+        }
+
+        /* Scan plain text until the next special character. */
+        size_t start = i;
+        while (i < len && text[i] != '*' && text[i] != '`')
+            i++;
+        cm_emit_literal(lex, text + start, i - start);
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * Phase 2: Token emission from block tree
+ * -------------------------------------------------------------------------- */
+
+static void cm_emit_block(CommonmarkLexer *lex, const CmBlock *block);
+
+static void cm_emit_children(CommonmarkLexer *lex, const CmBlock *block)
+{
+    for (CmBlock *child = block->first_child; child; child = child->next_sibling)
+        cm_emit_block(lex, child);
+}
+
+static void cm_emit_heading(CommonmarkLexer *lex, const CmBlock *block)
+{
+    char marker[16];
+    int marker_len = 0;
+    if (block->setext) {
+        /* Setext heading marker: '=' for level 1, '-' for level 2. */
+        marker[0] = (block->level == 1) ? '=' : '-';
+        marker[1] = ' ';
+        marker[2] = '\0';
+        marker_len = 2;
+    } else {
+        /* ATX heading marker: hashes plus trailing space. */
+        marker_len = snprintf(marker, sizeof(marker), "%.*s ",
+                              (int)(block->level < 6 ? block->level : 6),
+                              "######");
+    }
+    if (marker_len > 0)
+        cm_push(lex, HL_MARKUP_HEADING_MARKER, marker, (size_t)marker_len);
+    if (block->text_len > 0)
+        cm_parse_inline(lex, block->text, block->text_len);
+    cm_push_newline(lex);
+}
+
+static void cm_emit_paragraph(CommonmarkLexer *lex, const CmBlock *block)
+{
+    cm_push(lex, HL_MARKUP_PARAGRAPH, "", 0);
+    if (block->text_len > 0)
+        cm_parse_inline(lex, block->text, block->text_len);
+    cm_push_newline(lex);
+}
+
+static void cm_emit_thematic_break(CommonmarkLexer *lex, const CmBlock *block)
+{
+    if (block->text_len > 0)
+        cm_push(lex, HL_MARKUP_THEMATIC_BREAK, block->text, block->text_len);
+    cm_push_newline(lex);
+}
+
+static void cm_emit_blockquote(CommonmarkLexer *lex, const CmBlock *block)
+{
+    for (CmBlock *child = block->first_child; child; child = child->next_sibling) {
+        /* Block quote marker: we normalize to "> " for the output. */
+        cm_push(lex, HL_MARKUP_BLOCKQUOTE_MARKER, "> ", 2);
+        if (child->type == CM_BLOCK_HEADING) {
+            char marker[16];
+            size_t level = child->level < 6 ? child->level : 6;
+            size_t n = 0;
+            for (size_t k = 0; k < level; k++)
+                marker[n++] = '#';
+            marker[n++] = ' ';
+            cm_push(lex, HL_MARKUP_HEADING_MARKER, marker, n);
+            if (child->text_len > 0)
+                cm_parse_inline(lex, child->text, child->text_len);
+            cm_push_newline(lex);
+        } else if (child->type == CM_BLOCK_PARAGRAPH) {
+            if (child->text_len > 0)
+                cm_parse_inline(lex, child->text, child->text_len);
+            cm_push_newline(lex);
+        } else {
+            cm_emit_block(lex, child);
+        }
+    }
+}
+
+static void cm_emit_list_item(CommonmarkLexer *lex, const CmBlock *block)
+{
+    const char *line = block->text;
+    size_t len = block->text_len;
+    size_t content_off = 0;
+    if (cm_is_bullet_item(line, len, &content_off) ||
+        cm_is_ordered_item(line, len, &content_off)) {
+        /* Skip leading spaces so the marker token is just the marker and
+         * delimiter (e.g. "- " or "1. "), regardless of nesting depth. */
+        size_t marker_start = 0;
+        while (marker_start < len && (line[marker_start] == ' ' || line[marker_start] == '\t'))
+            marker_start++;
+        size_t marker_end = content_off;
+        while (content_off < len && (line[content_off] == ' ' || line[content_off] == '\t'))
+            content_off++;
+        cm_push(lex, HL_MARKUP_LIST_MARKER, line + marker_start,
+                (marker_end > marker_start) ? (marker_end - marker_start) : 0);
+        while (content_off < len) {
+            size_t end = len;
+            while (end > content_off && (line[end - 1] == ' ' || line[end - 1] == '\t'))
+                end--;
+            cm_parse_inline(lex, line + content_off, end - content_off);
+            break;
+        }
+    }
+    cm_push_newline(lex);
+
+    /* Emit any nested blocks (sub-lists, paragraphs, code blocks, etc.) that
+     * belong to this list item. */
+    cm_emit_children(lex, block);
+}
+
+static void cm_emit_fenced_code(CommonmarkLexer *lex, const CmBlock *block)
+{
+    /* Opening fence line */
+    cm_push(lex, HL_MARKUP_FENCED_OPEN, "```", 3);
+    if (block->text_len > 0)
+        cm_push(lex, HL_MARKUP_FENCED_INFO, block->text, block->text_len);
+    cm_push_newline(lex);
+
+    /* Content lines */
+    for (CmBlock *child = block->first_child; child; child = child->next_sibling) {
+        if (child->text_len > 0)
+            cm_push(lex, HL_MARKUP_INDENTED_CODE, child->text, child->text_len);
+        cm_push_newline(lex);
+    }
+
+    /* Closing fence line */
+    cm_push(lex, HL_MARKUP_FENCED_CLOSE, "```", 3);
+    cm_push_newline(lex);
+}
+
+static void cm_emit_block(CommonmarkLexer *lex, const CmBlock *block)
+{
+    switch (block->type) {
+    case CM_BLOCK_HEADING:
+        cm_emit_heading(lex, block);
+        break;
+    case CM_BLOCK_PARAGRAPH:
+        cm_emit_paragraph(lex, block);
+        break;
+    case CM_BLOCK_THEMATIC_BREAK:
+        cm_emit_thematic_break(lex, block);
+        break;
+    case CM_BLOCK_FENCED_CODE:
+        cm_emit_fenced_code(lex, block);
+        break;
+    case CM_BLOCK_LIST:
+        cm_emit_children(lex, block);
+        break;
+    case CM_BLOCK_LIST_ITEM:
+        cm_emit_list_item(lex, block);
+        break;
+    case CM_BLOCK_BLOCKQUOTE:
+        cm_emit_blockquote(lex, block);
+        break;
+    default:
+        /* Unsupported block types emit their children. */
+        cm_emit_children(lex, block);
+        break;
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * Source reading / line splitting
+ * -------------------------------------------------------------------------- */
+
+static int cm_read_all(FlareSource *src, char **out_buf, size_t *out_len)
+{
+    size_t cap = 4096;
+    size_t len = 0;
+    char *buf = malloc(cap);
+    if (!buf)
+        return -1;
+
+    while (1) {
+        ssize_t n = flare_source_read(src, buf + len, cap - len);
+        if (n < 0) {
+            free(buf);
+            return -1;
+        }
+        if (n == 0)
+            break;
+        len += (size_t)n;
+        if (len == cap) {
+            cap *= 2;
+            char *tmp = realloc(buf, cap);
+            if (!tmp) {
+                free(buf);
+                return -1;
+            }
+            buf = tmp;
+        }
+    }
+
+    if (len == cap) {
+        char *tmp = realloc(buf, cap + 1);
+        if (!tmp) {
+            free(buf);
+            return -1;
+        }
+        buf = tmp;
+    }
+    buf[len] = '\0';
+    *out_buf = buf;
+    *out_len = len;
+    return 0;
+}
+
+static void cm_split_lines(const char *input, size_t input_len,
+                           const char ***out_lines, size_t **out_lens,
+                           size_t *out_count)
+{
+    size_t cap = 64;
+    const char **lines = malloc(cap * sizeof(char *));
+    size_t *lens = malloc(cap * sizeof(size_t));
+    size_t count = 0;
+
+    const char *p = input;
+    while (p < input + input_len) {
+        const char *nl = memchr(p, '\n', input_len - (size_t)(p - input));
+        const char *line_start = p;
+        size_t line_len;
+        if (nl) {
+            line_len = (size_t)(nl - p);
+            p = nl + 1;
+        } else {
+            line_len = input_len - (size_t)(p - input);
+            p = input + input_len;
+        }
+        if (line_len > 0 && line_start[line_len - 1] == '\r')
+            line_len--;
+
+        if (count >= cap) {
+            cap *= 2;
+            lines = realloc(lines, cap * sizeof(char *));
+            lens = realloc(lens, cap * sizeof(size_t));
+        }
+        lines[count] = line_start;
+        lens[count] = line_len;
+        count++;
+    }
+
+    *out_lines = lines;
+    *out_lens = lens;
+    *out_count = count;
+}
+
+/* --------------------------------------------------------------------------
+ * FlareTokenSource vtable
+ * -------------------------------------------------------------------------- */
+
+static int commonmark_pull(FlareTokenSource *src, FlareToken *out)
+{
+    CommonmarkLexer *lex = (CommonmarkLexer *)src;
+    if (lex->pos >= lex->count)
+        return 0;
+    *out = lex->tokens[lex->pos++];
+    return 1;
+}
+
+static void commonmark_free(FlareTokenSource *src)
+{
+    CommonmarkLexer *lex = (CommonmarkLexer *)src;
+    if (lex->src)
+        flare_source_free(lex->src);
+    if (lex->tokens)
+        free(lex->tokens);
+    free(lex);
+}
+
+static const FlareTokenSourceVTable commonmark_vtable = {
+    .pull = commonmark_pull,
+    .error = NULL,
+    .free = commonmark_free,
+};
+
+/* --------------------------------------------------------------------------
+ * Public constructor
+ * -------------------------------------------------------------------------- */
+
+FlareTokenSource *flare_lexer_commonmark(FlareSource *src, Environment *env)
+{
+    if (!src)
+        return NULL;
+
+    CommonmarkLexer *lex = calloc(1, sizeof(CommonmarkLexer));
+    if (!lex) {
+        flare_source_free(src);
+        return NULL;
+    }
+    lex->base.vtable = &commonmark_vtable;
+    lex->src = src;
+    lex->env = env;
+
+    char *input = NULL;
+    size_t input_len = 0;
+    if (cm_read_all(src, &input, &input_len) < 0) {
+        flare_source_free(src);
+        free(lex);
+        return NULL;
+    }
+
+    const char **lines = NULL;
+    size_t *line_lens = NULL;
+    size_t line_count = 0;
+    cm_split_lines(input, input_len, &lines, &line_lens, &line_count);
+
+    size_t consumed = 0;
+    CmBlock *root = cm_build_blocks(lines, line_lens, line_count, 0, &consumed, 0);
+    if (root) {
+        cm_emit_children(lex, root);
+        cm_block_free(root);
+    }
+
+    free(lines);
+    free(line_lens);
+    free(input);
+
+    return &lex->base;
 }

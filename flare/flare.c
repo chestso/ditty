@@ -1,4 +1,4 @@
-/* flare.c - Flare syntax highlighting CLI: highlight source files to the terminal
+/* flare.c - Flare syntax highlighting CLI
  *
  * Usage: flare [OPTIONS] [FILE...]
  *
@@ -18,6 +18,11 @@
 #endif
 #include "../include/ditty/highlight.h"
 #include "../include/lisp.h"
+#include "../include/ditty/flare_source.h"
+#include "../include/ditty/flare_writer.h"
+#include "../include/ditty/highlight.h"
+#include "../include/ditty/flare_iterator.h"
+#include "../include/ditty/flare_layout.h"
 #include "ditty_version.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,7 +77,7 @@ static void usage(void)
         "\n"
         "Languages:\n"
         "  auto          detect from file extension (default)\n"
-        "  ditty    Ditty Lisp source\n"
+        "  ditty         Ditty Lisp source\n"
         "  commonmark    CommonMark/Markdown (highlights fenced lisp code blocks)\n"
         "  markdown      alias for commonmark\n",
         PROGNAME);
@@ -188,60 +193,65 @@ static char *read_all(FILE *f, size_t *out_len)
 
 static int highlight_file(const char *path, Environment *env,
                           LangChoice lang, FlareStyle *style,
-                          FlareFormatter *formatter)
+                          FlareColorDepth depth)
 {
-    FILE *f;
-    int close_it = 0;
-
-    if (strcmp(path, "-") == 0) {
-        f = stdin;
-    } else {
-        f = fopen(path, "rb");
-        if (!f) {
-            fprintf(stderr, "%s: %s: ", PROGNAME, path);
-            perror(NULL);
-            return 1;
-        }
-        close_it = 1;
-    }
-
-    size_t src_len = 0;
-    char *src = read_all(f, &src_len);
-    if (close_it)
-        fclose(f);
-
-    if (!src) {
-        fprintf(stderr, "%s: out of memory reading %s\n", PROGNAME, path);
+    /* Create source from file */
+    FlareSource *source = flare_source_file_contents(path);
+    if (!source) {
+        fprintf(stderr, "%s: failed to open %s\n", PROGNAME, path);
         return 1;
     }
 
+    /* Determine language */
     LangChoice effective = lang;
-    if (effective == LANG_AUTO)
+    if (effective == LANG_AUTO) {
         effective = detect_language(path);
+    }
 
-    FlareLexer *lexer;
-    if (effective == LANG_COMMONMARK)
-        lexer = flare_lexer_commonmark(env);
-    else
-        lexer = flare_lexer_ditty(env);
+    /* Create streaming lexer */
+    FlareTokenSource *lexer;
+    if (effective == LANG_COMMONMARK) {
+        lexer = flare_lexer_commonmark(source, env);
+    } else {
+        lexer = flare_lexer_ditty(source, env);
+    }
 
     if (!lexer) {
         fprintf(stderr, "%s: failed to create lexer for %s\n", PROGNAME, path);
-        free(src);
         return 1;
     }
 
-    FlareResult r = flare_highlight(src, src_len, lexer, style, formatter);
-    flare_lexer_free(lexer);
-    free(src);
-
-    if (!r.data) {
-        fprintf(stderr, "%s: highlight failed for %s\n", PROGNAME, path);
+    /* Create writer for stdout */
+    FlareWriter *writer = flare_writer_file(stdout);
+    if (!writer) {
+        fprintf(stderr, "%s: failed to create writer\n", PROGNAME);
+        flare_token_source_free(lexer);
         return 1;
     }
 
-    fwrite(r.data, 1, r.length, stdout);
-    flare_result_free(r);
+    /* Create formatter with writer and style */
+    FlareFormatter *formatter = flare_formatter_terminal(depth, writer, style);
+    if (!formatter) {
+        fprintf(stderr, "%s: failed to create formatter\n", PROGNAME);
+        flare_writer_free(writer);
+        flare_token_source_free(lexer);
+        return 1;
+    }
+
+    /* Format using pipeline */
+    int result = flare_formatter_format(formatter, lexer);
+
+    /* Flush and cleanup */
+    flare_writer_flush(writer);
+    flare_formatter_free(formatter);
+    flare_writer_free(writer);
+    flare_token_source_free(lexer);
+
+    if (result < 0) {
+        fprintf(stderr, "%s: failed to format %s\n", PROGNAME, path);
+        return 1;
+    }
+
     return 0;
 }
 
@@ -303,21 +313,20 @@ int main(int argc, char **argv)
     Environment *env = lisp_init();
 
     FlareStyle *style = make_style();
-    FlareFormatter *fmt = flare_formatter_terminal(depth);
 
     int rc = 0;
 
     if (file_start >= argc) {
-        rc = highlight_file("-", env, lang, style, fmt);
+        /* Read from stdin */
+        rc = highlight_file("-", env, lang, style, depth);
     } else {
         for (int i = file_start; i < argc; i++) {
-            if (highlight_file(argv[i], env, lang, style, fmt) != 0)
+            if (highlight_file(argv[i], env, lang, style, depth) != 0)
                 rc = 1;
         }
     }
 
     flare_style_free(style);
-    flare_formatter_free(fmt);
     lisp_cleanup();
 
     return rc;

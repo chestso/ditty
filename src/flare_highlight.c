@@ -7,12 +7,8 @@
 
 /* Forward declarations from other source files */
 extern FlareColorDepth flare_formatter_depth(const FlareFormatter *f);
-extern char *flare_format_terminal(const FlareToken *tokens, size_t count,
-                                   const char *input, const FlareStyle *style,
-                                   FlareColorDepth depth);
 
 FlareResult flare_highlight(const char *input, size_t input_len,
-                            const FlareLexer *lexer,
                             const FlareStyle *style,
                             const FlareFormatter *formatter)
 {
@@ -23,15 +19,11 @@ FlareResult flare_highlight(const char *input, size_t input_len,
     if (input_len == 0 && input[0] != '\0')
         input_len = 0;
 
-    /* Resolve defaults */
-    FlareLexer *def_lexer = NULL;
     Environment *def_env = NULL;
-    if (!lexer) {
-        def_env = lisp_init();
-        def_lexer = flare_lexer_ditty(def_env);
-        lexer = def_lexer;
-    }
+    FlareSource *def_src = NULL;
+    FlareTokenSource *src = NULL;
 
+    /* Resolve defaults */
     FlareStyle *def_style = NULL;
     if (!style) {
         def_style = flare_style_dracula();
@@ -40,26 +32,55 @@ FlareResult flare_highlight(const char *input, size_t input_len,
 
     FlareFormatter *def_fmt = NULL;
     if (!formatter) {
-        def_fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR);
+        def_fmt = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR, NULL, NULL);
         formatter = def_fmt;
     }
 
     /* Lex */
+    def_env = lisp_init();
+    if (!def_env)
+        goto cleanup;
+    def_src = flare_source_string(input,
+                                  input_len > 0 ? input_len : strlen(input),
+                                  0);
+    if (!def_src)
+        goto cleanup;
+    src = flare_lexer_ditty(def_src, def_env);
+    if (!src)
+        goto cleanup;
+
+    /* Pull tokens into an array */
     size_t token_count = 0;
-    FlareToken *tokens = flare_lex(lexer, input,
-                                   input_len > 0 ? input_len : strlen(input),
-                                   &token_count);
+    size_t token_capacity = 64;
+    FlareToken *tokens = malloc(token_capacity * sizeof(FlareToken));
+    if (!tokens)
+        goto cleanup;
+
+    FlareToken tok;
+    while (flare_token_source_pull(src, &tok)) {
+        if (token_count >= token_capacity) {
+            token_capacity *= 2;
+            FlareToken *tmp = realloc(tokens, token_capacity * sizeof(FlareToken));
+            if (!tmp) {
+                free(tokens);
+                goto cleanup;
+            }
+            tokens = tmp;
+        }
+        tokens[token_count++] = tok;
+    }
 
     /* Format */
     FlareColorDepth depth = flare_formatter_depth(formatter);
-    char *ansi = flare_format_terminal(tokens, token_count, input, style, depth);
-
-    /* Clean up tokens */
+    char *ansi = flare_format_terminal(tokens, token_count, style, depth,
+                                       flare_terminal_supports_hyperlinks());
     free(tokens);
 
-    /* Clean up defaults */
-    if (def_lexer)
-        flare_lexer_free(def_lexer);
+cleanup:
+    if (src)
+        flare_token_source_free(src);
+    else if (def_src)
+        flare_source_free(def_src);
     if (def_env)
         lisp_cleanup();
     if (def_style)

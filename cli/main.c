@@ -19,6 +19,9 @@
 #include <boba/msg.h>
 #include <boba/runtime.h>
 #include <ditty/highlight.h>
+#include <ditty/flare_source.h>
+#include <ditty/flare_writer.h>
+
 #endif
 
 #ifdef HAVE_BOBA
@@ -58,9 +61,8 @@ const char *__asan_default_options(void)
 static Environment *g_env = NULL;
 static ReplAppModel *g_app = NULL;
 static TuiRuntime *g_runtime = NULL;
-static FlareLexer *g_lexer = NULL;    /* reused across highlight calls */
-static FlareLexer *g_cm_lexer = NULL; /* CommonMark lexer for /doc */
-static FlareStyle *g_style = NULL;    /* CharmTones style, created once */
+
+static FlareStyle *g_style = NULL; /* CharmTones style, created once */
 
 /* ANSI color buffers */
 static char color_prompt[32];
@@ -122,14 +124,62 @@ static const char *color_for_type(LispType type)
 static char *highlight_lisp(const char *text, size_t len, void *userdata)
 {
     (void)userdata;
-    FlareResult r = flare_highlight(text, len, g_lexer, g_style, NULL);
-    /* flare_highlight returns malloc'd data; textinput will free it.
-     * If highlighting fails, fall back to plain text. */
-    if (r.data)
-        return r.data;
+
+    /* Empty input: return empty string */
+    if (!text || len == 0) {
+        char *empty = malloc(1);
+        if (empty)
+            empty[0] = '\0';
+        return empty;
+    }
+
+    /* v3 streaming pipeline: source → lexer → formatter → buffer writer */
+    FlareSource *source = flare_source_string(text, len, 0);
+    if (!source)
+        goto fallback;
+
+    FlareTokenSource *lexer = flare_lexer_ditty(source, g_env);
+    if (!lexer) {
+        flare_source_free(source);
+        goto fallback;
+    }
+
+    FlareWriter *writer = flare_writer_buffer();
+    if (!writer) {
+        flare_token_source_free(lexer);
+        goto fallback;
+    }
+
+    FlareFormatter *formatter = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR, writer, g_style);
+    if (!formatter) {
+        flare_writer_free(writer);
+        goto fallback;
+    }
+
+    int rc = flare_formatter_format(formatter, lexer);
+
+    flare_formatter_free(formatter);
+    flare_token_source_free(lexer);
+
+    char *result = NULL;
+    if (rc == 0) {
+        size_t out_len = 0;
+        result = flare_writer_buffer_steal(writer, &out_len);
+        (void)out_len;
+    }
+
+    flare_writer_free(writer);
+
+    if (result)
+        return result;
+
+fallback:
+    /* Fallback: return plain copy */
     char *fallback = malloc(len + 1);
-    memcpy(fallback, text, len);
-    fallback[len] = '\0';
+    if (fallback) {
+        memcpy(fallback, text, len);
+        fallback[len] = '\0';
+    }
     return fallback;
 }
 
@@ -277,21 +327,40 @@ static void print_doc(const char *name)
         const char *md = LISP_SYM_VAL(sym)->docstring;
         size_t md_len = strlen(md);
 
-        FlareResult r = flare_highlight(md, md_len, g_cm_lexer, g_style, NULL);
+        FlareSource *source = flare_source_string(md, md_len, 0);
+        FlareWriter *writer = flare_writer_buffer();
+        char *ansi = NULL;
+        if (source && writer) {
+            FlareTokenSource *lexer = flare_lexer_commonmark(source, g_env);
+            if (lexer) {
+                FlareFormatter *formatter = flare_formatter_terminal(
+                    BFLARE_COLOR_TRUECOLOR, writer, g_style);
+                if (formatter) {
+                    if (flare_formatter_format(formatter, lexer) == 0) {
+                        size_t out_len = 0;
+                        ansi = flare_writer_buffer_steal(writer, &out_len);
+                        (void)out_len;
+                    }
+                    flare_formatter_free(formatter);
+                }
+                flare_token_source_free(lexer);
+            }
+        }
+        flare_writer_free(writer);
 
-        if (r.data && r.length > 0) {
-            for (size_t i = 0; i < r.length; i++) {
-                if (r.data[i] == '\n')
+        if (ansi) {
+            for (size_t i = 0; i < strlen(ansi); i++) {
+                if (ansi[i] == '\n')
                     fputs("\r\n", stdout);
                 else
-                    fputc(r.data[i], stdout);
+                    fputc(ansi[i], stdout);
             }
             fputs("\r\n", stdout);
+            free(ansi);
         } else {
             /* Fallback: print raw markdown if highlighting fails */
             print_raw_output(color_result, md, SGR_RESET);
         }
-        flare_result_free(r);
         return;
     }
 
@@ -563,16 +632,6 @@ static void cleanup(void)
 {
     g_app = NULL;
 
-    if (g_lexer) {
-        flare_lexer_free(g_lexer);
-        g_lexer = NULL;
-    }
-
-    if (g_cm_lexer) {
-        flare_lexer_free(g_cm_lexer);
-        g_cm_lexer = NULL;
-    }
-
     if (g_style) {
         flare_style_free(g_style);
         g_style = NULL;
@@ -589,12 +648,6 @@ static void cleanup(void)
 static void run_interactive_repl(Environment *env)
 {
     init_colors();
-
-    /* Create flare lexer for syntax highlighting (reused across keystrokes) */
-    g_lexer = flare_lexer_ditty(env);
-
-    /* Create CommonMark lexer for /doc command (reused across calls) */
-    g_cm_lexer = flare_lexer_commonmark(env);
 
     /* Create CharmTones flare style (reused across all highlight calls) */
     g_style = flare_style_charmtones();

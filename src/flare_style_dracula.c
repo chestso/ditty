@@ -57,17 +57,29 @@ FlareStyle *flare_style_build_dracula(void)
     e = (FlareStyleEntry){ .fg_r = 98, .fg_g = 114, .fg_b = 164, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP, &e);
 
-    e = (FlareStyleEntry){ .fg_r = 255, .fg_g = 121, .fg_b = 198, .bold = 1, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
+    e = (FlareStyleEntry){ .fg_r = 255, .fg_g = 121, .fg_b = 198, .bold = 1, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0, .margin_top = 1, .margin_bottom = 1 };
     flare_style_set(s, HL_MARKUP_HEADING_MARKER, &e);
 
-    e = (FlareStyleEntry){ .fg_r = 255, .fg_g = 121, .fg_b = 198, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
+    e = (FlareStyleEntry){ .fg_r = 248, .fg_g = 248, .fg_b = 242, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0, .margin_top = 0, .margin_bottom = 1 };
+    flare_style_set(s, HL_MARKUP_PARAGRAPH, &e);
+
+    e = (FlareStyleEntry){ .fg_r = 255, .fg_g = 121, .fg_b = 198, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0, .margin_top = 1, .margin_bottom = 1 };
+    flare_style_set(s, HL_MARKUP_THEMATIC_BREAK, &e);
+
+    e = (FlareStyleEntry){ .fg_r = 255, .fg_g = 121, .fg_b = 198, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0, .margin_top = 1, .margin_bottom = 1 };
     flare_style_set(s, HL_MARKUP_SETEXT_UNDERLINE, &e);
+
+    e = (FlareStyleEntry){ .fg_r = 98, .fg_g = 114, .fg_b = 164, .bold = 0, .italic = 1, .underline = 0, .faint = 0, .strikethrough = 0, .margin_top = 1, .margin_bottom = 1 };
+    flare_style_set(s, HL_MARKUP_FENCED_OPEN, &e);
 
     e = (FlareStyleEntry){ .fg_r = 98, .fg_g = 114, .fg_b = 164, .bold = 0, .italic = 1, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP_FENCED_INFO, &e);
 
     e = (FlareStyleEntry){ .fg_r = 241, .fg_g = 250, .fg_b = 140, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };
     flare_style_set(s, HL_MARKUP_INDENTED_CODE, &e);
+
+    e = (FlareStyleEntry){ .fg_r = 255, .fg_g = 121, .fg_b = 198, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0, .margin_top = 0, .margin_bottom = 0 };
+    flare_style_set(s, HL_MARKUP_LIST_MARKER, &e);
 
     /* Markdown/CommonMark inline markup */
     e = (FlareStyleEntry){ .fg_r = 255, .fg_g = 121, .fg_b = 198, .bold = 0, .italic = 0, .underline = 0, .faint = 0, .strikethrough = 0 };

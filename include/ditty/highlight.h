@@ -8,6 +8,9 @@
 #define DITTY_FLARE_HIGHLIGHT_H
 
 #include "../lisp.h"
+#include "flare_source.h"
+#include "flare_token_source.h"
+#include "flare_writer.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -67,6 +70,7 @@ typedef int FlareTokenType;
 #define HL_MARKUP_THEMATIC_BREAK    8070
 #define HL_MARKUP_HTML_BLOCK        8080
 #define HL_MARKUP_LINKREF_DEF       8090
+#define HL_MARKUP_PARAGRAPH         8100
 
 /* Inline structure (category 9000) */
 #define HL_MARKUP_INLINE          9000
@@ -93,13 +97,20 @@ int flare_token_subcategory(FlareTokenType type);
 
 /* ----- Core types ------------------------------------------------------- */
 
-/* Token produced by the lexer */
-typedef struct
+/* Token produced by the lexer.
+ * In v3.0, tokens own their text. text points to GC-managed memory
+ * that remains valid until the source that produced it is freed. */
+typedef struct FlareToken FlareToken;
+struct FlareToken
 {
     FlareTokenType type;
-    size_t offset; /* byte offset into source */
+    union
+    {
+        char *text;    /* owned, GC-allocated token text (v3.0) */
+        size_t offset; /* byte offset into source text (v1.0 compat) */
+    };
     size_t length; /* byte length of the token text */
-} FlareToken;
+};
 
 /* Styling for a token type */
 typedef struct
@@ -107,13 +118,12 @@ typedef struct
     uint8_t fg_r, fg_g, fg_b;
     uint8_t bg_r, bg_g, bg_b;
     int bold, italic, underline, faint, strikethrough;
+    int margin_top;    /* blank lines before a block-level token */
+    int margin_bottom; /* blank lines after a block-level token */
 } FlareStyleEntry;
 
 /* A complete style (collection of type → entry mappings) */
 typedef struct FlareStyle FlareStyle;
-
-/* A lexer (language-specific tokenizer) */
-typedef struct FlareLexer FlareLexer;
 
 /* A formatter (produces output from token stream + style) */
 typedef struct FlareFormatter FlareFormatter;
@@ -127,27 +137,18 @@ typedef struct
 
 /* ----- Lexer API -------------------------------------------------------- */
 
-/* Create a Ditty Lisp lexer. Requires a non-NULL Environment* (obtained
- * from lisp_init()) for semantic classification of symbols as
- * special forms, builtins, macros, or variables. Passing NULL
- * returns NULL. */
-FlareLexer *flare_lexer_ditty(Environment *env);
+/* Create a streaming Ditty Lisp lexer that reads from src.
+ * Requires a non-NULL Environment* (obtained from lisp_init()) for
+ * semantic classification of symbols as special forms, builtins,
+ * macros, or variables. Passing NULL returns NULL.
+ * The returned FlareTokenSource owns src. */
+FlareTokenSource *flare_lexer_ditty(FlareSource *src, Environment *env);
 
-/* Create a CommonMark/Markdown lexer. Requires a non-NULL Environment*
- * for sub-lexing fenced code blocks with the ditty lexer.
- * Passing NULL returns NULL. */
-FlareLexer *flare_lexer_commonmark(Environment *env);
-
-/* Generic lexer by name (future: "c", "python", etc.) */
-FlareLexer *flare_lexer_get(const char *name);
-
-/* Tokenize input. Returns a malloc'd array of tokens;
- * *out_count receives the number of tokens (0 for empty input).
- * Caller frees the array with free(). */
-FlareToken *flare_lex(const FlareLexer *lexer, const char *input,
-                      size_t input_len, size_t *out_count);
-
-void flare_lexer_free(FlareLexer *lexer);
+/* Create a streaming CommonMark/Markdown lexer that reads from src.
+ * Requires a non-NULL Environment* for sub-lexing fenced code blocks
+ * with the ditty lexer. Passing NULL returns NULL.
+ * The returned FlareTokenSource owns src. */
+FlareTokenSource *flare_lexer_commonmark(FlareSource *src, Environment *env);
 
 /* ----- Style API ------------------------------------------------------- */
 
@@ -167,6 +168,27 @@ void flare_style_set(FlareStyle *style, FlareTokenType type,
 
 void flare_style_free(FlareStyle *style);
 
+/* ----- Reflow options -------------------------------------------------- */
+
+/* Reflow options for terminal formatter */
+typedef struct FlareReflowOptions FlareReflowOptions;
+struct FlareReflowOptions
+{
+    int width;                /* Target width (default 76, 0 = no reflow) */
+    int preserve_paragraphs;  /* Keep paragraph breaks (default 1) */
+    int preserve_code;        /* Don't reflow fenced code (default 1) */
+    int preserve_headings;    /* Don't reflow headings (default 1) */
+    int preserve_hard_breaks; /* Preserve hard line breaks (default 1) */
+};
+
+/* Default reflow options (width=76, all preservation enabled) */
+#define FLARE_REFLOW_DEFAULT ((FlareReflowOptions){ \
+    .width = 76,                                    \
+    .preserve_paragraphs = 1,                       \
+    .preserve_code = 1,                             \
+    .preserve_headings = 1,                         \
+    .preserve_hard_breaks = 1 })
+
 /* ----- Formatter API --------------------------------------------------- */
 
 /* Color depth for formatters */
@@ -178,17 +200,33 @@ typedef enum
     BFLARE_COLOR_TRUECOLOR /* 24-bit RGB (SGR 38;2;R;G;B) */
 } FlareColorDepth;
 
-/* Create a terminal formatter at the given color depth */
-FlareFormatter *flare_formatter_terminal(FlareColorDepth depth);
+/* Create a terminal formatter at the given color depth.
+ * `reflow` is kept for API compatibility; the formatter stores it but
+ * the new pull-based pipeline receives options via the caller. */
+FlareFormatter *flare_formatter_terminal(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style);
+FlareFormatter *flare_formatter_terminal_ex(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style,
+                                            const FlareReflowOptions *reflow);
 
 void flare_formatter_free(FlareFormatter *formatter);
 
+/* Format tokens from a FlareTokenSource using the configured formatter.
+ * Returns 0 on success, -1 on error. */
+int flare_formatter_format(FlareFormatter *fmt, FlareTokenSource *src);
+
 /* Format tokens to ANSI with explicit hyperlink control.
  * When enable_hyperlinks is 1, inline links and autolinks emit OSC 8
- * escape sequences.  When 0, links are styled without hyperlinks. */
-char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
-                               const char *input, const FlareStyle *style,
-                               FlareColorDepth depth, int enable_hyperlinks);
+ * escape sequences.  When 0, links are styled without hyperlinks.
+ * Tokens must use the text-based representation (text/length). */
+char *flare_format_terminal(const FlareToken *tokens, size_t count,
+                            const FlareStyle *style, FlareColorDepth depth,
+                            int enable_hyperlinks);
+
+/* Format tokens with reflow.
+ * NULL reflow = source-faithful layout (no reflow). */
+char *flare_format_terminal_reflow(const FlareToken *tokens, size_t count,
+                                   const FlareStyle *style,
+                                   FlareColorDepth depth, int enable_hyperlinks,
+                                   const FlareReflowOptions *reflow);
 
 /* ----- Color conversion API -------------------------------------------- */
 
@@ -219,13 +257,12 @@ int flare_terminal_hyperlinks_env(void);
 
 /* Highlight source text in one call.
  *
- * lexer, style, formatter are all optional (NULL = defaults:
- * ditty lexer, monokai style, truecolor terminal formatter).
+ * style and formatter are optional (NULL = defaults: monokai style,
+ * truecolor terminal formatter).
  *
  * Returns a FlareResult with a malloc'd ANSI string.
  * Caller frees with flare_result_free(). */
 FlareResult flare_highlight(const char *input, size_t input_len,
-                            const FlareLexer *lexer,
                             const FlareStyle *style,
                             const FlareFormatter *formatter);
 

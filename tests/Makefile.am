@@ -4,12 +4,10 @@ FLARE_TESTS = \
     test_token_type \
     test_color \
     test_style \
-    test_lexer \
-    test_lexer_commonmark \
-    test_formatter \
-    test_hyperlink \
-    test_api \
-    test_roundtrip
+    test_flare \
+    test_flare_lexer_ditty_classifier \
+    test_flare_lexer_ditty \
+    test_flare_lexer_commonmark
 
 check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils $(FLARE_TESTS)
 if HAVE_BOBA
@@ -65,29 +63,21 @@ test_style_SOURCES = test_style.c
 test_style_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
 test_style_LDADD = $(AM_FLARE_LDADD)
 
-test_lexer_SOURCES = test_lexer.c
-test_lexer_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
-test_lexer_LDADD = $(AM_FLARE_LDADD)
+test_flare_SOURCES = test_flare.c
+test_flare_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
+test_flare_LDADD = $(AM_FLARE_LDADD)
 
-test_lexer_commonmark_SOURCES = test_lexer_commonmark.c
-test_lexer_commonmark_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
-test_lexer_commonmark_LDADD = $(AM_FLARE_LDADD)
+test_flare_lexer_ditty_classifier_SOURCES = test_flare_lexer_ditty_classifier.c
+test_flare_lexer_ditty_classifier_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
+test_flare_lexer_ditty_classifier_LDADD = $(AM_FLARE_LDADD)
 
-test_formatter_SOURCES = test_formatter.c
-test_formatter_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
-test_formatter_LDADD = $(AM_FLARE_LDADD)
+test_flare_lexer_ditty_SOURCES = test_flare_lexer_ditty.c
+test_flare_lexer_ditty_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
+test_flare_lexer_ditty_LDADD = $(AM_FLARE_LDADD)
 
-test_api_SOURCES = test_api.c
-test_api_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
-test_api_LDADD = $(AM_FLARE_LDADD)
-
-test_roundtrip_SOURCES = test_roundtrip.c
-test_roundtrip_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
-test_roundtrip_LDADD = $(AM_FLARE_LDADD)
-
-test_hyperlink_SOURCES = test_hyperlink.c
-test_hyperlink_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
-test_hyperlink_LDADD = $(AM_FLARE_LDADD)
+test_flare_lexer_commonmark_SOURCES = test_flare_lexer_commonmark.c
+test_flare_lexer_commonmark_CPPFLAGS = $(AM_FLARE_CPPFLAGS)
+test_flare_lexer_commonmark_LDADD = $(AM_FLARE_LDADD)
 
 test_repl_completeness_SOURCES = test_repl_completeness.c
 test_repl_completeness_CPPFLAGS = \

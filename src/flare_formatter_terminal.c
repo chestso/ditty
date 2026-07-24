@@ -127,10 +127,9 @@ static size_t extract_autolink_uri(const char *text, size_t len,
 /* Try to extract a hyperlink URI from a token.
  * Returns the URI length (written to uri_buf), or 0 if no valid URI. */
 static size_t extract_hyperlink_uri(FlareTokenType type,
-                                    const char *input, size_t offset, size_t length,
+                                    const char *text, size_t length,
                                     char *uri_buf, size_t uri_buf_size)
 {
-    const char *text = input + offset;
     size_t uri_len = 0;
 
     if (type == HL_MARKUP_INLINE_LINK)
@@ -224,10 +223,10 @@ static int is_fenced_marker(FlareTokenType type)
  * When `indent` is true, prepend 2 spaces at the start of each line
  * (after every \n). Returns the new output position. */
 static size_t emit_token_text(char **out, size_t *cap, size_t pos,
-                              const char *input, size_t offset, size_t length,
+                              const char *text, size_t length,
                               int indent, int *at_line_start)
 {
-    const char *src = input + offset;
+    const char *src = text;
 
     if (!indent) {
         buf_ensure(out, cap, pos, length + 5);
@@ -267,65 +266,36 @@ static size_t emit_token_text(char **out, size_t *cap, size_t pos,
     return pos;
 }
 
-/* Emit inline code text with backtick delimiters replaced by spaces.
- * The opening and closing backtick runs (same length per CommonMark)
- * are replaced with that many space characters.  The inner content
- * is copied verbatim. */
+/* Emit inline code text.  The lexer has already stripped the backtick
+ * delimiters and applied CommonMark normalization, so we just emit the
+ * content as-is. */
 static size_t emit_inline_code_text(char **out, size_t *cap, size_t pos,
-                                    const char *input, size_t offset, size_t length,
+                                    const char *text, size_t length,
                                     int *at_line_start)
 {
-    /* Count opening backtick run */
-    size_t bt_len = 0;
-    while (bt_len < length && input[offset + bt_len] == '`')
-        bt_len++;
-
-    if (bt_len == 0 || bt_len >= length) {
-        /* Malformed — emit as-is */
-        return emit_token_text(out, cap, pos, input, offset, length, 0,
-                               at_line_start);
-    }
-
-    /* Emit opening spaces (replacing the backtick delimiters) */
-    buf_ensure(out, cap, pos, bt_len + 1);
-    memset(*out + pos, ' ', bt_len);
-    pos += bt_len;
-
-    /* Emit inner content (between backticks) */
-    size_t inner_off = offset + bt_len;
-    size_t inner_len = length - 2 * bt_len;
-    if (inner_len > 0) {
-        buf_ensure(out, cap, pos, inner_len + 1);
-        memcpy(*out + pos, input + inner_off, inner_len);
-        pos += inner_len;
-    }
-
-    /* Emit closing spaces (replacing the backtick delimiters) */
-    buf_ensure(out, cap, pos, bt_len + 1);
-    memset(*out + pos, ' ', bt_len);
-    pos += bt_len;
-
-    *at_line_start = 0;
+    if (length > 0)
+        pos = emit_token_text(out, cap, pos, text, length, 0,
+                              at_line_start);
     return pos;
 }
 
 /* Emit only the title text from an inline link token [text](url),
  * suppressing the URL and all syntax characters. */
 static size_t emit_link_text(char **out, size_t *cap, size_t pos,
-                             const char *input, size_t offset, size_t length,
+                             const char *text, size_t length,
                              int *at_line_start)
 {
-    if (length < 2 || input[offset] != '[')
-        return emit_token_text(out, cap, pos, input, offset, length, 0,
+    if (length < 2 || text[0] != '[')
+        return emit_token_text(out, cap, pos, text, length, 0,
                                at_line_start);
 
     /* Find matching `]` with nesting support */
     size_t p = 1;
     int depth = 1;
     while (p < length) {
-        if (input[offset + p] == '[')
+        if (text[p] == '[')
             depth++;
-        else if (input[offset + p] == ']') {
+        else if (text[p] == ']') {
             depth--;
             if (depth == 0)
                 break;
@@ -333,15 +303,15 @@ static size_t emit_link_text(char **out, size_t *cap, size_t pos,
         p++;
     }
     if (depth != 0)
-        return emit_token_text(out, cap, pos, input, offset, length, 0,
+        return emit_token_text(out, cap, pos, text, length, 0,
                                at_line_start);
 
     /* Title text is between offset+1 and offset+p */
-    size_t title_off = offset + 1;
+    size_t title_off = 1;
     size_t title_len = p - 1;
     if (title_len > 0) {
         buf_ensure(out, cap, pos, title_len + 1);
-        memcpy(*out + pos, input + title_off, title_len);
+        memcpy(*out + pos, text + title_off, title_len);
         pos += title_len;
     }
 
@@ -351,30 +321,30 @@ static size_t emit_link_text(char **out, size_t *cap, size_t pos,
 
 /* Emit autolink text <url> with angle brackets stripped. */
 static size_t emit_autolink_text(char **out, size_t *cap, size_t pos,
-                                 const char *input, size_t offset,
-                                 size_t length, int *at_line_start)
+                                 const char *text, size_t length,
+                                 int *at_line_start)
 {
-    if (length < 2 || input[offset] != '<')
-        return emit_token_text(out, cap, pos, input, offset, length, 0,
+    if (length < 2 || text[0] != '<')
+        return emit_token_text(out, cap, pos, text, length, 0,
                                at_line_start);
 
     /* Find closing `>` */
     size_t end = 0;
     for (size_t i = 1; i < length; i++) {
-        if (input[offset + i] == '>') {
+        if (text[i] == '>') {
             end = i;
             break;
         }
     }
     if (end == 0)
-        return emit_token_text(out, cap, pos, input, offset, length, 0,
+        return emit_token_text(out, cap, pos, text, length, 0,
                                at_line_start);
 
-    size_t uri_off = offset + 1;
+    size_t uri_off = 1;
     size_t uri_len = end - 1;
     if (uri_len > 0) {
         buf_ensure(out, cap, pos, uri_len + 1);
-        memcpy(*out + pos, input + uri_off, uri_len);
+        memcpy(*out + pos, text + uri_off, uri_len);
         pos += uri_len;
     }
 
@@ -385,11 +355,11 @@ static size_t emit_autolink_text(char **out, size_t *cap, size_t pos,
 /* Format token stream into an ANSI string.
  * When enable_hyperlinks is 1, inline links and autolinks emit OSC 8
  * escape sequences for clickable hyperlinks on supporting terminals. */
-char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
-                               const char *input, const FlareStyle *style,
-                               FlareColorDepth depth, int enable_hyperlinks)
+char *flare_format_terminal(const FlareToken *tokens, size_t count,
+                            const FlareStyle *style, FlareColorDepth depth,
+                            int enable_hyperlinks)
 {
-    if (!tokens || count == 0 || !input || !style) {
+    if (!tokens || count == 0 || !style) {
         char *empty = malloc(5);
         if (empty)
             memcpy(empty, "\033[0m", 4), empty[4] = '\0';
@@ -399,6 +369,8 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
     /* Grow-only buffer */
     size_t cap = 256;
     char *out = malloc(cap);
+    if (!out)
+        return NULL;
     size_t pos = 0;
 
     FlareStyleEntry prev = { 0 };
@@ -408,8 +380,45 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
     int bold_depth = 0;    /* nested bold tracking */
     int italic_depth = 0;  /* nested italic tracking */
 
+    /* Block spacing state */
+    int prev_margin_bottom = 0;
+    int first_block = 1;
+
     for (size_t i = 0; i < count; i++) {
-        /* Skip fenced code block structural markers — they are not
+        /* Block-level spacing. Tokens that begin a new block can request
+         * blank lines above/below via their stylesheet margins. Do this
+         * before fenced-marker skipping so HL_MARKUP_FENCED_OPEN can
+         * request a leading blank line. */
+        if (tokens[i].type == HL_MARKUP_HEADING_MARKER ||
+            tokens[i].type == HL_MARKUP_PARAGRAPH ||
+            tokens[i].type == HL_MARKUP_THEMATIC_BREAK ||
+            tokens[i].type == HL_MARKUP_FENCED_OPEN) {
+            FlareStyleEntry entry = flare_style_get(style, tokens[i].type);
+            if (!first_block) {
+                int spacing = prev_margin_bottom > entry.margin_top ? prev_margin_bottom : entry.margin_top;
+                for (int s = 0; s < spacing; s++) {
+                    buf_ensure(&out, &cap, pos, 1);
+                    out[pos++] = '\n';
+                }
+            }
+            prev_margin_bottom = entry.margin_bottom;
+            first_block = 0;
+            if (tokens[i].type == HL_MARKUP_PARAGRAPH)
+                continue;
+            if (tokens[i].type == HL_MARKUP_FENCED_OPEN) {
+                in_fenced = 1;
+                at_line_start = 1;
+                /* Consume trailing \n that ends the fence line */
+                if (i + 1 < count && tokens[i + 1].type == HL_TEXT &&
+                    tokens[i + 1].length == 1 &&
+                    tokens[i + 1].text[0] == '\n')
+                    i++;
+                prev_valid = 0;
+                continue;
+            }
+        }
+
+        /* Skip remaining fenced code block structural markers — they are not
          * visual content. When skipping, also consume the line-ending
          * newline that belongs to the fence line:
          *   - \n immediately after FENCED_OPEN/INFO: ends the opening
@@ -419,14 +428,13 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
          * The \n BEFORE FENCED_OPEN and AFTER FENCED_CLOSE are
          * paragraph separators and must be kept. */
         if (is_fenced_marker(tokens[i].type)) {
-            if (tokens[i].type == HL_MARKUP_FENCED_OPEN ||
-                tokens[i].type == HL_MARKUP_FENCED_INFO) {
+            if (tokens[i].type == HL_MARKUP_FENCED_INFO) {
                 in_fenced = 1;
                 at_line_start = 1;
                 /* Consume trailing \n that ends the fence line */
                 if (i + 1 < count && tokens[i + 1].type == HL_TEXT &&
                     tokens[i + 1].length == 1 &&
-                    input[tokens[i + 1].offset] == '\n')
+                    tokens[i + 1].text[0] == '\n')
                     i++;
             } else if (tokens[i].type == HL_MARKUP_FENCED_CLOSE) {
                 in_fenced = 0;
@@ -435,7 +443,7 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
             continue;
         }
         if (tokens[i].type == HL_TEXT && tokens[i].length == 1 &&
-            input[tokens[i].offset] == '\n' &&
+            tokens[i].text[0] == '\n' &&
             i + 1 < count && tokens[i + 1].type == HL_MARKUP_FENCED_CLOSE) {
             /* \n before closing fence: part of the fence block, not
              * a paragraph separator — suppress.  Also clear
@@ -492,8 +500,7 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
         if (enable_hyperlinks &&
             (tokens[i].type == HL_MARKUP_INLINE_LINK ||
              tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)) {
-            uri_len = extract_hyperlink_uri(tokens[i].type, input,
-                                            tokens[i].offset, tokens[i].length,
+            uri_len = extract_hyperlink_uri(tokens[i].type, tokens[i].text, tokens[i].length,
                                             uri_buf, sizeof(uri_buf));
             has_hyperlink = (uri_len > 0);
         }
@@ -508,20 +515,16 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
              * links/autolinks: title-only rendering) */
             size_t tlen = tokens[i].length;
             if (tokens[i].type == HL_MARKUP_INLINE_CODE)
-                pos = emit_inline_code_text(&out, &cap, pos, input,
-                                            tokens[i].offset, tlen,
+                pos = emit_inline_code_text(&out, &cap, pos, tokens[i].text, tlen,
                                             &at_line_start);
             else if (tokens[i].type == HL_MARKUP_INLINE_LINK)
-                pos = emit_link_text(&out, &cap, pos, input,
-                                     tokens[i].offset, tlen,
+                pos = emit_link_text(&out, &cap, pos, tokens[i].text, tlen,
                                      &at_line_start);
             else if (tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)
-                pos = emit_autolink_text(&out, &cap, pos, input,
-                                         tokens[i].offset, tlen,
+                pos = emit_autolink_text(&out, &cap, pos, tokens[i].text, tlen,
                                          &at_line_start);
             else
-                pos = emit_token_text(&out, &cap, pos, input,
-                                      tokens[i].offset, tlen, in_fenced,
+                pos = emit_token_text(&out, &cap, pos, tokens[i].text, tlen, in_fenced,
                                       &at_line_start);
 
             if (has_hyperlink)
@@ -531,7 +534,7 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
 
         /* Build SGR sequence for this style.
          * Always lead with reset (0) to clear attributes from the previous
-         * token — ANSI attributes are cumulative, so without an explicit
+         * token — ANSI attribute are cumulative, so without an explicit
          * reset a bold from token N would persist into token N+1. */
         char sgr[128];
         int sglen = 0;
@@ -585,7 +588,8 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
         if (depth == BFLARE_COLOR_TRUECOLOR) {
             if (need_semi)
                 sgr[sgrpos++] = ';';
-            fglen = snprintf(fgbuf, sizeof(fgbuf), "38;2;%d;%d;%d", entry.fg_r, entry.fg_g, entry.fg_b);
+            fglen = snprintf(fgbuf, sizeof(fgbuf), "38;2;%d;%d;%d",
+                             entry.fg_r, entry.fg_g, entry.fg_b);
             memcpy(sgr + sgrpos, fgbuf, fglen);
             sgrpos += fglen;
             need_semi = 1;
@@ -697,20 +701,16 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
         memcpy(out + pos, sgr, sgrpos);
         pos += sgrpos;
         if (tokens[i].type == HL_MARKUP_INLINE_CODE)
-            pos = emit_inline_code_text(&out, &cap, pos, input,
-                                        tokens[i].offset, tlen,
+            pos = emit_inline_code_text(&out, &cap, pos, tokens[i].text, tlen,
                                         &at_line_start);
         else if (tokens[i].type == HL_MARKUP_INLINE_LINK)
-            pos = emit_link_text(&out, &cap, pos, input,
-                                 tokens[i].offset, tlen,
+            pos = emit_link_text(&out, &cap, pos, tokens[i].text, tlen,
                                  &at_line_start);
         else if (tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)
-            pos = emit_autolink_text(&out, &cap, pos, input,
-                                     tokens[i].offset, tlen,
+            pos = emit_autolink_text(&out, &cap, pos, tokens[i].text, tlen,
                                      &at_line_start);
         else
-            pos = emit_token_text(&out, &cap, pos, input,
-                                  tokens[i].offset, tlen, in_fenced,
+            pos = emit_token_text(&out, &cap, pos, tokens[i].text, tlen, in_fenced,
                                   &at_line_start);
 
         if (has_hyperlink)
@@ -730,13 +730,4 @@ char *flare_format_terminal_ex(const FlareToken *tokens, size_t count,
     out[pos] = '\0';
 
     return out;
-}
-
-/* Legacy wrapper: auto-detect hyperlink support */
-char *flare_format_terminal(const FlareToken *tokens, size_t count,
-                            const char *input, const FlareStyle *style,
-                            FlareColorDepth depth)
-{
-    return flare_format_terminal_ex(tokens, count, input, style, depth,
-                                    flare_terminal_supports_hyperlinks());
 }
