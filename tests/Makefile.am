@@ -228,7 +228,6 @@ EXTRA_DIST = \
     test_file_utils.c \
     test_repl_app.c \
     flare_testkit.h \
-    test_hyperlink.c \
     test-helpers.lisp \
     basic/alists.lisp \
     basic/apply.lisp \
