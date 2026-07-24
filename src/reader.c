@@ -100,6 +100,9 @@ static LispObject *read_string(const char **input)
 
     if (**input == '"') {
         (*input)++;
+    } else {
+        /* Unclosed string - hit end of input without closing quote */
+        return lisp_make_typed_error(sym_unclosed_input, "Unclosed string", NIL, NULL);
     }
 
     buffer[length] = '\0';
