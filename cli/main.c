@@ -123,7 +123,10 @@ static const char *color_for_type(LispType type)
 
 static char *highlight_lisp(const char *text, size_t len, void *userdata)
 {
-    (void)userdata;
+    /* The textinput widget calls us per-line, but we need the full buffer
+     * to correctly highlight multiline constructs (strings, lists, etc.)
+     * We use userdata to get the textinput and access the full text. */
+    TuiTextInput *textinput = (TuiTextInput *)userdata;
 
     /* Empty input: return empty string */
     if (!text || len == 0) {
@@ -133,8 +136,31 @@ static char *highlight_lisp(const char *text, size_t len, void *userdata)
         return empty;
     }
 
-    /* v3 streaming pipeline: source → lexer → formatter → buffer writer */
-    FlareSource *source = flare_source_string(text, len, 0);
+    /* Get full buffer if we have textinput access */
+    const char *full_text = text;
+    size_t full_len = len;
+
+    if (textinput) {
+        const char *buffer = tui_textinput_text(textinput);
+        if (buffer) {
+            full_text = buffer;
+            full_len = strlen(buffer);
+        }
+    }
+
+    /* Find the offset of this line within the full buffer.
+     * We do this by finding where 'text' appears in 'full_text'.
+     * This works because the widget passes us a pointer into the buffer. */
+    size_t line_offset = 0;
+    if (full_text != text && full_len > 0) {
+        /* text is a pointer into full_text - find its offset */
+        if (text >= full_text && text < full_text + full_len) {
+            line_offset = (size_t)(text - full_text);
+        }
+    }
+
+    /* Highlight the full buffer */
+    FlareSource *source = flare_source_string(full_text, full_len, 0);
     if (!source)
         goto fallback;
 
@@ -142,34 +168,87 @@ static char *highlight_lisp(const char *text, size_t len, void *userdata)
     if (!lexer)
         goto fallback;
 
-    FlareWriter *writer = flare_writer_buffer();
-    if (!writer) {
+    /* Collect tokens */
+    size_t token_count = 0;
+    size_t token_capacity = 64;
+    FlareToken *tokens = malloc(token_capacity * sizeof(FlareToken));
+    if (!tokens) {
         flare_token_source_free(lexer);
         goto fallback;
     }
 
-    FlareFormatter *formatter = flare_formatter_terminal(BFLARE_COLOR_TRUECOLOR, writer, g_style);
-    if (!formatter) {
-        flare_writer_free(writer);
-        goto fallback;
+    FlareToken tok;
+    while (flare_token_source_pull(lexer, &tok) > 0) {
+        if (token_count >= token_capacity) {
+            token_capacity *= 2;
+            FlareToken *tmp = realloc(tokens, token_capacity * sizeof(FlareToken));
+            if (!tmp) {
+                free(tokens);
+                flare_token_source_free(lexer);
+                goto fallback;
+            }
+            tokens = tmp;
+        }
+        tokens[token_count++] = tok;
     }
-
-    int rc = flare_formatter_format(formatter, lexer);
-
-    flare_formatter_free(formatter);
     flare_token_source_free(lexer);
 
-    char *result = NULL;
-    if (rc == 0) {
-        size_t out_len = 0;
-        result = flare_writer_buffer_steal(writer, &out_len);
-        (void)out_len;
+    /* Format full buffer */
+    char *full_ansi = flare_format_terminal(tokens, token_count, g_style, BFLARE_COLOR_TRUECOLOR, 0);
+    free(tokens);
+
+    if (!full_ansi)
+        goto fallback;
+
+    /* If we're highlighting the full text, just return it */
+    if (full_text == text) {
+        return full_ansi;
     }
 
-    flare_writer_free(writer);
+    /* Extract the line from full_ansi.
+     * The formatter now emits SGR codes after each newline, so we can find
+     * our line by counting newlines in the source and matching in the output. */
 
-    if (result)
+    /* Count newlines before line_offset in source to get line number */
+    size_t line_number = 0;
+    for (size_t i = 0; i < line_offset && i < full_len; i++) {
+        if (full_text[i] == '\n')
+            line_number++;
+    }
+
+    /* Find the Nth newline in the ANSI output */
+    size_t ansi_pos = 0;
+    size_t current_line = 0;
+    size_t ansi_len = strlen(full_ansi);
+
+    while (current_line < line_number && ansi_pos < ansi_len) {
+        if (full_ansi[ansi_pos] == '\n') {
+            current_line++;
+        }
+        ansi_pos++;
+    }
+
+    /* Find end of this line (next newline or end of string) */
+    size_t line_start = ansi_pos;
+    size_t line_end = ansi_pos;
+    while (line_end < ansi_len && full_ansi[line_end] != '\n') {
+        line_end++;
+    }
+
+    /* Extract the line portion */
+    size_t line_len = line_end - line_start;
+    char *result = malloc(line_len + 1);
+    if (result) {
+        memcpy(result, full_ansi + line_start, line_len);
+        result[line_len] = '\0';
+    }
+
+    free(full_ansi);
+
+    if (result && result[0])
         return result;
+
+    free(result);
 
 fallback:
     /* Fallback: return plain copy */
@@ -674,8 +753,10 @@ static void run_interactive_repl(Environment *env)
     tui_textinput_set_focused_prompt_style(g_app->textinput, prompt_style);
     tui_textinput_set_blurred_prompt_style(g_app->textinput, prompt_style);
 
-    /* Wire flare syntax highlighting into the textinput */
-    tui_textinput_set_text_renderer(g_app->textinput, highlight_lisp, NULL);
+    /* Wire flare syntax highlighting into the textinput.
+     * Pass the textinput as userdata so the callback can access the full
+     * buffer for multiline construct highlighting. */
+    tui_textinput_set_text_renderer(g_app->textinput, highlight_lisp, g_app->textinput);
 
     /* Wire completion provider */
     g_app->on_tab_complete = repl_tab_complete;

@@ -210,6 +210,154 @@ static int style_entries_equal(const FlareStyleEntry *a, const FlareStyleEntry *
            a->strikethrough == b->strikethrough;
 }
 
+/* Build a full SGR sequence for a style entry.
+ * Format: ESC [ 0 ; attributes ; colors m
+ * Returns bytes written to buf. */
+static int build_sgr(const FlareStyleEntry *entry, FlareColorDepth depth, char *buf, size_t bufsize)
+{
+    int pos = 0;
+    int need_semi = 0;
+
+    buf[pos++] = '\033';
+    buf[pos++] = '[';
+    buf[pos++] = '0';
+    need_semi = 1;
+
+    if (entry->bold) {
+        if (need_semi)
+            buf[pos++] = ';';
+        pos += snprintf(buf + pos, bufsize - pos, "1");
+        need_semi = 1;
+    }
+    if (entry->faint) {
+        if (need_semi)
+            buf[pos++] = ';';
+        pos += snprintf(buf + pos, bufsize - pos, "2");
+        need_semi = 1;
+    }
+    if (entry->italic) {
+        if (need_semi)
+            buf[pos++] = ';';
+        pos += snprintf(buf + pos, bufsize - pos, "3");
+        need_semi = 1;
+    }
+    if (entry->underline) {
+        if (need_semi)
+            buf[pos++] = ';';
+        pos += snprintf(buf + pos, bufsize - pos, "4");
+        need_semi = 1;
+    }
+    if (entry->strikethrough) {
+        if (need_semi)
+            buf[pos++] = ';';
+        pos += snprintf(buf + pos, bufsize - pos, "9");
+        need_semi = 1;
+    }
+
+    /* Foreground color */
+    char fgbuf[32];
+    int fglen;
+    if (depth == BFLARE_COLOR_TRUECOLOR) {
+        if (need_semi)
+            buf[pos++] = ';';
+        fglen = snprintf(fgbuf, sizeof(fgbuf), "38;2;%d;%d;%d",
+                         entry->fg_r, entry->fg_g, entry->fg_b);
+        memcpy(buf + pos, fgbuf, fglen);
+        pos += fglen;
+        need_semi = 1;
+    } else if (depth == BFLARE_COLOR_256) {
+        if (need_semi)
+            buf[pos++] = ';';
+        int idx = flare_color_rgb_to_256(entry->fg_r, entry->fg_g, entry->fg_b);
+        fglen = snprintf(fgbuf, sizeof(fgbuf), "38;5;%d", idx);
+        memcpy(buf + pos, fgbuf, fglen);
+        pos += fglen;
+        need_semi = 1;
+    } else if (depth == BFLARE_COLOR_16) {
+        int idx = flare_color_rgb_to_16(entry->fg_r, entry->fg_g, entry->fg_b);
+        if (need_semi)
+            buf[pos++] = ';';
+        if (idx >= 8) {
+            fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 90 + (idx - 8));
+        } else {
+            fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + idx);
+        }
+        memcpy(buf + pos, fgbuf, fglen);
+        pos += fglen;
+        need_semi = 1;
+    } else {
+        int idx = flare_color_rgb_to_8(entry->fg_r, entry->fg_g, entry->fg_b);
+        if (idx >= 8) {
+            if (!entry->bold) {
+                if (need_semi)
+                    buf[pos++] = ';';
+                fglen = snprintf(fgbuf, sizeof(fgbuf), "1;%d", 30 + (idx - 8));
+            } else {
+                if (need_semi)
+                    buf[pos++] = ';';
+                fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + (idx - 8));
+            }
+            memcpy(buf + pos, fgbuf, fglen);
+            pos += fglen;
+            need_semi = 1;
+        } else {
+            if (need_semi)
+                buf[pos++] = ';';
+            fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + idx);
+            memcpy(buf + pos, fgbuf, fglen);
+            pos += fglen;
+            need_semi = 1;
+        }
+    }
+
+    /* Background color */
+    if (entry->bg_r || entry->bg_g || entry->bg_b) {
+        char bgbuf[32];
+        int bglen;
+        if (depth == BFLARE_COLOR_TRUECOLOR) {
+            if (need_semi)
+                buf[pos++] = ';';
+            bglen = snprintf(bgbuf, sizeof(bgbuf), "48;2;%d;%d;%d",
+                             entry->bg_r, entry->bg_g, entry->bg_b);
+            memcpy(buf + pos, bgbuf, bglen);
+            pos += bglen;
+            need_semi = 1;
+        } else if (depth == BFLARE_COLOR_256) {
+            if (need_semi)
+                buf[pos++] = ';';
+            int bidx = flare_color_rgb_to_256(entry->bg_r, entry->bg_g, entry->bg_b);
+            bglen = snprintf(bgbuf, sizeof(bgbuf), "48;5;%d", bidx);
+            memcpy(buf + pos, bgbuf, bglen);
+            pos += bglen;
+            need_semi = 1;
+        } else if (depth == BFLARE_COLOR_16) {
+            if (need_semi)
+                buf[pos++] = ';';
+            int bidx = flare_color_rgb_to_16(entry->bg_r, entry->bg_g, entry->bg_b);
+            if (bidx >= 8) {
+                bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 100 + (bidx - 8));
+            } else {
+                bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 40 + bidx);
+            }
+            memcpy(buf + pos, bgbuf, bglen);
+            pos += bglen;
+            need_semi = 1;
+        } else {
+            if (need_semi)
+                buf[pos++] = ';';
+            int bidx = flare_color_rgb_to_8(entry->bg_r, entry->bg_g, entry->bg_b);
+            bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 40 + bidx);
+            memcpy(buf + pos, bgbuf, bglen);
+            pos += bglen;
+            need_semi = 1;
+        }
+    }
+
+    buf[pos++] = 'm';
+    buf[pos] = '\0';
+    return pos;
+}
+
 /* Check if a token type is a fenced code block structural marker that
  * should be suppressed from rendered output.  The fence delimiters
  * (``` or ~~~) and info strings are structural, not visual content. */
@@ -221,14 +369,18 @@ static int is_fenced_marker(FlareTokenType type)
 
 /* Copy token text to the output buffer, tracking line boundaries.
  * When `indent > 0`, prepend `indent` spaces at the start of each line
- * (after every \n). Returns the new output position. */
+ * (after every \n). When `sgr` is non-NULL, re-emit the style after each
+ * newline to maintain style continuity across line breaks. Returns the
+ * new output position. */
 static size_t emit_token_text(char **out, size_t *cap, size_t pos,
                               const char *text, size_t length,
-                              int indent, int *at_line_start)
+                              int indent, const char *sgr,
+                              int *at_line_start)
 {
     const char *src = text;
+    size_t sgr_len = sgr ? strlen(sgr) : 0;
 
-    if (indent == 0) {
+    if (indent == 0 && sgr == NULL) {
         buf_ensure(out, cap, pos, length + 5);
         memcpy(*out + pos, src, length);
         pos += length;
@@ -238,23 +390,30 @@ static size_t emit_token_text(char **out, size_t *cap, size_t pos,
             const char *nl = memchr(src + src_pos, '\n', length - src_pos);
             if (!nl) {
                 size_t chunk = length - src_pos;
-                buf_ensure(out, cap, pos, chunk + indent + 1);
+                buf_ensure(out, cap, pos, chunk + indent + sgr_len + 5);
                 memcpy(*out + pos, src + src_pos, chunk);
                 pos += chunk;
                 break;
             }
             size_t chunk = (size_t)(nl - (src + src_pos)) + 1;
-            buf_ensure(out, cap, pos, chunk + indent + 1);
+            buf_ensure(out, cap, pos, chunk + indent + sgr_len + 5);
             memcpy(*out + pos, src + src_pos, chunk);
             pos += chunk;
             src_pos += chunk;
-            /* Emit indentation after the newline (unless it's the
-             * very end of the token — the next token will handle it
-             * via the at_line_start mechanism). */
-            if (src_pos < length && indent > 0) {
-                buf_ensure(out, cap, pos, indent);
-                for (int s = 0; s < indent; s++) {
-                    (*out)[pos++] = ' ';
+            /* After newline: emit indentation and/or re-apply style.
+             * Skip if this is the very end of the token — the next
+             * token will handle it via the at_line_start mechanism. */
+            if (src_pos < length) {
+                if (indent > 0) {
+                    buf_ensure(out, cap, pos, indent);
+                    for (int s = 0; s < indent; s++) {
+                        (*out)[pos++] = ' ';
+                    }
+                }
+                if (sgr && sgr_len > 0) {
+                    buf_ensure(out, cap, pos, sgr_len);
+                    memcpy(*out + pos, sgr, sgr_len);
+                    pos += sgr_len;
                 }
             }
         }
@@ -272,6 +431,7 @@ static size_t emit_token_text(char **out, size_t *cap, size_t pos,
  * extends around the code. */
 static size_t emit_inline_code_text(char **out, size_t *cap, size_t pos,
                                     const char *text, size_t length,
+                                    const char *sgr,
                                     int *at_line_start)
 {
     /* Leading space for padding */
@@ -280,7 +440,7 @@ static size_t emit_inline_code_text(char **out, size_t *cap, size_t pos,
 
     /* Content */
     if (length > 0)
-        pos = emit_token_text(out, cap, pos, text, length, 0, at_line_start);
+        pos = emit_token_text(out, cap, pos, text, length, 0, sgr, at_line_start);
 
     /* Trailing space for padding */
     buf_ensure(out, cap, pos, 1);
@@ -294,10 +454,11 @@ static size_t emit_inline_code_text(char **out, size_t *cap, size_t pos,
  * suppressing the URL and all syntax characters. */
 static size_t emit_link_text(char **out, size_t *cap, size_t pos,
                              const char *text, size_t length,
+                             const char *sgr,
                              int *at_line_start)
 {
     if (length < 2 || text[0] != '[')
-        return emit_token_text(out, cap, pos, text, length, 0,
+        return emit_token_text(out, cap, pos, text, length, 0, sgr,
                                at_line_start);
 
     /* Find matching `]` with nesting support */
@@ -314,7 +475,7 @@ static size_t emit_link_text(char **out, size_t *cap, size_t pos,
         p++;
     }
     if (depth != 0)
-        return emit_token_text(out, cap, pos, text, length, 0,
+        return emit_token_text(out, cap, pos, text, length, 0, sgr,
                                at_line_start);
 
     /* Title text is between offset+1 and offset+p */
@@ -333,10 +494,11 @@ static size_t emit_link_text(char **out, size_t *cap, size_t pos,
 /* Emit autolink text <url> with angle brackets stripped. */
 static size_t emit_autolink_text(char **out, size_t *cap, size_t pos,
                                  const char *text, size_t length,
+                                 const char *sgr,
                                  int *at_line_start)
 {
     if (length < 2 || text[0] != '<')
-        return emit_token_text(out, cap, pos, text, length, 0,
+        return emit_token_text(out, cap, pos, text, length, 0, sgr,
                                at_line_start);
 
     /* Find closing `>` */
@@ -348,7 +510,7 @@ static size_t emit_autolink_text(char **out, size_t *cap, size_t pos,
         }
     }
     if (end == 0)
-        return emit_token_text(out, cap, pos, text, length, 0,
+        return emit_token_text(out, cap, pos, text, length, 0, sgr,
                                at_line_start);
 
     size_t uri_off = 1;
@@ -551,6 +713,11 @@ char *flare_format_terminal_with_style(const FlareToken *tokens, size_t count,
 
         /* Coalesce: if same style as previous, skip the escape */
         if (prev_valid && style_entries_equal(&prev, &entry)) {
+            /* Build SGR from prev for style continuity across newlines */
+            char prev_sgr[128];
+            int prev_sgr_len = build_sgr(&prev, depth, prev_sgr, sizeof(prev_sgr));
+            (void)prev_sgr_len; /* Used for memcpy below */
+
             /* Emit OSC 8 open if this token has a hyperlink */
             if (has_hyperlink)
                 emit_osc8_open(&out, &cap, &pos, uri_buf, uri_len);
@@ -560,179 +727,26 @@ char *flare_format_terminal_with_style(const FlareToken *tokens, size_t count,
             size_t tlen = tokens[i].length;
             if (tokens[i].type == HL_MARKUP_INLINE_CODE)
                 pos = emit_inline_code_text(&out, &cap, pos, tokens[i].text, tlen,
-                                            &at_line_start);
+                                            prev_sgr, &at_line_start);
             else if (tokens[i].type == HL_MARKUP_INLINE_LINK)
                 pos = emit_link_text(&out, &cap, pos, tokens[i].text, tlen,
-                                     &at_line_start);
+                                     prev_sgr, &at_line_start);
             else if (tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)
                 pos = emit_autolink_text(&out, &cap, pos, tokens[i].text, tlen,
-                                         &at_line_start);
+                                         prev_sgr, &at_line_start);
             else
                 pos = emit_token_text(&out, &cap, pos, tokens[i].text, tlen,
                                       in_fenced ? ts.fenced_indent : 0,
-                                      &at_line_start);
+                                      prev_sgr, &at_line_start);
 
             if (has_hyperlink)
                 emit_osc8_close(&out, &cap, &pos);
             continue;
         }
 
-        /* Build SGR sequence for this style.
-         * Always lead with reset (0) to clear attributes from the previous
-         * token — ANSI attribute are cumulative, so without an explicit
-         * reset a bold from token N would persist into token N+1. */
+        /* Build SGR sequence for this style. */
         char sgr[128];
-        int sglen = 0;
-
-        int need_semi = 0;
-        int sgrpos = 0;
-        sgr[sgrpos++] = '\033';
-        sgr[sgrpos++] = '[';
-        sgr[sgrpos++] = '0';
-        need_semi = 1;
-
-        if (entry.bold) {
-            if (need_semi)
-                sgr[sgrpos++] = ';';
-            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "1");
-            sgrpos += sglen;
-            need_semi = 1;
-        }
-        if (entry.faint) {
-            if (need_semi)
-                sgr[sgrpos++] = ';';
-            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "2");
-            sgrpos += sglen;
-            need_semi = 1;
-        }
-        if (entry.italic) {
-            if (need_semi)
-                sgr[sgrpos++] = ';';
-            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "3");
-            sgrpos += sglen;
-            need_semi = 1;
-        }
-        if (entry.underline) {
-            if (need_semi)
-                sgr[sgrpos++] = ';';
-            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "4");
-            sgrpos += sglen;
-            need_semi = 1;
-        }
-        if (entry.strikethrough) {
-            if (need_semi)
-                sgr[sgrpos++] = ';';
-            sglen = snprintf(sgr + sgrpos, sizeof(sgr) - sgrpos, "9");
-            sgrpos += sglen;
-            need_semi = 1;
-        }
-
-        /* Foreground color */
-        char fgbuf[32];
-        int fglen;
-        if (depth == BFLARE_COLOR_TRUECOLOR) {
-            if (need_semi)
-                sgr[sgrpos++] = ';';
-            fglen = snprintf(fgbuf, sizeof(fgbuf), "38;2;%d;%d;%d",
-                             entry.fg_r, entry.fg_g, entry.fg_b);
-            memcpy(sgr + sgrpos, fgbuf, fglen);
-            sgrpos += fglen;
-            need_semi = 1;
-        } else if (depth == BFLARE_COLOR_256) {
-            if (need_semi)
-                sgr[sgrpos++] = ';';
-            int idx = flare_color_rgb_to_256(entry.fg_r, entry.fg_g, entry.fg_b);
-            fglen = snprintf(fgbuf, sizeof(fgbuf), "38;5;%d", idx);
-            memcpy(sgr + sgrpos, fgbuf, fglen);
-            sgrpos += fglen;
-            need_semi = 1;
-        } else if (depth == BFLARE_COLOR_16) {
-            /* 16-color: aixterm bright codes 90-97 */
-            int idx = flare_color_rgb_to_16(entry.fg_r, entry.fg_g, entry.fg_b);
-            if (need_semi)
-                sgr[sgrpos++] = ';';
-            if (idx >= 8) {
-                fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 90 + (idx - 8));
-            } else {
-                fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + idx);
-            }
-            memcpy(sgr + sgrpos, fgbuf, fglen);
-            sgrpos += fglen;
-            need_semi = 1;
-        } else {
-            /* 8-color: normal codes 30-37, bold-intensity for bright */
-            int idx = flare_color_rgb_to_8(entry.fg_r, entry.fg_g, entry.fg_b);
-            if (idx >= 8) {
-                /* Bright: emit 1; (bold-intensity) + color in one SGR param.
-                 * Avoid double-bold if entry.bold was already emitted above. */
-                if (!entry.bold) {
-                    if (need_semi)
-                        sgr[sgrpos++] = ';';
-                    fglen = snprintf(fgbuf, sizeof(fgbuf), "1;%d", 30 + (idx - 8));
-                } else {
-                    /* Bold was already emitted as "1" — just append color */
-                    if (need_semi)
-                        sgr[sgrpos++] = ';';
-                    fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + (idx - 8));
-                }
-                memcpy(sgr + sgrpos, fgbuf, fglen);
-                sgrpos += fglen;
-                need_semi = 1;
-            } else {
-                if (need_semi)
-                    sgr[sgrpos++] = ';';
-                fglen = snprintf(fgbuf, sizeof(fgbuf), "%d", 30 + idx);
-                memcpy(sgr + sgrpos, fgbuf, fglen);
-                sgrpos += fglen;
-                need_semi = 1;
-            }
-        }
-
-        /* Background color (only if non-zero to avoid resetting bg
-         * on tokens that don't need it) */
-        if (entry.bg_r || entry.bg_g || entry.bg_b) {
-            char bgbuf[32];
-            int bglen;
-            if (depth == BFLARE_COLOR_TRUECOLOR) {
-                if (need_semi)
-                    sgr[sgrpos++] = ';';
-                bglen = snprintf(bgbuf, sizeof(bgbuf), "48;2;%d;%d;%d",
-                                 entry.bg_r, entry.bg_g, entry.bg_b);
-                memcpy(sgr + sgrpos, bgbuf, bglen);
-                sgrpos += bglen;
-                need_semi = 1;
-            } else if (depth == BFLARE_COLOR_256) {
-                if (need_semi)
-                    sgr[sgrpos++] = ';';
-                int bidx = flare_color_rgb_to_256(entry.bg_r, entry.bg_g, entry.bg_b);
-                bglen = snprintf(bgbuf, sizeof(bgbuf), "48;5;%d", bidx);
-                memcpy(sgr + sgrpos, bgbuf, bglen);
-                sgrpos += bglen;
-                need_semi = 1;
-            } else if (depth == BFLARE_COLOR_16) {
-                if (need_semi)
-                    sgr[sgrpos++] = ';';
-                int bidx = flare_color_rgb_to_16(entry.bg_r, entry.bg_g, entry.bg_b);
-                if (bidx >= 8) {
-                    bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 100 + (bidx - 8));
-                } else {
-                    bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 40 + bidx);
-                }
-                memcpy(sgr + sgrpos, bgbuf, bglen);
-                sgrpos += bglen;
-                need_semi = 1;
-            } else {
-                if (need_semi)
-                    sgr[sgrpos++] = ';';
-                int bidx = flare_color_rgb_to_8(entry.bg_r, entry.bg_g, entry.bg_b);
-                bglen = snprintf(bgbuf, sizeof(bgbuf), "%d", 40 + bidx);
-                memcpy(sgr + sgrpos, bgbuf, bglen);
-                sgrpos += bglen;
-                need_semi = 1;
-            }
-        }
-
-        sgr[sgrpos++] = 'm';
+        int sgrpos = build_sgr(&entry, depth, sgr, sizeof(sgr));
 
         /* Write SGR + token text.
          * If this token has a hyperlink, wrap it in OSC 8 sequences:
@@ -747,17 +761,17 @@ char *flare_format_terminal_with_style(const FlareToken *tokens, size_t count,
         pos += sgrpos;
         if (tokens[i].type == HL_MARKUP_INLINE_CODE)
             pos = emit_inline_code_text(&out, &cap, pos, tokens[i].text, tlen,
-                                        &at_line_start);
+                                        sgr, &at_line_start);
         else if (tokens[i].type == HL_MARKUP_INLINE_LINK)
             pos = emit_link_text(&out, &cap, pos, tokens[i].text, tlen,
-                                 &at_line_start);
+                                 sgr, &at_line_start);
         else if (tokens[i].type == HL_MARKUP_INLINE_AUTOLINK)
             pos = emit_autolink_text(&out, &cap, pos, tokens[i].text, tlen,
-                                     &at_line_start);
+                                     sgr, &at_line_start);
         else
             pos = emit_token_text(&out, &cap, pos, tokens[i].text, tlen,
                                   in_fenced ? ts.fenced_indent : 0,
-                                  &at_line_start);
+                                  sgr, &at_line_start);
 
         if (has_hyperlink)
             emit_osc8_close(&out, &cap, &pos);
