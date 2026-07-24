@@ -200,11 +200,6 @@ static char *highlight_lisp(const char *text, size_t len, void *userdata)
     if (!full_ansi)
         goto fallback;
 
-    /* If we're highlighting the full text, just return it */
-    if (full_text == text) {
-        return full_ansi;
-    }
-
     /* Extract the line from full_ansi.
      * The formatter now emits SGR codes after each newline, so we can find
      * our line by counting newlines in the source and matching in the output. */
@@ -237,6 +232,9 @@ static char *highlight_lisp(const char *text, size_t len, void *userdata)
 
     /* Extract the line portion */
     size_t line_len = line_end - line_start;
+    /* Strip trailing newline — boba passes line content without the \n */
+    while (line_len > 0 && full_ansi[line_start + line_len - 1] == '\n')
+        line_len--;
     char *result = malloc(line_len + 1);
     if (result) {
         memcpy(result, full_ansi + line_start, line_len);
