@@ -72,17 +72,20 @@ static int ditty_pull(FlareTokenSource *src, FlareToken *out)
     /* String literal */
     else if (c == '"') {
         end = start + 1;
+        int closed = 0;
         while (end < lex->buffer_len) {
             if (lex->buffer[end] == '\\' && end + 1 < lex->buffer_len) {
                 end += 2; /* Skip escape sequence */
             } else if (lex->buffer[end] == '"') {
                 end++;
+                closed = 1;
                 break;
             } else {
                 end++;
             }
         }
-        type = HL_LITERAL_STRING;
+        /* Use error type for unclosed strings so they get distinct styling */
+        type = closed ? HL_LITERAL_STRING : HL_ERROR_UNCLOSED_STRING;
     }
     /* Comment */
     else if (c == ';') {
