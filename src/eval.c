@@ -1641,7 +1641,7 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
             /* Loop continues: if result is TAIL_CALL, unwrap it WITHOUT C stack growth */
         }
 
-    trampoline_done:
+trampoline_done:
 
         if (should_propagate_error(result)) {
             result = lisp_attach_stack_trace(result, new_env);
