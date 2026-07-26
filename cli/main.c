@@ -542,10 +542,10 @@ static int handle_command(const char *input, Environment *env)
         char *fname = GC_strdup(filename);
         LispObject *result = lisp_load_file(fname, env);
 
-        if (LISP_TYPE(result) == LISP_ERROR) {
+        if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
             char *err_str = lisp_print(result);
             print_raw_output(color_error, err_str, SGR_RESET);
-        } else {
+        } else if (!(LISP_TYPE(result) == LISP_ERROR && LISP_ERROR_CAUGHT(result))) {
             char *output = lisp_print(result);
             const char *clr = color_for_type(LISP_TYPE(result));
             print_raw_output(clr, output, SGR_RESET);
@@ -617,7 +617,7 @@ static void handle_line_submit(char *line)
     if (LISP_TYPE(eval_result) == LISP_ERROR && !LISP_ERROR_CAUGHT(eval_result)) {
         char *err_str = lisp_print(eval_result);
         print_raw_output(color_error, err_str, SGR_RESET);
-    } else {
+    } else if (!(LISP_TYPE(eval_result) == LISP_ERROR && LISP_ERROR_CAUGHT(eval_result))) {
         char *output = lisp_print(eval_result);
         const char *clr = color_for_type(LISP_TYPE(eval_result));
         print_raw_output(clr, output, SGR_RESET);
@@ -949,8 +949,11 @@ int main(int argc, char **argv)
                 return 1;
             }
 
-            char *output = lisp_print(result);
-            printf("%s\n", output);
+            /* Skip printing caught errors */
+            if (!(LISP_TYPE(result) == LISP_ERROR && LISP_ERROR_CAUGHT(result))) {
+                char *output = lisp_print(result);
+                printf("%s\n", output);
+            }
         }
 
         lisp_cleanup();
@@ -1143,7 +1146,7 @@ int main(int argc, char **argv)
         if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
             char *err_str = lisp_print(result);
             printf("%s\n", err_str);
-        } else {
+        } else if (!(LISP_TYPE(result) == LISP_ERROR && LISP_ERROR_CAUGHT(result))) {
             char *output = lisp_print(result);
             printf("%s\n", output);
         }

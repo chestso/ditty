@@ -223,6 +223,9 @@ AM_TESTS_ENVIRONMENT = \
     DITTY_BIN="$(abs_top_builddir)/cli/ditty"; \
     export DITTY_BIN;
 
+# Shell tests
+TESTS += regression/test_caught_error_suppress_print.sh
+
 EXTRA_DIST = \
     run-test.sh \
     test_sf_kind.c \
@@ -296,5 +299,7 @@ EXTRA_DIST = \
     regression/nested-unknown-hash-syntax.lisp \
     regression/tail_call_unwrap.lisp \
     regression/unwind_protect_tail_call.lisp \
+    regression/test_caught_error_suppress_print.sh \
+    regression/caught_error_suppress_print.lisp \
     fixtures/app_lib/app-helper.lisp \
     fixtures/extra_lib/extra-lib.lisp
