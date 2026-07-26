@@ -9,6 +9,7 @@ static int should_propagate_error(LispObject *obj)
 }
 
 /* Forward declarations */
+static LispObject *handle_caught_error(LispObject *error, Environment *env);
 static LispObject *eval_list(LispObject *list, Environment *env, int in_tail_position);
 static LispObject *eval_if(LispObject *args, Environment *env, int in_tail_position);
 static LispObject *eval_define(LispObject *args, Environment *env);
@@ -42,6 +43,11 @@ LispObject *lisp_eval(LispObject *expr, Environment *env)
         /* Execute the tail call (in_tail_position=0 to actually run it) */
         /* But the body evaluation will still use in_tail_position=1 for last expr */
         result = apply(func, args, env, 0);
+    }
+
+    /* If an error escaped from the trampoline, check for handlers */
+    if (should_propagate_error(result) && env->handler_stack != NULL) {
+        result = handle_caught_error(result, env);
     }
 
     return result;
@@ -1438,6 +1444,9 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
         if (env && env->call_stack != NULL) {
             new_env->call_stack = env->call_stack; /* Inherit call stack */
         }
+        if (env && env->handler_stack != NULL) {
+            new_env->handler_stack = env->handler_stack; /* Inherit handler stack */
+        }
 
         /* Generate lambda name for stack trace */
         char lambda_name[128];
@@ -1556,7 +1565,8 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
 
             /* Create NEW environment for tail-called lambda */
             Environment *tail_env = env_create(LISP_LAMBDA_CLOSURE(tail_func));
-            tail_env->call_stack = new_env->call_stack; /* Inherit call stack */
+            tail_env->call_stack = new_env->call_stack;       /* Inherit call stack */
+            tail_env->handler_stack = new_env->handler_stack; /* Inherit handler stack */
 
             /* Generate lambda name for stack trace */
             char tail_lambda_name[128];
@@ -1644,6 +1654,15 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
 trampoline_done:
 
         if (should_propagate_error(result)) {
+            /* Check for handlers before propagating */
+            if (new_env->handler_stack != NULL) {
+                result = handle_caught_error(result, new_env);
+                if (!should_propagate_error(result)) {
+                    /* Handler caught the error, return normally */
+                    pop_call_frame(new_env);
+                    return result;
+                }
+            }
             result = lisp_attach_stack_trace(result, new_env);
             pop_call_frame(new_env);
             return result;
@@ -1691,6 +1710,83 @@ static LispObject *eval_unwind_protect(LispObject *args, Environment *env, int i
  * Evaluates BODYFORM. If an error occurs, finds matching handler by error type.
  * Binds error to VAR in handler environment, executes handler body.
  */
+
+/* Helper: Try to handle an error via handler_stack chain.
+ * Walks from innermost to outermost handler, looking for a match.
+ * Returns the handler result if found, or the original error if not.
+ */
+static LispObject *handle_caught_error(LispObject *error, Environment *env)
+{
+    for (HandlerContext *ctx = env->handler_stack; ctx != NULL; ctx = ctx->parent) {
+        LispObject *handlers = ctx->handlers;
+        LispObject *error_type = LISP_ERROR_TYPE(error);
+        LispObject *matching_handler = NIL;
+        LispObject *error_catch_all = NIL;
+
+        /* Search for matching handler in this context */
+        for (LispObject *h = handlers; h != NIL && LISP_TYPE(h) == LISP_CONS; h = lisp_cdr(h)) {
+            LispObject *handler = lisp_car(h);
+            LispObject *handler_type = lisp_car(handler);
+
+            /* Direct match - use this handler */
+            if (error_type != NULL && LISP_TYPE(error_type) == LISP_SYMBOL &&
+                strcmp(LISP_SYM_VAL(handler_type)->name, LISP_SYM_VAL(error_type)->name) == 0) {
+                matching_handler = handler;
+                break;
+            }
+
+            /* 'error catches everything (but keep looking for more specific) */
+            if (strcmp(LISP_SYM_VAL(handler_type)->name, "error") == 0) {
+                error_catch_all = handler;
+            }
+        }
+
+        /* Use specific handler if found, otherwise use 'error catch-all */
+        if (matching_handler == NIL) {
+            matching_handler = error_catch_all;
+        }
+
+        if (matching_handler != NIL) {
+            /* Found a handler - execute it */
+            LispObject *handler_body = lisp_cdr(matching_handler);
+
+            /* Mark error as caught */
+            LISP_ERROR_CAUGHT(error) = 1;
+
+            /* Pop this handler from the stack before executing handler body */
+            /* This prevents infinite loops if handler itself errors */
+            env->handler_stack = ctx->parent;
+
+            /* Bind error to VAR in handler environment if specified */
+            LispObject *saved_binding = NULL;
+            int had_binding = 0;
+            LispObject *var = ctx->error_var_name;
+            Environment *handler_env = ctx->handler_env;
+
+            if (var != NIL) {
+                saved_binding = env_lookup(handler_env, LISP_SYM_VAL(var));
+                had_binding = (saved_binding != NULL);
+                env_define(handler_env, LISP_SYM_VAL(var), error, NULL);
+            }
+
+            /* Evaluate handler body */
+            LispObject *handler_result = eval_progn(handler_body, handler_env, 0);
+
+            /* Restore old binding */
+            if (var != NIL) {
+                if (had_binding) {
+                    env_set(handler_env, LISP_SYM_VAL(var), saved_binding);
+                }
+            }
+
+            return handler_result;
+        }
+    }
+
+    /* No handler found - return the error unmodified */
+    return error;
+}
+
 static LispObject *eval_condition_case(LispObject *args, Environment *env, int in_tail_position)
 {
     /* Parse: (condition-case VAR BODYFORM HANDLER...) */
@@ -1723,8 +1819,25 @@ static LispObject *eval_condition_case(LispObject *args, Environment *env, int i
         }
     }
 
-    /* Evaluate body */
-    LispObject *result = lisp_eval_internal(bodyform, env, in_tail_position);
+    /* Push handler context onto the handler stack.
+     * This ensures handlers are active even across tail calls.
+     * Allocate on GC heap to survive across tail-call trampolines.
+     */
+    HandlerContext *ctx = GC_malloc(sizeof(HandlerContext));
+    ctx->handlers = handlers;
+    ctx->error_var_name = var;
+    ctx->handler_env = env;
+    ctx->parent = env->handler_stack;
+    env->handler_stack = ctx;
+
+    /* Evaluate body - NOT in tail position, because the handler must remain active.
+     * If we allowed tail position, the body could become a tail call that escapes
+     * this function's scope before we check for errors.
+     */
+    LispObject *result = lisp_eval_internal(bodyform, env, 0);
+
+    /* Pop handler context */
+    env->handler_stack = ctx->parent;
 
     /* Check if error occurred */
     if (LISP_TYPE(result) == LISP_ERROR) {

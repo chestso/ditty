@@ -354,11 +354,11 @@ LispObject *lisp_make_macro(LispObject *params, LispObject *body, Environment *c
 
 LispObject *lisp_make_tail_call(LispObject *func, LispObject *args)
 {
-    static LispObject tail_call_obj;
-    tail_call_obj.type = LISP_TAIL_CALL;
-    tail_call_obj.value.tail_call.func = func;
-    tail_call_obj.value.tail_call.args = args;
-    return &tail_call_obj;
+    LispObject *obj = GC_malloc(sizeof(LispObject));
+    obj->type = LISP_TAIL_CALL;
+    obj->value.tail_call.func = func;
+    obj->value.tail_call.args = args;
+    return obj;
 }
 
 LispObject *lisp_make_string_port(const char *str)

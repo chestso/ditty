@@ -99,8 +99,8 @@ Environment *env_create(Environment *parent)
     env->bucket_count = ENV_INLINE_BUCKETS;
     env->binding_count = 0;
     env->parent = parent;
-    env->call_stack = NULL;
-    env->handler_stack = NULL;
+    env->call_stack = (parent != NULL) ? parent->call_stack : NULL;
+    env->handler_stack = (parent != NULL) ? parent->handler_stack : NULL;
     return env;
 }
 
