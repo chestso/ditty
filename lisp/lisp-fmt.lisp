@@ -855,6 +855,17 @@
      (has-vertical-intent? (unwrap-value (cadr lst))))
     ((quote-shorthand? lst 'unquote-splicing)
      (has-vertical-intent? (unwrap-value (cadr lst))))
+    ((vector? lst)
+     (let ((prev-start -1)
+           (found #f)
+           (len (length lst)))
+       (do ((i 0 (+ i 1))) ((or found (>= i len)) found)
+         (let ((elem (vector-ref lst i)))
+           (when (annotated? elem)
+             (let ((sl (ann-start-line elem)))
+               (when (and (> prev-start 0) (not (= sl prev-start)))
+                 (set! found #t))
+               (set! prev-start sl)))))))
     ((not (pair? lst)) #f)
     (#t
      (let ((prev-start -1)
@@ -898,6 +909,15 @@
   (cond
     ;; Comment nodes render as their text (first-class AST peer)
     ((comment-node? sexp) (comment-node-text sexp))
+    ;; Vectors
+    ((vector? sexp)
+     (cond
+       ;; Preserve user-chosen vertical layout
+       ((has-vertical-intent? sexp) (format-vector-multiline sexp indent))
+       ;; Try single line if fits
+       ((fits-on-line? sexp indent) (sexp-to-string sexp))
+       ;; Multi-line formatting needed
+       (#t (format-vector-multiline sexp indent))))
     ;; Atoms - just convert to string
     ((not (pair? sexp)) (sexp-to-string sexp))
     ;; Empty list
@@ -941,7 +961,7 @@
     ((comment-node? sexp) (comment-node-text sexp))
     (#t
      (let ((value (unwrap-value sexp)))
-       (if (and (annotated? sexp) (not (pair? value)))
+       (if (and (annotated? sexp) (not (pair? value)) (not (vector? value)))
          (sexp-to-string sexp)
          (format-sexp-inner value indent))))))
 
@@ -1369,6 +1389,53 @@
             (lb-append! lb (format-sexp dotted-tail (lb-col lb)))))))
     ;; If the last child was a comment, close ) on a new line so ; doesn't
     ;; swallow the ).
+    (when force-break (lb-newline! lb indent))
+    (lb-append! lb ")")
+    (lb-finish lb)))
+
+(defun format-vector-multiline (vec indent)
+  "Format a vector across multiple lines. Comment-node peer children are
+   dropped during parsing (see parse-vector), so this only handles the
+   actual vector elements."
+  (let* ((elem-indent (+ indent 2)) ; After "#("
+         (lb (lb-create elem-indent))
+         (len (length vec))
+         (force-break #f)
+         (prev-last-line -1))
+    ;; Start with "#("
+    (lb-set-parts! lb '("#("))
+    (lb-set-col! lb (+ indent 2))
+    ;; Process each element
+    (do ((i 0 (+ i 1))
+         (first-elem #t #f)) ((>= i len))
+      (let ((elem (vector-ref vec i)))
+        (let* ((elem-single-len (sexp-length elem))
+               (space-needed (if first-elem 0 1))
+               (try-col (if first-elem (lb-col lb) (+ (lb-col lb) 1)))
+               (elem-str (format-sexp elem try-col))
+               (is-multiline (string-contains? elem-str "\n"))
+               (source-gap?
+                (and (annotated? elem) (> prev-last-line 0)
+                     (> (ann-start-line elem) prev-last-line))))
+          (if
+            (and (not first-elem)
+                 (or force-break source-gap?
+                     (> (+ (lb-col lb) space-needed elem-single-len)
+                      *max-column*)
+                     is-multiline))
+            ;; New line needed
+            (let ((elem-str-aligned
+                   (if is-multiline (format-sexp elem elem-indent) elem-str)))
+              (lb-newline! lb elem-indent)
+              (lb-append! lb elem-str-aligned)
+              (let ((first-newline (string-index elem-str-aligned "\n")))
+                (when first-newline
+                  (lb-set-col! lb (+ elem-indent first-newline)))))
+            ;; Fits on current line
+            (progn (unless first-elem (lb-append-space! lb))
+              (lb-append! lb elem-str))))
+        (set! force-break #f)
+        (when (annotated? elem) (set! prev-last-line (ann-last-line elem)))))
     (when force-break (lb-newline! lb indent))
     (lb-append! lb ")")
     (lb-finish lb)))
