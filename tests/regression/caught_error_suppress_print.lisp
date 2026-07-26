@@ -5,14 +5,12 @@
 
 ;; ---- Case 1: Caught error returns handler value, not error output ----
 ;; Handler returns 'ok, so result should be 'ok with no ERROR: prefix
-(define result1 (condition-case err (error 'test-error "message")
-                  (error 'ok)))
+(define result1 (condition-case err (error 'test-error "message") (error 'ok)))
 
 (assert-equal 'ok result1 "Caught error: handler return value is result")
 
 ;; ---- Case 2: Caught error with nil handler body returns nil ----
-(define result2 (condition-case err (error 'test-error "message")
-                  (error nil)))
+(define result2 (condition-case err (error 'test-error "message") (error nil)))
 
 (assert-nil result2 "Caught error: nil handler body returns nil")
 
@@ -27,8 +25,7 @@
 
 ;; ---- Case 4: Handler returns the error object itself ----
 ;; The error object should NOT print - it's a caught error returned as value
-(define result4 (condition-case err (error 'test-error "message")
-                  (error err)))
+(define result4 (condition-case err (error 'test-error "message") (error err)))
 
 (assert-true (error? result4) "Handler returns error object: is error type")
 ;; The caught flag should be set
