@@ -77,6 +77,8 @@ Integer column width.
 
 Concatenate strings together.
 
+All arguments must be strings. Use `char->string` to convert characters.
+
 ### Parameters
 
 - `strings...` - Zero or more strings to concatenate

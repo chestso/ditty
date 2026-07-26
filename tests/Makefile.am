@@ -148,6 +148,7 @@ TESTS = \
     basic/alists.lisp \
     basic/apply.lisp \
     basic/and_or_list.lisp \
+    basic/bitwise.lisp \
     basic/characters.lisp \
     basic/define_shorthand.lisp \
     basic/filesystem.lisp \
@@ -232,6 +233,7 @@ EXTRA_DIST = \
     basic/alists.lisp \
     basic/apply.lisp \
     basic/and_or_list.lisp \
+    basic/bitwise.lisp \
     basic/characters.lisp \
     basic/define_shorthand.lisp \
     basic/filesystem.lisp \

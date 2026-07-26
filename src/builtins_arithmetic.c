@@ -333,6 +333,120 @@ static LispObject *builtin_min(LispObject *args, Environment *env)
                         : lisp_make_number(result);
 }
 
+/* ---- Bitwise Operations ---- */
+
+static LispObject *builtin_logand(LispObject *args, Environment *env)
+{
+    (void)env;
+    long long result = -1; /* Identity: all bits set */
+
+    while (args != NIL && args != NULL) {
+        LispObject *arg = lisp_car(args);
+        if (LISP_TYPE(arg) != LISP_INTEGER)
+            return lisp_make_error("logand requires integers");
+        result &= LISP_INT_VAL(arg);
+        args = lisp_cdr(args);
+    }
+
+    return lisp_make_integer(result);
+}
+
+static LispObject *builtin_logior(LispObject *args, Environment *env)
+{
+    (void)env;
+    long long result = 0; /* Identity: no bits set */
+
+    while (args != NIL && args != NULL) {
+        LispObject *arg = lisp_car(args);
+        if (LISP_TYPE(arg) != LISP_INTEGER)
+            return lisp_make_error("logior requires integers");
+        result |= LISP_INT_VAL(arg);
+        args = lisp_cdr(args);
+    }
+
+    return lisp_make_integer(result);
+}
+
+static LispObject *builtin_logxor(LispObject *args, Environment *env)
+{
+    (void)env;
+    long long result = 0; /* Identity: no bits set */
+
+    while (args != NIL && args != NULL) {
+        LispObject *arg = lisp_car(args);
+        if (LISP_TYPE(arg) != LISP_INTEGER)
+            return lisp_make_error("logxor requires integers");
+        result ^= LISP_INT_VAL(arg);
+        args = lisp_cdr(args);
+    }
+
+    return lisp_make_integer(result);
+}
+
+static LispObject *builtin_lognot(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("lognot");
+
+    LispObject *arg = lisp_car(args);
+    if (LISP_TYPE(arg) != LISP_INTEGER)
+        return lisp_make_error("lognot requires an integer");
+
+    return lisp_make_integer(~LISP_INT_VAL(arg));
+}
+
+static LispObject *builtin_ash(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_2("ash");
+
+    LispObject *value_obj = lisp_car(args);
+    LispObject *count_obj = lisp_car(lisp_cdr(args));
+
+    if (LISP_TYPE(value_obj) != LISP_INTEGER)
+        return lisp_make_error("ash requires an integer value");
+    if (LISP_TYPE(count_obj) != LISP_INTEGER)
+        return lisp_make_error("ash requires an integer count");
+
+    long long value = LISP_INT_VAL(value_obj);
+    long long count = LISP_INT_VAL(count_obj);
+
+    if (count >= 0)
+        return lisp_make_integer(value << count);
+    else
+        return lisp_make_integer(value >> (-count));
+}
+
+static LispObject *builtin_logcount(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("logcount");
+
+    LispObject *arg = lisp_car(args);
+    if (LISP_TYPE(arg) != LISP_INTEGER)
+        return lisp_make_error("logcount requires an integer");
+
+    long long value = LISP_INT_VAL(arg);
+    int count = 0;
+
+    /* Count 1-bits using two's complement semantics */
+    if (value >= 0) {
+        while (value) {
+            count += value & 1;
+            value >>= 1;
+        }
+    } else {
+        /* For negative numbers, count 0-bits in two's complement */
+        value = ~value;
+        while (value) {
+            count += value & 1;
+            value >>= 1;
+        }
+    }
+
+    return lisp_make_integer(count);
+}
+
 void register_arithmetic_builtins(Environment *env)
 {
     REGISTER("+", builtin_add);
@@ -347,4 +461,10 @@ void register_arithmetic_builtins(Environment *env)
     REGISTER("odd?", builtin_odd_question);
     REGISTER("max", builtin_max);
     REGISTER("min", builtin_min);
+    REGISTER("logand", builtin_logand);
+    REGISTER("logior", builtin_logior);
+    REGISTER("logxor", builtin_logxor);
+    REGISTER("lognot", builtin_lognot);
+    REGISTER("ash", builtin_ash);
+    REGISTER("logcount", builtin_logcount);
 }

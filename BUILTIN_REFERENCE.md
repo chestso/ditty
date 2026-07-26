@@ -21,6 +21,12 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `odd?`
   - `max`
   - `min`
+  - `logand`
+  - `logior`
+  - `logxor`
+  - `lognot`
+  - `ash`
+  - `logcount`
 - [Characters](#characters)
   - `char?`
   - `char-code`
@@ -372,6 +378,8 @@ Divide numbers or compute reciprocal.
 
 Result of division. **Always returns a float**, even for integer arguments.
 
+For integer division, use `quotient` instead.
+
 #### Examples
 
 ```lisp
@@ -384,6 +392,8 @@ Result of division. **Always returns a float**, even for integer arguments.
 ### `quotient`
 
 Integer division - divide and truncate to integer.
+
+Use this instead of `/` when you need an integer result.
 
 #### Parameters
 
@@ -645,6 +655,189 @@ Returns error if no arguments are provided or if any argument is not a number.
 
 - `max` - Return the largest number
 - `<` - Less-than comparison
+
+### `logand`
+
+Bitwise AND of integers.
+
+#### Parameters
+
+- `integers...` - Zero or more integers
+
+#### Returns
+
+Bitwise AND of all arguments. With no arguments, returns -1 (all bits set, the identity element).
+
+#### Examples
+
+```lisp
+(logand 15 7)        ; => 7  (0b1111 & 0b0111)
+(logand 12 10)       ; => 8  (0b1100 & 0b1010 = 0b1000)
+(logand)             ; => -1 (identity)
+(logand 42)          ; => 42 (single argument)
+(logand -1 6)        ; => 6  (-1 has all bits set)
+```
+
+#### Errors
+
+Returns error if any argument is not an integer.
+
+#### See Also
+
+- `logior` - Bitwise inclusive OR
+- `logxor` - Bitwise exclusive OR
+- `lognot` - Bitwise NOT
+
+### `logior`
+
+Bitwise inclusive OR of integers.
+
+#### Parameters
+
+- `integers...` - Zero or more integers
+
+#### Returns
+
+Bitwise inclusive OR of all arguments. With no arguments, returns 0 (no bits set, the identity element).
+
+#### Examples
+
+```lisp
+(logior 12 10)       ; => 14 (0b1100 | 0b1010 = 0b1110)
+(logior 8 1)         ; => 9  (0b1000 | 0b0001 = 0b1001)
+(logior)             ; => 0  (identity)
+(logior 1 2 4 8)     ; => 15 (variadic)
+```
+
+#### Errors
+
+Returns error if any argument is not an integer.
+
+#### See Also
+
+- `logand` - Bitwise AND
+- `logxor` - Bitwise exclusive OR
+
+### `logxor`
+
+Bitwise exclusive OR (XOR) of integers.
+
+#### Parameters
+
+- `integers...` - Zero or more integers
+
+#### Returns
+
+Bitwise exclusive OR of all arguments. With no arguments, returns 0 (the identity element).
+
+#### Examples
+
+```lisp
+(logxor 12 10)       ; => 6  (0b1100 ^ 0b1010 = 0b0110)
+(logxor 8 1)         ; => 9  (0b1000 ^ 0b0001 = 0b1001)
+(logxor 42 42)       ; => 0  (x ^ x = 0)
+(logxor)             ; => 0  (identity)
+```
+
+#### Errors
+
+Returns error if any argument is not an integer.
+
+#### See Also
+
+- `logand` - Bitwise AND
+- `logior` - Bitwise inclusive OR
+
+### `lognot`
+
+Bitwise NOT (complement) of an integer.
+
+#### Parameters
+
+- `integer` - An integer
+
+#### Returns
+
+The bitwise complement of the integer. Equivalent to `-(n+1)` in two's complement.
+
+#### Examples
+
+```lisp
+(lognot 0)           ; => -1  (all bits flipped to 1)
+(lognot -1)          ; => 0   (all bits flipped to 0)
+(lognot 5)           ; => -6
+(lognot (lognot 42)) ; => 42  (double negation)
+```
+
+#### Errors
+
+Returns error if the argument is not an integer.
+
+#### See Also
+
+- `logand` - Bitwise AND
+
+### `ash`
+
+Arithmetic shift - shift bits left or right.
+
+#### Parameters
+
+- `integer` - The integer to shift
+- `count` - Number of bits to shift (positive = left, negative = right)
+
+#### Returns
+
+The integer shifted by `count` bits. Left shift multiplies by 2^count. Right shift divides by 2^count with sign extension (arithmetic shift).
+
+#### Examples
+
+```lisp
+(ash 1 3)            ; => 8   (1 << 3 = 8)
+(ash 2 3)            ; => 16  (2 << 3 = 16)
+(ash 8 -3)           ; => 1   (8 >> 3 = 1)
+(ash 7 -1)           ; => 3   (7 >> 1 = 3, truncates)
+(ash 42 0)           ; => 42  (no shift)
+(ash -4 -1)          ; => -2  (sign-extending right shift)
+```
+
+#### Errors
+
+Returns error if either argument is not an integer.
+
+#### See Also
+
+- `logand` - Bitwise AND
+
+### `logcount`
+
+Count the number of 1-bits in an integer (Hamming weight).
+
+#### Parameters
+
+- `integer` - An integer
+
+#### Returns
+
+For non-negative integers: the number of 1-bits. For negative integers: the number of 0-bits in two's complement representation.
+
+#### Examples
+
+```lisp
+(logcount 0)         ; => 0
+(logcount 1)         ; => 1
+(logcount 7)         ; => 3  (0b111)
+(logcount 15)        ; => 4  (0b1111)
+(logcount 42)        ; => 3  (0b101010)
+```
+
+#### Errors
+
+Returns error if the argument is not an integer.
+
+#### See Also
+
+- `logand` - Bitwise AND
 
 ---
 
@@ -2575,9 +2768,7 @@ The name as a string, or nil if anonymous.
 
 ### `documentation`
 
-Get documentation string for function, macro, variable, or built-in bound to symbol.
-
-First checks the symbol's own docstring (set via `set-documentation!` or copied from lambda/macro on `define`), then falls back to the value's docstring if bound to a lambda/macro/builtin.
+Get the documentation string stored on a symbol.
 
 #### Parameters
 
@@ -2585,11 +2776,7 @@ First checks the symbol's own docstring (set via `set-documentation!` or copied 
 
 #### Returns
 
-String containing the documentation, or `nil` if:
-
-- No docstring exists
-- Symbol is unbound
-- Symbol's value is not a function, macro, or built-in
+String containing the documentation, or `nil` if the symbol has no docstring.
 
 #### Examples
 
@@ -2597,37 +2784,18 @@ String containing the documentation, or `nil` if:
 ; User-defined function
 (define calculate-area
   (lambda (width height)
-    "Calculate the area of a rectangle.
-
-    ## Parameters
-    - `width` - Width of the rectangle
-    - `height` - Height of the rectangle
-
-    ## Returns
-    The area as a number."
+    "Calculate the area of a rectangle."
     (* width height)))
 
 (documentation 'calculate-area)
-; => "Calculate the area of a rectangle.\
-\
-    ## Parameters..."
+; => "Calculate the area of a rectangle."
 
-; Built-in function
-(documentation 'car)
-; => "Get the first element of a list (the car).\
-\
-#### Parameters..."
+; Unbound symbol with a docstring
+(set-documentation! 'future-var "Will be defined later.")
+(documentation 'future-var)  ; => "Will be defined later."
 
-; Macro
-(defmacro when (condition . body)
-  "Execute BODY when CONDITION is true."
-  `(if ,condition (progn ,@body) nil))
-
-(documentation 'when)
-; => "Execute BODY when CONDITION is true."
-
-; Undefined symbol
-(documentation 'nonexistent)  ; => ERROR: Undefined symbol
+; Unbound symbol without a docstring
+(documentation 'nonexistent)  ; => nil
 
 ; Function without docstring
 (define no-doc (lambda (x) (* x 2)))
@@ -2637,15 +2805,16 @@ String containing the documentation, or `nil` if:
 #### Notes
 
 - Similar to Emacs Lisp's `documentation` function
-- Works with lambdas, macros, and built-in functions
+- Docstrings are stored on interned symbols, not on bindings
+- Works with lambdas, macros, and built-in functions only when their docstring is set on the symbol
 - Docstrings use CommonMark (Markdown) format
 
 #### Errors
 
 Returns error if:
 
+- No argument is provided
 - Argument is not a symbol
-- Symbol is undefined
 
 #### See Also
 
@@ -5343,6 +5512,8 @@ Integer column width.
 
 Concatenate strings together.
 
+All arguments must be strings. Use `char->string` to convert characters.
+
 #### Parameters
 
 - `strings...` - Zero or more strings to concatenate
@@ -5844,7 +6015,7 @@ The following aliases are defined in the standard library for naming consistency
 
 Symbol and keyword operations.
 
-See also: `symbol?` in [Type Predicates](docstrings/type-predicates.md), `documentation` and `set-documentation!` in [Functions](docstrings/functions.md).
+See also: `symbol?` in [Type Predicates](doc/type-predicates.md), `documentation` and `set-documentation!` in [Functions](doc/functions.md).
 
 ### `symbol->string`
 

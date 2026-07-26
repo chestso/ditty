@@ -100,6 +100,8 @@ Divide numbers or compute reciprocal.
 
 Result of division. **Always returns a float**, even for integer arguments.
 
+For integer division, use `quotient` instead.
+
 ### Examples
 
 ```lisp
@@ -112,6 +114,8 @@ Result of division. **Always returns a float**, even for integer arguments.
 ## `quotient`
 
 Integer division - divide and truncate to integer.
+
+Use this instead of `/` when you need an integer result.
 
 ### Parameters
 
@@ -373,3 +377,186 @@ Returns error if no arguments are provided or if any argument is not a number.
 
 - `max` - Return the largest number
 - `<` - Less-than comparison
+
+## `logand`
+
+Bitwise AND of integers.
+
+### Parameters
+
+- `integers...` - Zero or more integers
+
+### Returns
+
+Bitwise AND of all arguments. With no arguments, returns -1 (all bits set, the identity element).
+
+### Examples
+
+```lisp
+(logand 15 7)        ; => 7  (0b1111 & 0b0111)
+(logand 12 10)       ; => 8  (0b1100 & 0b1010 = 0b1000)
+(logand)             ; => -1 (identity)
+(logand 42)          ; => 42 (single argument)
+(logand -1 6)        ; => 6  (-1 has all bits set)
+```
+
+### Errors
+
+Returns error if any argument is not an integer.
+
+### See Also
+
+- `logior` - Bitwise inclusive OR
+- `logxor` - Bitwise exclusive OR
+- `lognot` - Bitwise NOT
+
+## `logior`
+
+Bitwise inclusive OR of integers.
+
+### Parameters
+
+- `integers...` - Zero or more integers
+
+### Returns
+
+Bitwise inclusive OR of all arguments. With no arguments, returns 0 (no bits set, the identity element).
+
+### Examples
+
+```lisp
+(logior 12 10)       ; => 14 (0b1100 | 0b1010 = 0b1110)
+(logior 8 1)         ; => 9  (0b1000 | 0b0001 = 0b1001)
+(logior)             ; => 0  (identity)
+(logior 1 2 4 8)     ; => 15 (variadic)
+```
+
+### Errors
+
+Returns error if any argument is not an integer.
+
+### See Also
+
+- `logand` - Bitwise AND
+- `logxor` - Bitwise exclusive OR
+
+## `logxor`
+
+Bitwise exclusive OR (XOR) of integers.
+
+### Parameters
+
+- `integers...` - Zero or more integers
+
+### Returns
+
+Bitwise exclusive OR of all arguments. With no arguments, returns 0 (the identity element).
+
+### Examples
+
+```lisp
+(logxor 12 10)       ; => 6  (0b1100 ^ 0b1010 = 0b0110)
+(logxor 8 1)         ; => 9  (0b1000 ^ 0b0001 = 0b1001)
+(logxor 42 42)       ; => 0  (x ^ x = 0)
+(logxor)             ; => 0  (identity)
+```
+
+### Errors
+
+Returns error if any argument is not an integer.
+
+### See Also
+
+- `logand` - Bitwise AND
+- `logior` - Bitwise inclusive OR
+
+## `lognot`
+
+Bitwise NOT (complement) of an integer.
+
+### Parameters
+
+- `integer` - An integer
+
+### Returns
+
+The bitwise complement of the integer. Equivalent to `-(n+1)` in two's complement.
+
+### Examples
+
+```lisp
+(lognot 0)           ; => -1  (all bits flipped to 1)
+(lognot -1)          ; => 0   (all bits flipped to 0)
+(lognot 5)           ; => -6
+(lognot (lognot 42)) ; => 42  (double negation)
+```
+
+### Errors
+
+Returns error if the argument is not an integer.
+
+### See Also
+
+- `logand` - Bitwise AND
+
+## `ash`
+
+Arithmetic shift - shift bits left or right.
+
+### Parameters
+
+- `integer` - The integer to shift
+- `count` - Number of bits to shift (positive = left, negative = right)
+
+### Returns
+
+The integer shifted by `count` bits. Left shift multiplies by 2^count. Right shift divides by 2^count with sign extension (arithmetic shift).
+
+### Examples
+
+```lisp
+(ash 1 3)            ; => 8   (1 << 3 = 8)
+(ash 2 3)            ; => 16  (2 << 3 = 16)
+(ash 8 -3)           ; => 1   (8 >> 3 = 1)
+(ash 7 -1)           ; => 3   (7 >> 1 = 3, truncates)
+(ash 42 0)           ; => 42  (no shift)
+(ash -4 -1)          ; => -2  (sign-extending right shift)
+```
+
+### Errors
+
+Returns error if either argument is not an integer.
+
+### See Also
+
+- `logand` - Bitwise AND
+
+## `logcount`
+
+Count the number of 1-bits in an integer (Hamming weight).
+
+### Parameters
+
+- `integer` - An integer
+
+### Returns
+
+For non-negative integers: the number of 1-bits. For negative integers: the number of 0-bits in two's complement representation.
+
+### Examples
+
+```lisp
+(logcount 0)         ; => 0
+(logcount 1)         ; => 1
+(logcount 7)         ; => 3  (0b111)
+(logcount 15)        ; => 4  (0b1111)
+(logcount 42)        ; => 3  (0b101010)
+```
+
+### Errors
+
+Returns error if the argument is not an integer.
+
+### See Also
+
+- `logand` - Bitwise AND
