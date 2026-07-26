@@ -2,6 +2,8 @@
 
 An embeddable Lisp interpreter library and syntax highlighter written in C. This implementation follows traditional Lisp naming conventions and provides a REPL for testing and demonstration.
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/chestso/ditty)
+
 **Documentation:**
 
 - **[Language Guide](LANGUAGE_GUIDE.md)** — Conceptual guide covering evaluation, special forms, macros, conventions, and more
