@@ -130,6 +130,8 @@
   '(;; --- Arithmetic (src/builtins_arithmetic.c) ---
     "+" "-" "*" "/" "quotient" "remainder" "floor" "modulo"
     "even?" "odd?" "max" "min"
+    ;; --- Bitwise operations (src/builtins_arithmetic.c) ---
+    "logand" "logior" "logxor" "lognot" "ash" "logcount"
     ;; --- Comparison (src/builtins_comparison.c) ---
     ">" "<" "=" ">=" "<=" "not" "eq?" "equal?" "string=?"
     ;; --- Type predicates (src/builtins_type_predicates.c) ---
