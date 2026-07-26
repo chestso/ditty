@@ -101,6 +101,7 @@ Environment *env_create(Environment *parent)
     env->parent = parent;
     env->call_stack = (parent != NULL) ? parent->call_stack : NULL;
     env->handler_stack = (parent != NULL) ? parent->handler_stack : NULL;
+    env->cleanup_stack = (parent != NULL) ? parent->cleanup_stack : NULL;
     return env;
 }
 

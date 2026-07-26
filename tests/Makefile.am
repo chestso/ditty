@@ -208,6 +208,7 @@ TESTS = \
     regression/multiline_parsing.lisp \
     regression/nested-unknown-hash-syntax.lisp \
     regression/tail_call_unwrap.lisp \
+    regression/unwind_protect_tail_call.lisp \
     test_sf_kind \
     test_repl_completeness \
     test_auto_indent \
@@ -294,5 +295,6 @@ EXTRA_DIST = \
     regression/multiline_parsing.lisp \
     regression/nested-unknown-hash-syntax.lisp \
     regression/tail_call_unwrap.lisp \
+    regression/unwind_protect_tail_call.lisp \
     fixtures/app_lib/app-helper.lisp \
     fixtures/extra_lib/extra-lib.lisp

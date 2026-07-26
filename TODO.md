@@ -4,24 +4,21 @@
 
 ### unwind-protect + tail-call optimization
 
-`unwind-protect` has a similar issue to the `condition-case` tail-call bug. The cleanup forms may not run if an error occurs during a tail-recursive call inside the protected body.
+**Status:** FIXED - cleanup forms now run correctly when errors occur in tail-recursive loops.
 
-**Investigation needed:**
+**Implementation:**
 
-- Verify if `unwind-protect` cleanup runs correctly when an error occurs in a tail-recursive loop
-- If not, apply similar handler_stack mechanism or use a separate cleanup_stack
-- The cleanup must run even if the body becomes a tail call
+- Added `CleanupContext` struct and `cleanup_stack` field to `Environment`
+- Cleanups are pushed/popped in `eval_unwind_protect()`
+- Cleanups are inherited across tail calls (dynamic scope)
+- `run_pending_cleanups()` helper drains the stack when errors escape
+- Cleanups only run once: if a handler catches the error, cleanup runs on normal return; if unhandled, cleanup runs before error propagates
 
-**Test case:**
+**Files changed:**
 
-```lisp
-(define cleanup-ran #f)
-(unwind-protect
-  (let loop ()
-    (error 'test-error)
-    (loop))
-  (set! cleanup-ran #t))
-;; cleanup-ran should be #t
-```
+- `include/lisp.h` - Added `CleanupContext` struct, `cleanup_stack` to `Environment`
+- `src/env.c` - Initialize `cleanup_stack` in `env_create()`
+- `src/eval.c` - Added `run_pending_cleanups()`, modified `eval_unwind_protect()`, cleanup checks in trampolines
+- `tests/regression/unwind_protect_tail_call.lisp` - 8 test cases
 
-**Related:** See `ditty-bug-condition-case-tail-call.md` for the fix pattern used for `condition-case`.
+**Related:** See `ditty-bug-condition-case-tail-call.md` for the similar `condition-case` fix.

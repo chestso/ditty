@@ -10,6 +10,7 @@ static int should_propagate_error(LispObject *obj)
 
 /* Forward declarations */
 static LispObject *handle_caught_error(LispObject *error, Environment *env);
+static void run_pending_cleanups(Environment *env);
 static LispObject *eval_list(LispObject *list, Environment *env, int in_tail_position);
 static LispObject *eval_if(LispObject *args, Environment *env, int in_tail_position);
 static LispObject *eval_define(LispObject *args, Environment *env);
@@ -45,9 +46,18 @@ LispObject *lisp_eval(LispObject *expr, Environment *env)
         result = apply(func, args, env, 0);
     }
 
-    /* If an error escaped from the trampoline, check for handlers */
-    if (should_propagate_error(result) && env->handler_stack != NULL) {
-        result = handle_caught_error(result, env);
+    /* If an error escaped from the trampoline, check for handlers first.
+     * If a handler catches the error, cleanups will run when control returns
+     * to the unwind-protect. Only run cleanups if the error is unhandled.
+     */
+    if (should_propagate_error(result)) {
+        if (env->handler_stack != NULL) {
+            result = handle_caught_error(result, env);
+        }
+        /* Only run cleanups if error is still unhandled (escaping) */
+        if (should_propagate_error(result) && env->cleanup_stack != NULL) {
+            run_pending_cleanups(env);
+        }
     }
 
     return result;
@@ -1447,6 +1457,9 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
         if (env && env->handler_stack != NULL) {
             new_env->handler_stack = env->handler_stack; /* Inherit handler stack */
         }
+        if (env && env->cleanup_stack != NULL) {
+            new_env->cleanup_stack = env->cleanup_stack; /* Inherit cleanup stack */
+        }
 
         /* Generate lambda name for stack trace */
         char lambda_name[128];
@@ -1567,6 +1580,7 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
             Environment *tail_env = env_create(LISP_LAMBDA_CLOSURE(tail_func));
             tail_env->call_stack = new_env->call_stack;       /* Inherit call stack */
             tail_env->handler_stack = new_env->handler_stack; /* Inherit handler stack */
+            tail_env->cleanup_stack = new_env->cleanup_stack; /* Inherit cleanup stack */
 
             /* Generate lambda name for stack trace */
             char tail_lambda_name[128];
@@ -1654,7 +1668,7 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
 trampoline_done:
 
         if (should_propagate_error(result)) {
-            /* Check for handlers before propagating */
+            /* Check for handlers first - if caught, cleanups run on normal return */
             if (new_env->handler_stack != NULL) {
                 result = handle_caught_error(result, new_env);
                 if (!should_propagate_error(result)) {
@@ -1662,6 +1676,10 @@ trampoline_done:
                     pop_call_frame(new_env);
                     return result;
                 }
+            }
+            /* Error is unhandled - run cleanups before propagating */
+            if (new_env->cleanup_stack != NULL) {
+                run_pending_cleanups(new_env);
             }
             result = lisp_attach_stack_trace(result, new_env);
             pop_call_frame(new_env);
@@ -1693,8 +1711,20 @@ static LispObject *eval_unwind_protect(LispObject *args, Environment *env, int i
     LispObject *bodyform = lisp_car(args);
     LispObject *cleanup_forms = lisp_cdr(args);
 
+    /* Push cleanup context onto the stack.
+     * This ensures cleanup runs even if an error escapes via tail call.
+     */
+    CleanupContext *ctx = GC_malloc(sizeof(CleanupContext));
+    ctx->cleanup_forms = cleanup_forms;
+    ctx->cleanup_env = env;
+    ctx->parent = env->cleanup_stack;
+    env->cleanup_stack = ctx;
+
     /* Evaluate body (NOT in tail position - cleanup must execute) */
     LispObject *result = lisp_eval_internal(bodyform, env, 0);
+
+    /* Pop cleanup context */
+    env->cleanup_stack = ctx->parent;
 
     /* Execute cleanup forms ALWAYS (implicit progn, result ignored) */
     if (cleanup_forms != NIL) {
@@ -1785,6 +1815,21 @@ static LispObject *handle_caught_error(LispObject *error, Environment *env)
 
     /* No handler found - return the error unmodified */
     return error;
+}
+
+/* Helper: Run all pending cleanups from the cleanup stack.
+ * Called when an error propagates through trampoline loops.
+ * Cleanups run innermost-first (top of stack to bottom).
+ */
+static void run_pending_cleanups(Environment *env)
+{
+    while (env->cleanup_stack != NULL) {
+        CleanupContext *ctx = env->cleanup_stack;
+        env->cleanup_stack = ctx->parent;
+        if (ctx->cleanup_forms != NIL) {
+            eval_progn(ctx->cleanup_forms, ctx->cleanup_env, 0);
+        }
+    }
 }
 
 static LispObject *eval_condition_case(LispObject *args, Environment *env, int in_tail_position)

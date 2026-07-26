@@ -15,6 +15,7 @@ typedef struct LispObject LispObject;
 typedef struct Environment Environment;
 typedef struct CallStackFrame CallStackFrame;
 typedef struct HandlerContext HandlerContext;
+typedef struct CleanupContext CleanupContext;
 typedef struct Symbol Symbol;
 
 /* Symbol structure - interned with optional docstring.
@@ -67,6 +68,14 @@ struct HandlerContext
     LispObject *error_var_name; /* Symbol: variable to bind error (or NIL) */
     Environment *handler_env;   /* Environment for handler evaluation */
     HandlerContext *parent;     /* Previous handler context */
+};
+
+/* Cleanup context for unwind-protect */
+struct CleanupContext
+{
+    LispObject *cleanup_forms; /* List of cleanup expressions */
+    Environment *cleanup_env;  /* Environment for cleanup evaluation */
+    CleanupContext *parent;    /* Previous cleanup context */
 };
 
 /* Object types */
@@ -230,6 +239,7 @@ struct Environment
     Environment *parent;
     CallStackFrame *call_stack;    /* Current call stack */
     HandlerContext *handler_stack; /* Active condition-case handlers */
+    CleanupContext *cleanup_stack; /* Active unwind-protect cleanups */
 };
 
 /* Iterate all bindings in an environment frame */
