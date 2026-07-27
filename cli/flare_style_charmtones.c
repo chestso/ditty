@@ -98,7 +98,6 @@ FlareStyle *flare_style_charmtones(void)
 
     e = (FlareStyleEntry){ 0 };
     CT_FG(tui_ct_oyster(), e);
-    e.faint = 1;
     flare_style_set(s, HL_LITERAL_NIL, &e);
 
     e = (FlareStyleEntry){ 0 };
