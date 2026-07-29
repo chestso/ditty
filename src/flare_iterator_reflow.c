@@ -38,6 +38,8 @@ typedef struct
 
     int has_stash;
     FlareToken stash;
+
+    int pending_space; /* 1 if we need to emit a space before the next token */
 } ReflowIterator;
 
 static int is_space(char c)
@@ -84,6 +86,19 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         return 1;
     }
 
+    /* Emit pending space before the next non-text token */
+    if (it->pending_space) {
+        char *space_text = GC_MALLOC_ATOMIC(2);
+        space_text[0] = ' ';
+        space_text[1] = '\0';
+        out->type = HL_TEXT;
+        out->text = space_text;
+        out->length = 1;
+        it->pending_space = 0;
+        /* Don't increment column - the space was already counted when we set pending_space */
+        return 1;
+    }
+
     if (it->state == REFLOW_STATE_SPLITTING) {
         const char *text = it->current.text;
         size_t len = it->current.length;
@@ -95,6 +110,10 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         }
 
         if (it->split_pos >= len) {
+            /* Check if the original text ended with a trailing space */
+            if (len > 0 && is_space(text[len - 1]) && it->column > 0) {
+                it->pending_space = 1;
+            }
             it->state = REFLOW_STATE_NORMAL;
             return reflow_pull(src, out);
         }
@@ -109,6 +128,16 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         while (it->split_pos < len && !is_space(text[it->split_pos]))
             it->split_pos++;
         size_t word_len = it->split_pos - word_start;
+
+        /* Skip empty words (can happen with multiple consecutive spaces) */
+        if (word_len == 0) {
+            /* Check if the original text ended with a trailing space */
+            if (len > 0 && is_space(text[len - 1]) && it->column > 0) {
+                it->pending_space = 1;
+            }
+            it->state = REFLOW_STATE_NORMAL;
+            return reflow_pull(src, out);
+        }
 
         /* Calculate word width */
         char *word_tmp = GC_MALLOC_ATOMIC(word_len + 1);

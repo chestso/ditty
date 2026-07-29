@@ -46,6 +46,14 @@ typedef enum
     LANG_COMMONMARK
 } LangChoice;
 
+typedef enum
+{
+    DEBUG_NONE,
+    DEBUG_TOKENS,
+    DEBUG_REFLOW,
+    DEBUG_ALL
+} DebugMode;
+
 static void usage(void)
 {
     printf(
@@ -60,6 +68,8 @@ static void usage(void)
         "                        github-dark, github-light\n"
         "  -l, --language LANG   lexer language: auto (default), ditty,\n"
         "                        commonmark, markdown\n"
+        "  -w, --width WIDTH     wrap output at WIDTH columns (default: no wrap)\n"
+        "  -d, --debug MODE      dump pipeline stage: tokens, reflow, all\n"
         "  -h, --help            show this help text\n"
         "  -v, --version         show version\n"
         "\n"
@@ -79,7 +89,12 @@ static void usage(void)
         "  auto          detect from file extension (default)\n"
         "  ditty         Ditty Lisp source\n"
         "  commonmark    CommonMark/Markdown (highlights fenced lisp code blocks)\n"
-        "  markdown      alias for commonmark\n",
+        "  markdown      alias for commonmark\n"
+        "\n"
+        "Debug modes:\n"
+        "  tokens        dump token stream from lexer\n"
+        "  reflow        dump tokens after reflow (word-wrapping)\n"
+        "  all           dump both stages\n",
         PROGNAME);
 }
 
@@ -152,6 +167,26 @@ static int parse_language(const char *s, LangChoice *out)
     return -1;
 }
 
+static int parse_debug(const char *s, DebugMode *out)
+{
+    if (strcmp(s, "tokens") == 0) {
+        *out = DEBUG_TOKENS;
+        return 0;
+    }
+    if (strcmp(s, "reflow") == 0) {
+        *out = DEBUG_REFLOW;
+        return 0;
+    }
+    if (strcmp(s, "all") == 0) {
+        *out = DEBUG_ALL;
+        return 0;
+    }
+    fprintf(stderr,
+            "%s: unknown debug mode '%s' (choose: tokens, reflow, all)\n",
+            PROGNAME, s);
+    return -1;
+}
+
 /* Detect language from file extension */
 static LangChoice detect_language(const char *path)
 {
@@ -163,6 +198,43 @@ static LangChoice detect_language(const char *path)
         return LANG_COMMONMARK;
 
     return LANG_DITTY;
+}
+
+/* Print escape-friendly representation of text for debugging */
+static void print_escaped(const char *text, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)text[i];
+        if (c == '\n')
+            printf("\\n");
+        else if (c == '\r')
+            printf("\\r");
+        else if (c == '\t')
+            printf("\\t");
+        else if (c == '\\')
+            printf("\\\\");
+        else if (c == '"')
+            printf("\\\"");
+        else if (c >= 32 && c < 127)
+            putchar(c);
+        else
+            printf("\\x%02x", c);
+    }
+}
+
+/* Dump token stream to stdout for debugging */
+static void dump_tokens(FlareTokenSource *src, const char *stage)
+{
+    printf("=== %s ===\n", stage);
+    FlareToken tok;
+    int count = 0;
+    while (flare_token_source_pull(src, &tok) > 0) {
+        printf("%d: type=%d text=\"", count, tok.type);
+        print_escaped(tok.text, tok.length);
+        printf("\" len=%zu\n", tok.length);
+        count++;
+    }
+    printf("=== end %s (%d tokens) ===\n", stage, count);
 }
 
 static char *read_all(FILE *f, size_t *out_len)
@@ -193,10 +265,15 @@ static char *read_all(FILE *f, size_t *out_len)
 
 static int highlight_file(const char *path, Environment *env,
                           LangChoice lang, FlareStyle *style,
-                          FlareColorDepth depth)
+                          FlareColorDepth depth, DebugMode debug, int width)
 {
-    /* Create source from file */
-    FlareSource *source = flare_source_file_contents(path);
+    /* Create source from file or stdin */
+    FlareSource *source;
+    if (strcmp(path, "-") == 0) {
+        source = flare_source_file(stdin, "stdin");
+    } else {
+        source = flare_source_file_contents(path);
+    }
     if (!source) {
         fprintf(stderr, "%s: failed to open %s\n", PROGNAME, path);
         return 1;
@@ -221,6 +298,37 @@ static int highlight_file(const char *path, Environment *env,
         return 1;
     }
 
+    /* Debug: dump raw tokens */
+    if (debug == DEBUG_TOKENS || debug == DEBUG_ALL) {
+        dump_tokens(lexer, "tokens");
+        flare_token_source_free(lexer);
+        if (debug == DEBUG_TOKENS)
+            return 0;
+        /* DEBUG_ALL: continue to show reflow too - need to re-create lexer */
+        lexer = (effective == LANG_COMMONMARK) ? flare_lexer_commonmark(source, env)
+                                               : flare_lexer_ditty(source, env);
+        if (!lexer) {
+            fprintf(stderr, "%s: failed to re-create lexer for %s\n", PROGNAME, path);
+            return 1;
+        }
+    }
+
+    /* Debug: dump reflow tokens */
+    if (debug == DEBUG_REFLOW || debug == DEBUG_ALL) {
+        int reflow_width = width > 0 ? width : 80;
+        FlareLayout layout = { .width = reflow_width, .terminal_rows = 24, .resized = 0 };
+        FlareReflowOptions opts = FLARE_ITERATOR_REFLOW_DEFAULT;
+        FlareTokenSource *reflow = flare_iterator_reflow(lexer, &layout, &opts);
+        if (!reflow) {
+            fprintf(stderr, "%s: failed to create reflow iterator\n", PROGNAME);
+            flare_token_source_free(lexer);
+            return 1;
+        }
+        dump_tokens(reflow, "reflow");
+        flare_token_source_free(reflow); /* frees lexer too */
+        return 0;
+    }
+
     /* Create writer for stdout */
     FlareWriter *writer = flare_writer_file(stdout);
     if (!writer) {
@@ -229,8 +337,14 @@ static int highlight_file(const char *path, Environment *env,
         return 1;
     }
 
-    /* Create formatter with writer and style */
-    FlareFormatter *formatter = flare_formatter_terminal(depth, writer, style);
+    /* Create formatter with optional reflow */
+    FlareFormatter *formatter;
+    if (width > 0) {
+        FlareLayout layout = { .width = width, .terminal_rows = 24, .resized = 0 };
+        formatter = flare_formatter_terminal_ex(depth, writer, style, NULL, NULL, &layout);
+    } else {
+        formatter = flare_formatter_terminal(depth, writer, style);
+    }
     if (!formatter) {
         fprintf(stderr, "%s: failed to create formatter\n", PROGNAME);
         flare_writer_free(writer);
@@ -260,6 +374,8 @@ int main(int argc, char **argv)
     FlareColorDepth depth = BFLARE_COLOR_TRUECOLOR;
     style_ctor make_style = flare_style_dracula;
     LangChoice lang = LANG_AUTO;
+    DebugMode debug = DEBUG_NONE;
+    int width = 0;
     int file_start = argc;
 
     for (int i = 1; i < argc; i++) {
@@ -301,6 +417,29 @@ int main(int argc, char **argv)
                 return 2;
             continue;
         }
+        if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "%s: %s requires an argument\n", PROGNAME, argv[i]);
+                return 2;
+            }
+            i++;
+            if (parse_debug(argv[i], &debug) != 0)
+                return 2;
+            continue;
+        }
+        if (strcmp(argv[i], "-w") == 0 || strcmp(argv[i], "--width") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "%s: %s requires an argument\n", PROGNAME, argv[i]);
+                return 2;
+            }
+            i++;
+            width = atoi(argv[i]);
+            if (width <= 0) {
+                fprintf(stderr, "%s: width must be a positive integer\n", PROGNAME);
+                return 2;
+            }
+            continue;
+        }
         if (argv[i][0] == '-' && argv[i][1] != '\0') {
             fprintf(stderr, "%s: unknown option '%s'\n", PROGNAME, argv[i]);
             fprintf(stderr, "Try '%s --help' for more information.\n", PROGNAME);
@@ -318,10 +457,10 @@ int main(int argc, char **argv)
 
     if (file_start >= argc) {
         /* Read from stdin */
-        rc = highlight_file("-", env, lang, style, depth);
+        rc = highlight_file("-", env, lang, style, depth, debug, width);
     } else {
         for (int i = file_start; i < argc; i++) {
-            if (highlight_file(argv[i], env, lang, style, depth) != 0)
+            if (highlight_file(argv[i], env, lang, style, depth, debug, width) != 0)
                 rc = 1;
         }
     }
