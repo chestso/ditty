@@ -426,7 +426,11 @@ static void print_doc(const char *name)
                     }
                     flare_formatter_free(formatter);
                 }
-                flare_token_source_free(lexer);
+                /* Formatter takes ownership of lexer when reflow is applied.
+                 * If no reflow (width <= 0), we must free it. */
+                if (g_layout.width <= 0) {
+                    flare_token_source_free(lexer);
+                }
             }
         }
         flare_writer_free(writer);
