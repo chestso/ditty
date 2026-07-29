@@ -20,7 +20,7 @@ The object that was printed.
 ;; User-facing messages
 (princ "Hello, world!")    ; Prints: Hello, world! (no quotes)
 (princ "Line 1\nLine 2")   ; Prints: Line 1 (actual newline)
-                            ;         Line 2
+                           ;         Line 2
 
 ;; Escape sequences are interpreted
 (princ "Tab:\there")       ; Prints: Tab:  here (actual tab)
