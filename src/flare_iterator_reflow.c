@@ -216,7 +216,11 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         return reflow_pull(src, out);
     }
 
+    /* Pass through other tokens but update column for their display width */
     *out = token;
+    if (token.text && token.length > 0) {
+        it->column += utf8_display_width(token.text);
+    }
     return 1;
 }
 
