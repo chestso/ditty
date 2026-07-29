@@ -11,7 +11,7 @@ FLARE_TESTS = \
     test_flare_terminal_style \
     test_highlight_sequence
 
-check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils $(FLARE_TESTS)
+check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils test_history $(FLARE_TESTS)
 if HAVE_BOBA
 check_PROGRAMS += test_repl_app
 endif
@@ -113,6 +113,21 @@ test_auto_indent_LDADD = \
     $(GC_LIBS) \
     $(PCRE2_LIBS)
 
+test_history_SOURCES = test_history.c ../cli/history.c
+test_history_CPPFLAGS = \
+    -I$(top_srcdir)/include \
+    -I$(top_srcdir)/src \
+    -I$(top_builddir)/src \
+    -I$(top_srcdir)/cli \
+    $(GC_CFLAGS) \
+    $(PCRE2_CFLAGS) \
+    $(BOBA_CFLAGS)
+test_history_LDADD = \
+    $(top_builddir)/src/libditty.a \
+    $(GC_LIBS) \
+    $(PCRE2_LIBS) \
+    $(BOBA_LIBS)
+
 test_repl_app_SOURCES = test_repl_app.c ../cli/repl_app.c
 test_repl_app_CPPFLAGS = \
     -I$(top_srcdir)/include \
@@ -133,6 +148,7 @@ $(test_sf_kind_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_repl_completeness_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_auto_indent_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_file_utils_OBJECTS): $(top_builddir)/src/ditty_version.h
+$(test_history_OBJECTS): $(top_builddir)/src/ditty_version.h
 if HAVE_BOBA
 $(test_repl_app_OBJECTS): $(top_builddir)/src/ditty_version.h
 endif
@@ -140,7 +156,7 @@ $(FLARE_TESTS_OBJECTS): $(top_builddir)/src/ditty_version.h
 
 BOBA_TESTS =
 if HAVE_BOBA
-BOBA_TESTS += test_repl_app
+BOBA_TESTS += test_repl_app test_history
 endif
 
 # Lisp script tests

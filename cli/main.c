@@ -13,6 +13,7 @@
 
 #ifdef HAVE_BOBA
 #include "colors.h"
+#include "history.h"
 #include "repl_app.h"
 #include <boba/ansi_sequences.h>
 #include <boba/cmd.h>
@@ -579,6 +580,9 @@ static void handle_line_submit(char *line)
      * the form is complete (repl_app_update intercepts incomplete). */
     const char *full_text = line ? line : "";
 
+    /* Add to history before processing */
+    tui_textinput_history_add(g_app->textinput, full_text);
+
     /* Handle /quit / /load */
     if (full_text[0] == '/') {
         tui_runtime_finish_inline(g_runtime);
@@ -607,9 +611,6 @@ static void handle_line_submit(char *line)
      * output directly. The event loop's next flush renders the fresh
      * prompt below the output. */
     tui_runtime_finish_inline(g_runtime);
-
-    /* Add to history */
-    tui_textinput_history_add(g_app->textinput, full_text);
 
     LispObject *eval_result = lisp_eval(expr, g_env);
 
@@ -706,6 +707,10 @@ static void handle_app_cmd(TuiCmd *cmd, void *user_data)
 
 static void cleanup(void)
 {
+    if (g_app && g_app->textinput) {
+        history_save(g_app->textinput);
+    }
+
     g_app = NULL;
 
     if (g_style) {
@@ -765,6 +770,9 @@ static void run_interactive_repl(Environment *env)
     g_app->is_complete = is_form_complete;
     g_app->compute_indent = compute_auto_indent;
     g_app->on_break = handle_break;
+
+    /* Load history from previous sessions */
+    history_load(g_app->textinput);
 
     /* Give repl_app the runtime handle for posting messages */
     repl_app_set_runtime(g_runtime);

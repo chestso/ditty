@@ -2,7 +2,7 @@
 bin_PROGRAMS = ditty
 
 if HAVE_BOBA
-ditty_SOURCES = main.c repl_app.c flare_style_charmtones.c
+ditty_SOURCES = main.c repl_app.c flare_style_charmtones.c history.c
 else
 ditty_SOURCES = main.c
 endif
@@ -45,4 +45,4 @@ ditty_CPPFLAGS += $(BOBA_CFLAGS)
 ditty_LDADD += $(BOBA_LIBS)
 endif
 
-EXTRA_DIST = colors.h repl_app.h
+EXTRA_DIST = colors.h repl_app.h history.h
