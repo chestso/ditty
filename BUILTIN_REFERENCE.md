@@ -4409,13 +4409,11 @@ Formatted string if `destination` is `nil`, otherwise `nil`.
 #### Examples
 
 ```lisp
-(format nil "Hello, ~A!" "World")     ; => "Hello, World!"
-(format nil "~A + ~A = ~A" 2 3 5)     ; => "2 + 3 = 5"
-(format nil "String: ~S" "test")     ; => "String: \"test\""
-(format nil "Line 1~%Line 2")         ; => "Line 1\
-Line 2"
-(format #t "Hello!~%" )               ; Prints: Hello!\
-
+(format nil "Hello, ~A!" "World")      ; => "Hello, World!"
+(format nil "~A + ~A = ~A" 2 3 5)      ; => "2 + 3 = 5"
+(format nil "String: ~S" "test")       ; => "String: \"test\""
+(format nil "Line 1~%Line 2")          ; => "Line 1\nLine 2"
+(format #t "Hello!~%")                 ; Prints: Hello! then newline
                                        ; => nil
 ```
 
