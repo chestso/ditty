@@ -17,9 +17,17 @@ The object that was printed.
 ### Examples
 
 ```lisp
-(princ "Hello")         ; Prints: Hello (no quotes)
-(princ 42)              ; Prints: 42
-(princ '(1 2 3))        ; Prints: (1 2 3)
+;; User-facing messages
+(princ "Hello, world!")        ; Prints: Hello, world! (no quotes)
+(princ "Line 1\nLine 2")      ; Prints: Line 1 (actual newline)
+                               ;         Line 2
+
+;; Escape sequences are interpreted
+(princ "Tab:\there")          ; Prints: Tab:  here (actual tab)
+
+;; Numbers and lists look natural
+(princ 42)                     ; Prints: 42
+(princ '(1 2 3))               ; Prints: (1 2 3)
 ```
 
 ### Notes
@@ -47,9 +55,20 @@ The object that was printed.
 ### Examples
 
 ```lisp
-(prin1 "Hello")         ; Prints: "Hello" (with quotes)
-(prin1 42)              ; Prints: 42
-(prin1 '(1 2 3))        ; Prints: (1 2 3)
+;; Machine-readable output - can be read back
+(prin1 "Hello, world!")        ; Prints: "Hello, world!" (with quotes)
+(prin1 "Line 1\nLine 2")       ; Prints: "Line 1\nLine 2" (escape preserved)
+
+;; Escape sequences are preserved, not interpreted
+(prin1 "Tab:\there")           ; Prints: "Tab:\there" (literal backslash-t)
+
+;; Numbers and lists in readable form
+(prin1 42)                     ; Prints: 42
+(prin1 '(1 2 3))               ; Prints: (1 2 3)
+
+;; Contrast with princ: escape sequences
+(princ "a\nb")                 ; Prints: a (newline) b
+(prin1 "a\nb")                 ; Prints: "a\nb" (literal string)
 ```
 
 ### Notes
@@ -79,8 +98,20 @@ The object that was printed.
 ### Examples
 
 ```lisp
-(print "Hello")         ; Prints newline, then "Hello", then space
-(print 42)              ; Prints newline, then 42, then space
+;; Interactive debugging - each value on its own line
+(do ((i 1 (+ i 1)))
+    ((> i 3))
+  (print i))
+;; Prints:
+;;
+;; 1
+;;
+;; 2
+;;
+;; 3
+
+;; The space after makes output separation clear in REPL
+;; When REPL prints the return value, it doesn't run together
 ```
 
 ### Notes
