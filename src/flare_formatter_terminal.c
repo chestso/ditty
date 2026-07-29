@@ -426,25 +426,17 @@ static size_t emit_token_text(char **out, size_t *cap, size_t pos,
     return pos;
 }
 
-/* Emit inline code text with a space before and after for padding.
- * The space is included in the styled region so the background color
- * extends around the code. */
+/* Emit inline code text. The surrounding whitespace from the markdown
+ * source provides natural separation; ANSI styling distinguishes the
+ * code visually. No extra padding is added so reflow width tracking
+ * stays accurate. */
 static size_t emit_inline_code_text(char **out, size_t *cap, size_t pos,
                                     const char *text, size_t length,
                                     const char *sgr,
                                     int *at_line_start)
 {
-    /* Leading space for padding */
-    buf_ensure(out, cap, pos, 1);
-    (*out)[pos++] = ' ';
-
-    /* Content */
     if (length > 0)
         pos = emit_token_text(out, cap, pos, text, length, 0, sgr, at_line_start);
-
-    /* Trailing space for padding */
-    buf_ensure(out, cap, pos, 1);
-    (*out)[pos++] = ' ';
 
     *at_line_start = 0;
     return pos;
