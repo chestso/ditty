@@ -4,6 +4,7 @@
 #include "../include/ditty/flare_writer.h"
 #include "../include/ditty/flare_layout.h"
 #include "../include/ditty/flare_token_source.h"
+#include "../include/ditty/flare_iterator.h"
 #include <gc.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,7 @@ struct FlareFormatter
     FlareTerminalStyle term_style;
     FlareWriter *writer;
     FlareLayout *layout;
+    FlareReflowOptions reflow_opts;
     int prev_valid;
     FlareStyleEntry prev_style;
     int hyperlink_open;
@@ -237,12 +239,13 @@ static int format_token(FlareFormatter *fmt, const FlareToken *token)
 
 FlareFormatter *flare_formatter_terminal(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style)
 {
-    return flare_formatter_terminal_ex(depth, writer, style, NULL, NULL);
+    return flare_formatter_terminal_ex(depth, writer, style, NULL, NULL, NULL);
 }
 
 FlareFormatter *flare_formatter_terminal_ex(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style,
                                             const FlareTerminalStyle *term_style,
-                                            const FlareReflowOptions *reflow)
+                                            const FlareReflowOptions *reflow,
+                                            FlareLayout *layout)
 {
     FlareFormatter *f = calloc(1, sizeof(FlareFormatter));
     if (!f)
@@ -251,7 +254,8 @@ FlareFormatter *flare_formatter_terminal_ex(FlareColorDepth depth, FlareWriter *
     f->writer = writer;
     f->style = style;
     f->term_style = term_style ? *term_style : FLARE_TERMINAL_STYLE_DEFAULT;
-    (void)reflow;
+    f->reflow_opts = reflow ? *reflow : FLARE_REFLOW_DEFAULT;
+    f->layout = layout;
     return f;
 }
 
@@ -264,28 +268,45 @@ int flare_formatter_format(FlareFormatter *fmt, FlareTokenSource *src)
     if (!fmt || !src)
         return -1;
 
+    /* Wrap with reflow iterator if layout provides width */
+    FlareTokenSource *effective_src = src;
+    if (fmt->layout && fmt->layout->width > 0) {
+        effective_src = flare_iterator_reflow(src, fmt->layout, &fmt->reflow_opts);
+        if (!effective_src)
+            return -1;
+    }
+
     /* Collect tokens into an array, then render with the single terminal
      * formatter. This keeps all terminal rendering logic in one place. */
     size_t count = 0;
     size_t capacity = 64;
     FlareToken *tokens = malloc(capacity * sizeof(FlareToken));
-    if (!tokens)
+    if (!tokens) {
+        if (effective_src != src)
+            flare_token_source_free(effective_src);
         return -1;
+    }
 
     FlareToken tok;
     int result;
-    while ((result = flare_token_source_pull(src, &tok)) > 0) {
+    while ((result = flare_token_source_pull(effective_src, &tok)) > 0) {
         if (count >= capacity) {
             capacity *= 2;
             FlareToken *tmp = realloc(tokens, capacity * sizeof(FlareToken));
             if (!tmp) {
                 free(tokens);
+                if (effective_src != src)
+                    flare_token_source_free(effective_src);
                 return -1;
             }
             tokens = tmp;
         }
         tokens[count++] = tok;
     }
+
+    /* Free the reflow wrapper if we created one (it owns the upstream) */
+    if (effective_src != src)
+        flare_token_source_free(effective_src);
 
     if (result < 0) {
         free(tokens);

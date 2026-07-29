@@ -79,6 +79,8 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
     if (it->has_pending) {
         *out = it->pending;
         it->has_pending = 0;
+        /* Update column with the word's width */
+        it->column += utf8_display_width(it->pending.text);
         return 1;
     }
 
@@ -86,39 +88,67 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         const char *text = it->current.text;
         size_t len = it->current.length;
 
-        while (it->split_pos < len && is_space(text[it->split_pos]))
-            it->split_pos++;
+        /* Skip leading spaces if we're at column 0 (after a wrap or at start) */
+        if (it->column == 0) {
+            while (it->split_pos < len && is_space(text[it->split_pos]))
+                it->split_pos++;
+        }
 
         if (it->split_pos >= len) {
             it->state = REFLOW_STATE_NORMAL;
             return reflow_pull(src, out);
         }
 
+        /* Find the next word */
         size_t word_start = it->split_pos;
+        /* If at a space, skip it (we handle spacing explicitly below) */
+        if (is_space(text[word_start])) {
+            word_start++;
+            it->split_pos = word_start;
+        }
         while (it->split_pos < len && !is_space(text[it->split_pos]))
             it->split_pos++;
         size_t word_len = it->split_pos - word_start;
 
+        /* Calculate word width */
         char *word_tmp = GC_MALLOC_ATOMIC(word_len + 1);
         memcpy(word_tmp, text + word_start, word_len);
         word_tmp[word_len] = '\0';
         int width = utf8_display_width(word_tmp);
         int tw = target_width(it);
 
-        if (it->column + width > tw && it->column > 0) {
+        /* Check if word fits (account for space if column > 0) */
+        int space_width = (it->column > 0) ? 1 : 0;
+        if (it->column + space_width + width > tw && it->column > 0) {
+            /* Word doesn't fit on current line - wrap first */
             emit_soft_break(it);
             it->column = 0;
-            it->split_pos = word_start;
+            it->split_pos = word_start; /* reprocess this word after wrap */
             *out = it->pending;
             it->has_pending = 0;
             return 1;
         }
 
-        char *word_text = GC_MALLOC_ATOMIC(word_len + 1);
-        memcpy(word_text, text + word_start, word_len);
-        word_text[word_len] = '\0';
+        /* Word fits - emit space first if needed */
+        if (space_width) {
+            char *space_text = GC_MALLOC_ATOMIC(2);
+            space_text[0] = ' ';
+            space_text[1] = '\0';
+            out->type = HL_TEXT;
+            out->text = space_text;
+            out->length = 1;
+            it->column += 1;
+            /* Stash word for next call */
+            it->has_pending = 1;
+            it->pending.type = HL_TEXT;
+            it->pending.text = word_tmp;
+            it->pending.length = word_len;
+            return 1;
+        }
+
+        /* At column 0, emit word directly */
         out->type = HL_TEXT;
-        out->text = word_text;
+        out->text = word_tmp;
         out->length = word_len;
         it->column += width;
         return 1;

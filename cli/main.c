@@ -22,6 +22,7 @@
 #include <ditty/highlight.h>
 #include <ditty/flare_source.h>
 #include <ditty/flare_writer.h>
+#include <ditty/flare_layout.h>
 
 #endif
 
@@ -64,6 +65,7 @@ static ReplAppModel *g_app = NULL;
 static TuiRuntime *g_runtime = NULL;
 
 static FlareStyle *g_style = NULL; /* CharmTones style, created once */
+static FlareLayout g_layout = { .width = 76, .terminal_rows = 24, .resized = 0 };
 
 /* ANSI color buffers */
 static char color_prompt[32];
@@ -410,8 +412,12 @@ static void print_doc(const char *name)
         if (source && writer) {
             FlareTokenSource *lexer = flare_lexer_commonmark(source, g_env);
             if (lexer) {
-                FlareFormatter *formatter = flare_formatter_terminal(
-                    BFLARE_COLOR_TRUECOLOR, writer, g_style);
+                /* Use terminal width for word wrap, leaving 4-char margin */
+                int width = g_runtime ? tui_runtime_get_width(g_runtime) : 76;
+                g_layout.width = width > 4 ? width - 4 : width;
+
+                FlareFormatter *formatter = flare_formatter_terminal_ex(
+                    BFLARE_COLOR_TRUECOLOR, writer, g_style, NULL, NULL, &g_layout);
                 if (formatter) {
                     if (flare_formatter_format(formatter, lexer) == 0) {
                         size_t out_len = 0;

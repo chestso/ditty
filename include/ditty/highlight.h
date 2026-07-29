@@ -11,6 +11,7 @@
 #include "flare_source.h"
 #include "flare_token_source.h"
 #include "flare_writer.h"
+#include "flare_layout.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -201,20 +202,20 @@ typedef struct
 
 /* ----- Reflow options -------------------------------------------------- */
 
-/* Reflow options for terminal formatter */
+/* Reflow options for terminal formatter.
+ * Width is stored separately in FlareLayout for runtime updates (e.g., terminal resize).
+ */
 typedef struct FlareReflowOptions FlareReflowOptions;
 struct FlareReflowOptions
 {
-    int width;                /* Target width (default 76, 0 = no reflow) */
     int preserve_paragraphs;  /* Keep paragraph breaks (default 1) */
     int preserve_code;        /* Don't reflow fenced code (default 1) */
     int preserve_headings;    /* Don't reflow headings (default 1) */
     int preserve_hard_breaks; /* Preserve hard line breaks (default 1) */
 };
 
-/* Default reflow options (width=76, all preservation enabled) */
+/* Default reflow options (all preservation enabled) */
 #define FLARE_REFLOW_DEFAULT ((FlareReflowOptions){ \
-    .width = 76,                                    \
     .preserve_paragraphs = 1,                       \
     .preserve_code = 1,                             \
     .preserve_headings = 1,                         \
@@ -232,12 +233,13 @@ typedef enum
 } FlareColorDepth;
 
 /* Create a terminal formatter at the given color depth.
- * `reflow` is kept for API compatibility; the formatter stores it but
- * the new pull-based pipeline receives options via the caller. */
+ * `layout` is borrowed and provides width for word wrap (NULL = no wrap).
+ * `reflow` controls what content is preserved during reflow. */
 FlareFormatter *flare_formatter_terminal(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style);
 FlareFormatter *flare_formatter_terminal_ex(FlareColorDepth depth, FlareWriter *writer, FlareStyle *style,
                                             const FlareTerminalStyle *term_style,
-                                            const FlareReflowOptions *reflow);
+                                            const FlareReflowOptions *reflow,
+                                            FlareLayout *layout);
 
 void flare_formatter_free(FlareFormatter *formatter);
 
