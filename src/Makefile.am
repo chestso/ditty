@@ -53,7 +53,7 @@ DOC_FILES = \
     $(top_srcdir)/docstrings/vectors.md
 
 docstrings.gen.h: $(top_srcdir)/scripts/gen-docstrings.sh $(DOC_FILES)
-	$(top_srcdir)/scripts/gen-docstrings.sh $(top_srcdir)/docstrings > $@
+	$(top_srcdir)/scripts/gen-docstrings.sh $(top_srcdir)/docstrings > docstrings.gen.h.tmp && mv docstrings.gen.h.tmp $@
 
 # Main lisp library
 libditty_a_SOURCES = \
