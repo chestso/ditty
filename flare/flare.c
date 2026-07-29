@@ -68,8 +68,7 @@ static void usage(void)
         "                        github-dark, github-light\n"
         "  -l, --language LANG   lexer language: auto (default), ditty,\n"
         "                        commonmark, markdown\n"
-        "  -w, --width WIDTH     wrap output at WIDTH columns (default: no wrap)\n"
-        "  -r, --reflow          enable word-wrapping (requires -w)\n"
+        "  -w, --width WIDTH     wrap output at WIDTH columns (enables reflow)\n"
         "  -d, --debug MODE      dump pipeline stage: tokens, reflow, all\n"
         "  -h, --help            show this help text\n"
         "  -v, --version         show version\n"
@@ -266,8 +265,7 @@ static char *read_all(FILE *f, size_t *out_len)
 
 static int highlight_file(const char *path, Environment *env,
                           LangChoice lang, FlareStyle *style,
-                          FlareColorDepth depth, DebugMode debug, int width,
-                          int enable_reflow)
+                          FlareColorDepth depth, DebugMode debug, int width)
 {
     /* Create source from file or stdin */
     FlareSource *source;
@@ -341,7 +339,7 @@ static int highlight_file(const char *path, Environment *env,
 
     /* Create formatter with optional reflow */
     FlareFormatter *formatter;
-    if (width > 0 && enable_reflow) {
+    if (width > 0) {
         FlareLayout layout = { .width = width, .terminal_rows = 24, .resized = 0 };
         formatter = flare_formatter_terminal_ex(depth, writer, style, NULL, NULL, &layout);
     } else {
@@ -363,7 +361,7 @@ static int highlight_file(const char *path, Environment *env,
     flare_writer_free(writer);
     /* If reflow was enabled, the formatter took ownership of the lexer
      * through the reflow iterator chain. Only free if no reflow. */
-    if (!(width > 0 && enable_reflow))
+    if (width <= 0)
         flare_token_source_free(lexer);
 
     if (result < 0) {
@@ -381,7 +379,6 @@ int main(int argc, char **argv)
     LangChoice lang = LANG_AUTO;
     DebugMode debug = DEBUG_NONE;
     int width = 0;
-    int enable_reflow = 0;
     int file_start = argc;
 
     for (int i = 1; i < argc; i++) {
@@ -446,10 +443,6 @@ int main(int argc, char **argv)
             }
             continue;
         }
-        if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--reflow") == 0) {
-            enable_reflow = 1;
-            continue;
-        }
         if (argv[i][0] == '-' && argv[i][1] != '\0') {
             fprintf(stderr, "%s: unknown option '%s'\n", PROGNAME, argv[i]);
             fprintf(stderr, "Try '%s --help' for more information.\n", PROGNAME);
@@ -467,10 +460,10 @@ int main(int argc, char **argv)
 
     if (file_start >= argc) {
         /* Read from stdin */
-        rc = highlight_file("-", env, lang, style, depth, debug, width, enable_reflow);
+        rc = highlight_file("-", env, lang, style, depth, debug, width);
     } else {
         for (int i = file_start; i < argc; i++) {
-            if (highlight_file(argv[i], env, lang, style, depth, debug, width, enable_reflow) != 0)
+            if (highlight_file(argv[i], env, lang, style, depth, debug, width) != 0)
                 rc = 1;
         }
     }
