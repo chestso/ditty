@@ -412,9 +412,8 @@ static void print_doc(const char *name)
         if (source && writer) {
             FlareTokenSource *lexer = flare_lexer_commonmark(source, g_env);
             if (lexer) {
-                /* Use terminal width for word wrap, leaving 4-char margin */
-                int width = g_runtime ? tui_runtime_get_width(g_runtime) : 76;
-                g_layout.width = width > 4 ? width - 4 : width;
+                /* Use terminal width for word wrap */
+                g_layout.width = g_runtime ? tui_runtime_get_width(g_runtime) : 80;
 
                 FlareFormatter *formatter = flare_formatter_terminal_ex(
                     BFLARE_COLOR_TRUECOLOR, writer, g_style, NULL, NULL, &g_layout);

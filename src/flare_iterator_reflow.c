@@ -12,6 +12,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define REFLOW_MARGIN        4
+#define REFLOW_DEFAULT_WIDTH 80
+
 typedef enum
 {
     REFLOW_STATE_NORMAL,
@@ -69,9 +72,11 @@ static const FlareTokenSourceVTable reflow_vtable = {
 
 static int target_width(const ReflowIterator *it)
 {
-    if (!it->layout || it->layout->width <= 0)
-        return 76;
-    return it->layout->width;
+    int w = REFLOW_DEFAULT_WIDTH;
+    if (it->layout && it->layout->width > 0)
+        w = it->layout->width;
+    w -= REFLOW_MARGIN;
+    return w > 0 ? w : 1;
 }
 
 static int reflow_pull(FlareTokenSource *src, FlareToken *out)
@@ -86,7 +91,19 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         return 1;
     }
 
-    /* Emit pending space before the next non-text token */
+    /* Emit a stashed non-text token (saved when we emitted a soft break) */
+    if (it->has_stash) {
+        *out = it->stash;
+        it->has_stash = 0;
+        if (out->text && out->length > 0)
+            it->column += utf8_display_width(out->text);
+        return 1;
+    }
+
+    /* Emit pending space before the next token.
+     * This preserves trailing spaces from TEXT tokens that ended with a space.
+     * The next TEXT token will have its leading space skipped during splitting,
+     * so we won't double-emit spaces. */
     if (it->pending_space) {
         char *space_text = GC_MALLOC_ATOMIC(2);
         space_text[0] = ' ';
@@ -110,7 +127,7 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         }
 
         if (it->split_pos >= len) {
-            /* Check if the original text ended with a trailing space */
+            /* Preserve trailing space from TEXT token for emission before non-text tokens */
             if (len > 0 && is_space(text[len - 1]) && it->column > 0) {
                 it->pending_space = 1;
             }
@@ -131,7 +148,7 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
 
         /* Skip empty words (can happen with multiple consecutive spaces) */
         if (word_len == 0) {
-            /* Check if the original text ended with a trailing space */
+            /* Preserve trailing space from TEXT token for emission before non-text tokens */
             if (len > 0 && is_space(text[len - 1]) && it->column > 0) {
                 it->pending_space = 1;
             }
@@ -245,11 +262,31 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         return reflow_pull(src, out);
     }
 
-    /* Pass through other tokens but update column for their display width */
-    *out = token;
+    /* Pass through other tokens but update column for their display width.
+     * If the token would exceed the target width, emit a soft break first.
+     *
+     * Note: TEXT tokens already contain surrounding spaces. The pending_space
+     * mechanism handles trailing spaces from TEXT tokens. We do NOT add
+     * separator spaces here.
+     */
+    int tw = target_width(it);
     if (token.text && token.length > 0) {
-        it->column += utf8_display_width(token.text);
+        int w = utf8_display_width(token.text);
+        /* Check if token fits (no separator - spaces are in TEXT tokens) */
+        if (it->column > 0 && it->column + w > tw) {
+            /* Token doesn't fit - emit soft break, stash token for next pull */
+            emit_soft_break(it);
+            it->column = 0;
+            it->pending_space = 0; /* cancel pending space after wrap */
+            *out = it->pending;
+            it->has_pending = 0;
+            it->has_stash = 1;
+            it->stash = token;
+            return 1;
+        }
+        it->column += w;
     }
+    *out = token;
     return 1;
 }
 

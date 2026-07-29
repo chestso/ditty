@@ -158,16 +158,16 @@ static void test_token_source_vtable(void)
 /* FlareLayout can be updated and read */
 static void test_layout_update(void)
 {
-    FlareLayout layout = { .width = 76, .terminal_rows = 24, .resized = 0 };
+    FlareLayout layout = { .width = 80, .terminal_rows = 24, .resized = 0 };
 
-    ASSERT_EQ(layout.width, 76);
+    ASSERT_EQ(layout.width, 80);
     ASSERT_EQ(layout.terminal_rows, 24);
     ASSERT_EQ(layout.resized, 0);
 
-    layout.width = 120;
+    layout.width = 124;
     layout.resized = 1;
 
-    ASSERT_EQ(layout.width, 120);
+    ASSERT_EQ(layout.width, 124);
     ASSERT_EQ(layout.resized, 1);
 }
 
@@ -182,7 +182,7 @@ static void test_reflow_passes_non_text_through(void)
         { HL_PUNCT_OPEN_PAREN, "(", 1 }
     };
     FlareTokenSource *src = mock_source(tokens, 3);
-    FlareLayout layout = { .width = 76, .resized = 0 };
+    FlareLayout layout = { .width = 80, .resized = 0 };
     FlareReflowOptions opts = FLARE_REFLOW_DEFAULT;
     FlareTokenSource *reflowed = flare_iterator_reflow(src, &layout, &opts);
 
@@ -209,7 +209,7 @@ static void test_reflow_splits_words(void)
         { HL_TEXT, "hello world", 11 }
     };
     FlareTokenSource *src = mock_source(tokens, 1);
-    FlareLayout layout = { .width = 76, .resized = 0 };
+    FlareLayout layout = { .width = 80, .resized = 0 };
     FlareReflowOptions opts = FLARE_REFLOW_DEFAULT;
     FlareTokenSource *reflowed = flare_iterator_reflow(src, &layout, &opts);
 
@@ -242,7 +242,8 @@ static void test_reflow_wraps_at_width(void)
         { HL_TEXT, "hello world test", 16 }
     };
     FlareTokenSource *src = mock_source(tokens, 1);
-    FlareLayout layout = { .width = 12, .resized = 0 };
+    /* Width 16, minus 4-char margin = effective width 12 */
+    FlareLayout layout = { .width = 16, .terminal_rows = 24, .resized = 0 };
     FlareReflowOptions opts = FLARE_REFLOW_DEFAULT;
     FlareTokenSource *reflowed = flare_iterator_reflow(src, &layout, &opts);
 
@@ -316,7 +317,7 @@ static void test_formatter_with_layout_wraps_text(void)
     FlareTokenSource *src = mock_source(tokens, 1);
 
     /* Layout with narrow width to force wrapping */
-    FlareLayout layout = { .width = 8, .terminal_rows = 24, .resized = 0 };
+    FlareLayout layout = { .width = 12, .terminal_rows = 24, .resized = 0 };
 
     /* Create formatter with layout */
     FlareWriter *writer = flare_writer_buffer();
@@ -341,6 +342,60 @@ static void test_formatter_with_layout_wraps_text(void)
     flare_style_free(style);
 }
 
+/* Reflow wraps when TEXT + INLINE_CODE exceeds width */
+static void test_reflow_wraps_around_inline_code(void)
+{
+    /* Simulate markdown: "hello `world` test" with narrow width.
+     * Tokens: TEXT("hello "), INLINE_CODE("world"), TEXT(" test") */
+    FlareToken tokens[] = {
+        { HL_TEXT, "hello ", 6 },
+        { HL_MARKUP_INLINE_CODE, "world", 5 },
+        { HL_TEXT, " test", 5 }
+    };
+    FlareTokenSource *src = mock_source(tokens, 3);
+    /* Width 16, minus 4-char margin = effective width 12 */
+    FlareLayout layout = { .width = 16, .terminal_rows = 24, .resized = 0 };
+    FlareReflowOptions opts = FLARE_REFLOW_DEFAULT;
+    FlareTokenSource *reflowed = flare_iterator_reflow(src, &layout, &opts);
+
+    FlareToken out;
+
+    /* "hello" (5) */
+    ASSERT_EQ(flare_token_source_pull(reflowed, &out), 1);
+    ASSERT_EQ(out.type, HL_TEXT);
+    ASSERT_EQ(out.length, 5);
+    ASSERT_TRUE(memcmp(out.text, "hello", 5) == 0);
+
+    /* trailing space from "hello " */
+    ASSERT_EQ(flare_token_source_pull(reflowed, &out), 1);
+    ASSERT_EQ(out.type, HL_TEXT);
+    ASSERT_EQ(out.length, 1);
+    ASSERT_TRUE(memcmp(out.text, " ", 1) == 0);
+
+    /* INLINE_CODE "world" (5) - total so far: 6+5=11, fits in width 12 */
+    ASSERT_EQ(flare_token_source_pull(reflowed, &out), 1);
+    ASSERT_EQ(out.type, HL_MARKUP_INLINE_CODE);
+    ASSERT_EQ(out.length, 5);
+    ASSERT_TRUE(memcmp(out.text, "world", 5) == 0);
+
+    /* Leading space from " test" - column is now 11, space makes 12,
+     * but " test" makes 17 total, which exceeds 12. So we should wrap. */
+    ASSERT_EQ(flare_token_source_pull(reflowed, &out), 1);
+    ASSERT_EQ(out.type, HL_TEXT);
+    ASSERT_EQ(out.length, 1);
+    ASSERT_TRUE(memcmp(out.text, "\n", 1) == 0);
+
+    /* "test" on new line */
+    ASSERT_EQ(flare_token_source_pull(reflowed, &out), 1);
+    ASSERT_EQ(out.type, HL_TEXT);
+    ASSERT_EQ(out.length, 4);
+    ASSERT_TRUE(memcmp(out.text, "test", 4) == 0);
+
+    ASSERT_EQ(flare_token_source_pull(reflowed, &out), 0);
+
+    flare_token_source_free(reflowed);
+}
+
 int main(void)
 {
     RUN_TEST(test_source_string_read);
@@ -354,6 +409,7 @@ int main(void)
     RUN_TEST(test_reflow_wraps_at_width);
     RUN_TEST(test_formatter_block_spacing);
     RUN_TEST(test_formatter_with_layout_wraps_text);
+    RUN_TEST(test_reflow_wraps_around_inline_code);
 
     TEST_SUMMARY();
     return 0;
