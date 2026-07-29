@@ -42,7 +42,8 @@ typedef struct
     int has_stash;
     FlareToken stash;
 
-    int pending_space; /* 1 if we need to emit a space before the next token */
+    int pending_space;  /* 1 if we need to emit a space before the next token */
+    int text_had_leading_space; /* 1 if current TEXT token started with a space */
 } ReflowIterator;
 
 static int is_space(char c)
@@ -137,10 +138,12 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
 
         /* Find the next word */
         size_t word_start = it->split_pos;
+        int at_text_start = (it->split_pos == 0); /* First word of this TEXT token */
         /* If at a space, skip it (we handle spacing explicitly below) */
         if (is_space(text[word_start])) {
             word_start++;
             it->split_pos = word_start;
+            at_text_start = 0; /* Skipped leading space, no longer at start */
         }
         while (it->split_pos < len && !is_space(text[it->split_pos]))
             it->split_pos++;
@@ -163,9 +166,13 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         int width = utf8_display_width(word_tmp);
         int tw = target_width(it);
 
-        /* Check if word fits (account for space if column > 0) */
-        int space_width = (it->column > 0) ? 1 : 0;
-        if (it->column + space_width + width > tw && it->column > 0) {
+        /* Check if word fits.
+         * Add separator space if column > 0, unless:
+         * - This is the first word of a TEXT token that didn't start with space
+         *   (no separator needed before punctuation like "." after inline code) */
+        int need_separator = (it->column > 0) && (it->text_had_leading_space || !at_text_start);
+        int space_width = need_separator ? 1 : 0;
+        if (it->column + space_width + width > tw && need_separator) {
             /* Word doesn't fit on current line - wrap first */
             emit_soft_break(it);
             it->column = 0;
@@ -176,7 +183,7 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         }
 
         /* Word fits - emit space first if needed */
-        if (space_width) {
+        if (need_separator) {
             char *space_text = GC_MALLOC_ATOMIC(2);
             space_text[0] = ' ';
             space_text[1] = '\0';
@@ -258,6 +265,7 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
 
         it->current = token;
         it->split_pos = 0;
+        it->text_had_leading_space = (token.length > 0 && is_space(token.text[0]));
         it->state = REFLOW_STATE_SPLITTING;
         return reflow_pull(src, out);
     }

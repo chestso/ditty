@@ -15,7 +15,8 @@ struct FlareFormatter
     FlareStyle *style;
     FlareTerminalStyle term_style;
     FlareWriter *writer;
-    FlareLayout *layout;
+    FlareLayout layout_val;     /* storage for copied layout */
+    FlareLayout *layout;        /* points to layout_val if set */
     FlareReflowOptions reflow_opts;
     int prev_valid;
     FlareStyleEntry prev_style;
@@ -255,7 +256,11 @@ FlareFormatter *flare_formatter_terminal_ex(FlareColorDepth depth, FlareWriter *
     f->style = style;
     f->term_style = term_style ? *term_style : FLARE_TERMINAL_STYLE_DEFAULT;
     f->reflow_opts = reflow ? *reflow : FLARE_REFLOW_DEFAULT;
-    f->layout = layout;
+    if (layout)
+        f->layout_val = *layout;
+    else
+        f->layout_val = (FlareLayout){0};
+    f->layout = layout ? &f->layout_val : NULL;
     return f;
 }
 
