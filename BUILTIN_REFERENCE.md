@@ -4360,7 +4360,7 @@ Output goes to stdout. Strings print with surrounding quotes.
 
 ### `print`
 
-Print object like prin1 but with newlines before and after.
+Print object like prin1 but preceded by a newline and followed by a space.
 
 #### Parameters
 
@@ -4373,13 +4373,14 @@ The object that was printed.
 #### Examples
 
 ```lisp
-(print "Hello")         ; Prints newline, then "Hello", then newline
-(print 42)              ; Prints newline, then 42, then newline
+(print "Hello")         ; Prints newline, then "Hello", then space
+(print 42)              ; Prints newline, then 42, then space
 ```
 
 #### Notes
 
-Output goes to stdout. Adds newline before and after output.
+Output goes to stdout. Outputs a newline before and a space after the object
+(Common Lisp spec).
 
 ### `format`
 

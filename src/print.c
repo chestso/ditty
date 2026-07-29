@@ -477,6 +477,6 @@ void lisp_print_cl(LispObject *obj)
 {
     printf("\n"); /* Newline BEFORE */
     lisp_prin1(obj);
-    printf("\n"); /* Newline AFTER */
+    printf(" "); /* Space AFTER (Common Lisp spec) */
     fflush(stdout);
 }
