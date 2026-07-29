@@ -4373,12 +4373,8 @@ The object that was printed.
 #### Examples
 
 ```lisp
-(print "Hello")         ; Prints: \
-"Hello"\
-
-(print 42)              ; Prints: \
-42\
-
+(print "Hello")         ; Prints newline, then "Hello", then newline
+(print 42)              ; Prints newline, then 42, then newline
 ```
 
 #### Notes
