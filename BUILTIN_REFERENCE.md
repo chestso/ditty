@@ -4326,16 +4326,16 @@ The object that was printed.
 
 ```lisp
 ;; User-facing messages
-(princ "Hello, world!")        ; Prints: Hello, world! (no quotes)
-(princ "Line 1\nLine 2")      ; Prints: Line 1 (actual newline)
-                               ;         Line 2
+(princ "Hello, world!")    ; Prints: Hello, world! (no quotes)
+(princ "Line 1\nLine 2")   ; Prints: Line 1 (actual newline)
+                            ;         Line 2
 
 ;; Escape sequences are interpreted
-(princ "Tab:\there")          ; Prints: Tab:  here (actual tab)
+(princ "Tab:\there")       ; Prints: Tab:  here (actual tab)
 
 ;; Numbers and lists look natural
-(princ 42)                     ; Prints: 42
-(princ '(1 2 3))               ; Prints: (1 2 3)
+(princ 42)                   ; Prints: 42
+(princ '(1 2 3))             ; Prints: (1 2 3)
 ```
 
 #### Notes
@@ -4364,19 +4364,19 @@ The object that was printed.
 
 ```lisp
 ;; Machine-readable output - can be read back
-(prin1 "Hello, world!")        ; Prints: "Hello, world!" (with quotes)
-(prin1 "Line 1\nLine 2")       ; Prints: "Line 1\nLine 2" (escape preserved)
+(prin1 "Hello, world!")    ; Prints: "Hello, world!" (with quotes)
+(prin1 "Line 1\nLine 2")   ; Prints: "Line 1\nLine 2" (escape preserved)
 
 ;; Escape sequences are preserved, not interpreted
-(prin1 "Tab:\there")           ; Prints: "Tab:\there" (literal backslash-t)
+(prin1 "Tab:\there")       ; Prints: "Tab:\there" (literal backslash-t)
 
 ;; Numbers and lists in readable form
-(prin1 42)                     ; Prints: 42
-(prin1 '(1 2 3))               ; Prints: (1 2 3)
+(prin1 42)                   ; Prints: 42
+(prin1 '(1 2 3))             ; Prints: (1 2 3)
 
 ;; Contrast with princ: escape sequences
-(princ "a\nb")                 ; Prints: a (newline) b
-(prin1 "a\nb")                 ; Prints: "a\nb" (literal string)
+(princ "a\nb")              ; Prints: a (newline) b
+(prin1 "a\nb")              ; Prints: "a\nb" (literal string)
 ```
 
 #### Notes
