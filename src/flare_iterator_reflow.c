@@ -42,7 +42,7 @@ typedef struct
     int has_stash;
     FlareToken stash;
 
-    int pending_space;  /* 1 if we need to emit a space before the next token */
+    int pending_space;          /* 1 if we need to emit a space before the next token */
     int text_had_leading_space; /* 1 if current TEXT token started with a space */
 } ReflowIterator;
 
@@ -113,7 +113,7 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
         out->text = space_text;
         out->length = 1;
         it->pending_space = 0;
-        /* Don't increment column - the space was already counted when we set pending_space */
+        it->column += 1;
         return 1;
     }
 
