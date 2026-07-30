@@ -257,8 +257,17 @@ static char g_test_history_file[4096];
 static int setup_test_history_dir(void)
 {
     const char *tmpdir = getenv("TMPDIR");
+#ifdef _WIN32
+    if (!tmpdir)
+        tmpdir = getenv("TEMP");
+    if (!tmpdir)
+        tmpdir = getenv("TMP");
+    if (!tmpdir)
+        tmpdir = ".";  /* Current directory as last resort on Windows */
+#else
     if (!tmpdir)
         tmpdir = "/tmp";
+#endif
     snprintf(g_test_history_dir, sizeof(g_test_history_dir), "%s/ditty_test_XXXXXX", tmpdir);
     if (mkdtemp(g_test_history_dir) == NULL)
         return -1;
