@@ -236,8 +236,10 @@ static int reflow_pull(FlareTokenSource *src, FlareToken *out)
     if (it->in_fenced_block || it->in_heading) {
         *out = token;
         if (token.type == HL_TEXT && token.length == 1 &&
-            token.text[0] == '\n')
+            token.text[0] == '\n') {
             it->column = 0;
+            it->in_heading = 0; /* Heading ends at newline */
+        }
         return 1;
     }
 
