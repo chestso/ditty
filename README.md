@@ -26,8 +26,8 @@ See **[LANGUAGE_GUIDE.md](LANGUAGE_GUIDE.md)** for concepts and **[BUILTIN_REFER
 
 ### Advanced Features
 
-- **Package System**: Symbol-based namespace management with `in-package`, `current-package`, and `pkg:symbol` qualified access syntax
-- **Library System**: Load-once library loading with `require`/`provide`, `export`/`use-package` for selective imports, and `DITTY_LISP_PATH` + XDG-based search paths
+- **Package System**: Symbol-based namespace management with `in-package`, `current-package`, `export`/`use-package` for selective imports, and `pkg:symbol` qualified access syntax
+- **Library System**: Load-once library loading with `require`/`provide`, `DITTY_LISP_PATH` + XDG-based search paths
 - **Condition System**: Emacs Lisp-style error handling with `signal`, `condition-case`, `unwind-protect`, and error introspection
 - **Tail Call Optimization**: Trampoline-based tail recursion enables efficient recursive algorithms without stack overflow
 - **Lexical Scoping**: First-class functions and closures with captured environments
@@ -46,7 +46,7 @@ Flare is a built-in syntax highlighting module (compiled into `libditty.a`) that
 - **Runtime-driven classification**: Uses the ditty `Environment` as the single source of truth for symbol classification — no parallel hardcoded keyword lists
 - **Two lexers**: Ditty Lisp and CommonMark/Markdown (fenced code blocks with `lisp`/`ditty` info strings are sub-lexed through the Lisp lexer)
 - **Four built-in styles**: Dracula, Monokai, GitHub Dark, GitHub Light
-- **Modular pipeline**: Lex → Style lookup → Format, each stage pluggable
+- **Modular pipeline**: Lex → [Reflow] → Format. Lex and Reflow implement the `FlareTokenSource` vtable (swappable). The formatter consumes a `FlareStyle` lookup table — reusable across formatters (e.g., ANSI terminal, HTML). Reflow wraps text at word boundaries when a `FlareLayout` width is provided
 - **`flare` CLI**: A `cat`-like tool that highlights source files to the terminal, with auto-detection of file language
 
 ## Quick Start
