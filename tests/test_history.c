@@ -263,7 +263,7 @@ static int setup_test_history_dir(void)
     if (!tmpdir)
         tmpdir = getenv("TMP");
     if (!tmpdir)
-        tmpdir = ".";  /* Current directory as last resort on Windows */
+        tmpdir = "."; /* Current directory as last resort on Windows */
 #else
     if (!tmpdir)
         tmpdir = "/tmp";
