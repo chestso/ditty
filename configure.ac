@@ -29,6 +29,14 @@ AS_IF([test -z "$DITTY_VERSION"],
 AC_SUBST([DITTY_VERSION])
 AC_MSG_NOTICE([ditty version: $DITTY_VERSION])
 
+dnl Derive the automake VERSION (and thus the dist tarball name and the
+dnl PACKAGE_VERSION/VERSION macros in config.h) from the version recomputed
+dnl above, not the one baked into configure by autoreconf.  Without this,
+dnl `make dist` after a tag still names the tarball with the autoreconf-time
+dnl version, so shipping a new release requires re-running autogen.sh.
+PACKAGE_VERSION="$DITTY_VERSION"
+VERSION="$DITTY_VERSION"
+
 # Checks for programs
 # Save CFLAGS before AC_PROG_CC so we can detect whether the user
 # set them or whether AC_PROG_CC applied its default (-g -O2).

@@ -11,9 +11,9 @@ FLARE_TESTS = \
     test_flare_terminal_style \
     test_highlight_sequence
 
-check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils test_history $(FLARE_TESTS)
+check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils $(FLARE_TESTS)
 if HAVE_BOBA
-check_PROGRAMS += test_repl_app
+check_PROGRAMS += test_repl_app test_history
 endif
 
 test_sf_kind_SOURCES = test_sf_kind.c

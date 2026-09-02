@@ -46,4 +46,12 @@ cd "$PROJECT_ROOT" || exit 1
 # Allow (require '...) to find built-in libraries in lisp/
 export DITTY_LISP_PATH="$PROJECT_ROOT/lisp${DITTY_LISP_PATH:+:$DITTY_LISP_PATH}"
 
+# Detach stdin from an inherited controlling terminal when this script runs
+# in a non-foreground process group (e.g. under `make distcheck` from an
+# interactive session).  Without this, TUI tests calling tcsetattr() on the
+# session tty get stopped by SIGTTOU and the test run hangs forever.
+if [ -t 0 ] && [ "$(ps -o tpgid= -p $$)" != "$(ps -o pgid= -p $$)" ]; then
+	exec "$REPL" "$TEST_FILE" </dev/null
+fi
+
 exec "$REPL" "$TEST_FILE"
