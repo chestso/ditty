@@ -1,26 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="136 162 240 276" width="512" height="512">
-  <!-- Cylinder body -->
+  <!-- Cylinder body (Dracula Alucard Selection #cfcfde / Smoke) -->
   <path d="M 144 250 L 144 370 A 112 60 0 0 0 368 370 L 368 250 Z"
-        fill="#e8d5a8"/>
+        fill="#cfcfde"/>
 
-  <!-- Bottom curve (full ellipse to match lid) -->
-  <ellipse cx="256" cy="370" rx="112" ry="60" fill="#e8d5a8"/>
-
-  <!-- Lid cylinder (half height) -->
+  <!-- Lid rim / seam band (Dracula Pink #ff79c6) -->
   <path d="M 144 230 L 144 250 A 112 60 0 0 0 368 250 L 368 230 Z"
-        fill="#2a8a8a"/>
+        fill="#ff79c6"/>
 
-  <!-- Lid top -->
-  <ellipse cx="256" cy="230" rx="112" ry="60" fill="#3aa0a0"/>
+  <!-- Lid top (Dracula Purple #bd93f9) -->
+  <ellipse cx="256" cy="230" rx="112" ry="60" fill="#bd93f9"/>
 
-  <!-- Lambda on lid top, perspective-skewed to match viewing angle -->
+  <!-- Lambda on lid top (Dracula Foreground #f8f8f2) -->
   <g transform="matrix(1 0 0 0.38 0 142.6)">
     <text x="256" y="230" text-anchor="middle" dominant-baseline="central"
-          font-family="Georgia, serif" font-size="200" font-weight="bold"
-          fill="#e8f0e8">λ</text>
+          font-family="Georgia, 'Liberation Serif', 'Noto Serif', serif" font-size="200" font-weight="bold"
+          fill="#f8f8f2">λ</text>
   </g>
 
-  <!-- Clasp at front, spanning lid and box -->
-  <rect x="240" y="300" width="32" height="24" rx="4" fill="#8a6a3a"/>
+  <!-- Clasp at front (Dracula Green #50fa7b with Dracula Background #282a36 keyhole) -->
+  <rect x="240" y="298" width="32" height="24" rx="4" fill="#50fa7b"/>
+  <circle cx="256" cy="310" r="4" fill="#282a36"/>
 </svg>
