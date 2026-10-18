@@ -10,9 +10,9 @@
  *   When popup visible: Tab/Up/Down navigate, Enter inserts, Esc dismisses
  */
 
+#include "colors.h"
 #include "repl_app.h"
 #include <boba/ansi_sequences.h>
-#include <boba/charmtones.h>
 #include <boba/cmd.h>
 #include <boba/msg.h>
 #include <boba/runtime.h>
@@ -20,6 +20,41 @@
 #include <string.h>
 
 #define REPL_APP_TYPE_ID (TUI_COMPONENT_TYPE_BASE + 20)
+
+/* ----- Completion popup colors (Dracula roles - see colors.h) ----------- */
+
+/* Muted chrome: the border and the title are structure, not content. */
+static TuiColor popup_border(void)
+{
+    return tui_color_rgb(DRACULA_COMMENT_R, DRACULA_COMMENT_G, DRACULA_COMMENT_B);
+}
+
+static TuiColor popup_title(void)
+{
+    return tui_color_rgb(DRACULA_COMMENT_R, DRACULA_COMMENT_G, DRACULA_COMMENT_B);
+}
+
+/* The selected row: Foreground text on the spec's Selection token, with
+ * the app accent as its marker. */
+static TuiColor popup_selected_bg(void)
+{
+    return tui_color_rgb(DRACULA_SELECTION_R, DRACULA_SELECTION_G, DRACULA_SELECTION_B);
+}
+
+static TuiColor popup_selected_fg(void)
+{
+    return tui_color_rgb(DRACULA_FG_R, DRACULA_FG_G, DRACULA_FG_B);
+}
+
+static TuiColor popup_marker(void)
+{
+    return tui_color_rgb(DRACULA_PINK_R, DRACULA_PINK_G, DRACULA_PINK_B);
+}
+
+static TuiColor popup_item(void)
+{
+    return tui_color_rgb(DRACULA_FG_R, DRACULA_FG_G, DRACULA_FG_B);
+}
 
 /* Runtime handle — needed by repl_app_update to post completion messages.
  * Set by the caller after runtime creation. */
@@ -70,12 +105,12 @@ TuiInitResult repl_app_init(void *config)
                                      app->terminal_width, app->terminal_height);
     tui_list_popup_set_title(app->popup, "completions");
     tui_list_popup_set_colors(app->popup,
-                              tui_ct_oyster(), /* border */
-                              tui_ct_squid(),  /* title */
-                              tui_ct_pepper(), /* selected bg */
-                              tui_ct_butter(), /* selected fg */
-                              tui_ct_coral(),  /* selected marker */
-                              tui_ct_smoke()); /* item text */
+                              popup_border(),      /* border */
+                              popup_title(),       /* title */
+                              popup_selected_bg(), /* selected bg */
+                              popup_selected_fg(), /* selected fg */
+                              popup_marker(),      /* selected marker */
+                              popup_item());       /* item text */
 
     return tui_init_result_none((TuiModel *)app);
 }

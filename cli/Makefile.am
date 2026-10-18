@@ -2,7 +2,7 @@
 bin_PROGRAMS = ditty
 
 if HAVE_BOBA
-ditty_SOURCES = main.c repl_app.c flare_style_charmtones.c history.c
+ditty_SOURCES = main.c repl_app.c history.c
 else
 ditty_SOURCES = main.c
 endif

@@ -26,11 +26,6 @@
 
 #endif
 
-#ifdef HAVE_BOBA
-/* Forward declaration — defined in flare_style_charmtones.c */
-FlareStyle *flare_style_charmtones(void);
-#endif
-
 #include "ditty_version.h"
 #ifndef DITTY_VERSION
 #define DITTY_VERSION "unknown"
@@ -64,7 +59,7 @@ static Environment *g_env = NULL;
 static ReplAppModel *g_app = NULL;
 static TuiRuntime *g_runtime = NULL;
 
-static FlareStyle *g_style = NULL; /* CharmTones style, created once */
+static FlareStyle *g_style = NULL; /* Dracula style, created once */
 static FlareLayout g_layout = { .width = 76, .terminal_rows = 24, .resized = 0 };
 
 /* ANSI color buffers */
@@ -739,8 +734,10 @@ static void run_interactive_repl(Environment *env)
 {
     init_colors();
 
-    /* Create CharmTones flare style (reused across all highlight calls) */
-    g_style = flare_style_charmtones();
+    /* The library's Dracula style, reused across all highlight calls:
+     * the REPL paints with the same palette it prints results in
+     * (cli/colors.h). */
+    g_style = flare_style_dracula();
 
     ReplAppConfig app_config = {
         .terminal_width = 80,
