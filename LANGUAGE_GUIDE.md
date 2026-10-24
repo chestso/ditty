@@ -1554,15 +1554,6 @@ counter                             ; => 2
 message_count                        ; => 2
 ```
 
-vec ; => #(10 99 30)
-(length vec) ; => 3
-
-; Pop elements
-(vector-pop! vec) ; => 30
-vec ; => #(10 99)
-
-````
-
 ### Complex Example
 
 ```lisp
@@ -1581,7 +1572,7 @@ vec ; => #(10 99)
     (concat "Hello, " name "!")))
 
 (greet "World")                      ; => "Hello, World!"
-````
+```
 
 ## See Also
 
