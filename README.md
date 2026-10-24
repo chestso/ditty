@@ -1,5 +1,7 @@
 # Ditty Lisp
 
+**Homepage:** <https://chest.so/ditty/>
+
 An embeddable Lisp interpreter library and syntax highlighter written in C. This implementation follows traditional Lisp naming conventions and provides a REPL for testing and demonstration.
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/chestso/ditty)
