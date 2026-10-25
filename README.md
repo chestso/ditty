@@ -9,7 +9,7 @@ An embeddable Lisp interpreter library and syntax highlighter written in C. This
 - **[Language Guide](LANGUAGE_GUIDE.md)** — Conceptual guide covering evaluation, special forms, macros, conventions, and more
 - **[Built-in Function Reference](BUILTIN_REFERENCE.md)** — Auto-generated per-function documentation with parameters, return values, and examples
 - **[Embedding Guide](EMBEDDING.md)** — C API reference, tagged-pointer object representation, and Boehm GC rules for embedders
-- [<img src="https://img.shields.io/badge/Ask%20DeepWiki-blueviolet" alt="Ask DeepWiki" height="20" align="middle">](https://deepwiki.com/chestso/ditty) — AI-generated wiki and searchable code index for this repository
+- [<img src="https://img.shields.io/badge/Ask%20DeepWiki-blueviolet" alt="Ask DeepWiki" height="20" align="absmiddle">](https://deepwiki.com/chestso/ditty) — AI-generated wiki and searchable code index for this repository
 
 ## Features
 
