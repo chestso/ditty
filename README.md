@@ -4,13 +4,12 @@
 
 An embeddable Lisp interpreter library and syntax highlighter written in C. This implementation follows traditional Lisp naming conventions and provides a REPL for testing and demonstration.
 
-<a href="https://deepwiki.com/chestso/ditty"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
-
 **Documentation:**
 
 - **[Language Guide](LANGUAGE_GUIDE.md)** — Conceptual guide covering evaluation, special forms, macros, conventions, and more
 - **[Built-in Function Reference](BUILTIN_REFERENCE.md)** — Auto-generated per-function documentation with parameters, return values, and examples
 - **[Embedding Guide](EMBEDDING.md)** — C API reference, tagged-pointer object representation, and Boehm GC rules for embedders
+- [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/chestso/ditty) — AI-generated wiki and searchable code index for this repository
 
 ## Features
 
