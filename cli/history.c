@@ -114,7 +114,13 @@ const char *history_get_path(void)
     return path;
 }
 
-/* ---- Public API ---- */
+/* ---- Public API ----
+ *
+ * The history itself lives in the textinput: boba owns the ring, including
+ * the dedup, cap and empty-line rules, and hands it back through
+ * tui_textinput_history_count() / _history_entry(). ditty owns only what is
+ * policy rather than state — the file's path, its escape format, and the
+ * order it writes in. */
 
 void history_load(TuiTextInput *input)
 {
@@ -151,9 +157,9 @@ void history_load(TuiTextInput *input)
     fclose(f);
 }
 
-void history_save(TuiTextInput *input)
+void history_save(const TuiTextInput *input)
 {
-    if (!input || input->history_count == 0)
+    if (!input || tui_textinput_history_count(input) == 0)
         return;
 
     const char *path = history_get_path();
@@ -171,8 +177,13 @@ void history_save(TuiTextInput *input)
     if (!f)
         return;
 
-    for (int i = 0; i < input->history_count; i++) {
-        char *escaped = history_escape(input->history[i]);
+    /* The ring is newest-first (index 0 is what Up reaches first) and the
+     * file is oldest-first, so it reads chronologically and loading it back
+     * in order restores the same ring. */
+    int count = tui_textinput_history_count(input);
+    for (int i = count - 1; i >= 0; i--) {
+        const char *entry = tui_textinput_history_entry(input, i);
+        char *escaped = history_escape(entry);
         if (escaped) {
             fprintf(f, "%s\n", escaped);
             free(escaped);

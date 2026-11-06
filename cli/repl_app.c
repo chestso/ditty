@@ -11,6 +11,7 @@
  */
 
 #include "colors.h"
+#include "history.h"
 #include "repl_app.h"
 #include <boba/ansi_sequences.h>
 #include <boba/cmd.h>
@@ -65,6 +66,26 @@ void repl_app_set_runtime(TuiRuntime *rt)
     s_runtime = rt;
 }
 
+/* Declare size and placement. boba 0.8 replaced the bespoke
+ * set_terminal_width()/set_soft_wrap() pair with one geometry struct, so
+ * this is the only place that says how big the input is.
+ *
+ * NATURAL, not FLOW: the REPL paints inline and its frame is the input
+ * plus the completion popup, so the app (not the component) owns the frame
+ * — rows past the bottom are meant to scroll away into the terminal's
+ * scrollback, which IS the output history here. FLOW would instead cap the
+ * input to the screen and scroll the form inside it, hiding the top of a
+ * long definition while you are typing it. INLINE placement is likewise
+ * relative-row painting; the width is the whole box, prompt included. */
+static void repl_app_apply_geometry(ReplAppModel *app)
+{
+    TuiTextInputGeometry g = tui_textinput_geometry(app->textinput);
+    g.sizing = TUI_TEXTINPUT_NATURAL;
+    g.place = TUI_TEXTINPUT_INLINE;
+    g.width = app->terminal_width > 0 ? app->terminal_width : 0;
+    tui_textinput_set_geometry(app->textinput, &g);
+}
+
 TuiInitResult repl_app_init(void *config)
 {
     const ReplAppConfig *cfg = (const ReplAppConfig *)config;
@@ -79,8 +100,12 @@ TuiInitResult repl_app_init(void *config)
     app->terminal_width = cfg && cfg->terminal_width > 0 ? cfg->terminal_width : 80;
     app->terminal_height = cfg && cfg->terminal_height > 0 ? cfg->terminal_height : 24;
 
-    /* Create textinput (user input) — multiline so Enter can insert newlines */
-    TuiTextInputConfig textinput_cfg = { .multiline = 1 };
+    /* Create textinput (user input) — multiline so Enter can insert newlines,
+     * soft-wrapping long lines instead of scrolling them sideways */
+    TuiTextInputConfig textinput_cfg = {
+        .multiline = 1,
+        .wrap = TUI_TEXTINPUT_WRAP,
+    };
     app->textinput = tui_textinput_create(&textinput_cfg);
     if (!app->textinput) {
         free(app);
@@ -88,9 +113,8 @@ TuiInitResult repl_app_init(void *config)
     }
     tui_textinput_set_prompt(app->textinput, ">>> ");
     tui_textinput_set_continuation_prompt(app->textinput, "... ");
-    tui_textinput_set_terminal_width(app->textinput, app->terminal_width);
-    tui_textinput_set_soft_wrap(app->textinput, 1);
-    tui_textinput_set_history_size(app->textinput, 500);
+    repl_app_apply_geometry(app);
+    tui_textinput_set_history_size(app->textinput, HISTORY_MAX_ENTRIES);
     tui_textinput_set_word_chars(app->textinput,
                                  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-*!?");
 
@@ -148,7 +172,15 @@ TuiUpdateResult repl_app_update(TuiModel *model, TuiMsg msg)
     if (msg.type == TUI_MSG_WINDOW_SIZE) {
         app->terminal_width = msg.data.size.width;
         app->terminal_height = msg.data.size.height;
-        tui_textinput_set_terminal_width(app->textinput, app->terminal_width);
+        /* The input learns the screen size from this message alone (boba
+         * 0.8: routed, not discovered), and the runtime only sends it to
+         * the root component — this one. Without this hand-off the input
+         * keeps painting at the size it was last told, so forward it down
+         * instead of re-declaring the width behind its back. */
+        TuiUpdateResult r = tui_textinput_update(app->textinput, msg);
+        if (r.cmd)
+            tui_cmd_free(r.cmd);
+        repl_app_apply_geometry(app);
         tui_list_popup_set_terminal_size(app->popup,
                                          app->terminal_width, app->terminal_height);
         return tui_update_result_none();

@@ -88,8 +88,11 @@ PKG_CHECK_MODULES([GC], [bdw-gc], [],
 PKG_CHECK_MODULES([PCRE2], [libpcre2-8], [],
     [AC_MSG_ERROR([PCRE2 is required. Install with: apt install libpcre2-dev (Debian/Ubuntu), dnf install pcre2-devel (Fedora), or brew install pcre2 (macOS)])])
 
-# boba is optional (enables TUI REPL when available)
-PKG_CHECK_MODULES([BOBA], [boba],
+# boba is optional (enables TUI REPL when available).
+# >= 0.9.0: the REPL drives the post-reset textinput surface (TuiTextInputGeometry,
+# TuiTextInputConfig.wrap, opaque model), routes TUI_MSG_WINDOW_SIZE to it, and
+# reads the history ring back through tui_textinput_history_count/_entry (0.9.0).
+PKG_CHECK_MODULES([BOBA], [boba >= 0.9.0],
     [have_boba=yes],
     [have_boba=no])
 AM_CONDITIONAL([HAVE_BOBA], [test "x$have_boba" = "xyes"])
