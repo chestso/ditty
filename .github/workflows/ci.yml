@@ -105,7 +105,11 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            runner: macos-14
+            # macos-latest, not a pinned image: GitHub retired every macOS 14
+            # image on 2026-11-02 and a pinned label then cancels the job
+            # outright ("configuration ... is not supported"). macos-latest is
+            # currently the arm64 image this job assumes.
+            runner: macos-latest
     runs-on: ${{ matrix.runner }}
 
     steps:
