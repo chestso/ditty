@@ -67,21 +67,25 @@ for md_file in $md_files; do
 	# H2 (## ) -> H3 (### )
 	# H3 (### ) -> H4 (#### )
 	# H4 (#### ) -> H5 (##### )
+	# Only real ATX headings (1-6 leading # followed by space/EOL)
+	# outside fenced code blocks are demoted. Lines such as "#xFF"
+	# (radix literal at line start in a code block) or "#t ..." (a
+	# value at the start of a paragraph) are content, not headings.
 	awk '
-    {
-        line = $0
-        # Count leading # characters
+    BEGIN { in_fence = 0 }
+    /^[[:space:]]*(```|~~~)/ { in_fence = !in_fence; print; next }
+    !in_fence {
         n = 0
-        tmp = line
+        tmp = $0
         while (substr(tmp, 1, 1) == "#") {
             n++
             tmp = substr(tmp, 2)
         }
-        if (n > 0) {
-            # Demote by one level
-            line = "#" line
+        if (n >= 1 && n <= 6 && (tmp == "" || substr(tmp, 1, 1) ~ /[[:space:]]/)) {
+            print "#" $0
+            next
         }
-        print line
     }
+    { print }
     ' "$md_file" | sed 's/\](\([a-zA-Z0-9_-]*\.md\))/](doc\/\1)/g'
 done

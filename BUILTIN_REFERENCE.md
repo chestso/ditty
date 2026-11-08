@@ -14,7 +14,6 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `/`
   - `quotient`
   - `remainder`
-  - `remainder`
   - `floor`
   - `modulo`
   - `even?`
@@ -88,11 +87,11 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `delete-directory`
   - `system-type`
   - `current-directory`
+  - `pwd`
   - `temporary-file-directory`
   - `make-temp-file`
   - `*load-pathname*`
 - [Functions](#functions)
-  - `lambda`
   - `function-params`
   - `function-body`
   - `function-name`
@@ -240,7 +239,6 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `profile-report`
   - `profile-reset`
 - [TUI](#tui)
-  - `tui-events`
   - `sleep`
   - `set-terminal-raw`
   - `restore-terminal`
@@ -266,7 +264,6 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `macro?`
   - `builtin?`
   - `callable?`
-  - `regex?`
 - [Vectors](#vectors)
   - `make-vector`
   - `vector-ref`
@@ -285,11 +282,11 @@ Functions for numerical operations.
 Integers can be written in decimal or with a radix prefix.
 
 ```lisp
-##xFF     ; hexadecimal => 255
-##xff     ; lowercase hex => 255
-##o10     ; octal => 8
-##b11     ; binary => 3
-##d42     ; decimal => 42
+#xFF     ; hexadecimal => 255
+#xff     ; lowercase hex => 255
+#o10     ; octal => 8
+#b11     ; binary => 3
+#d42     ; decimal => 42
 ```
 
 Negative radix literals are written with a leading `-` before the radix prefix:
@@ -416,33 +413,6 @@ Integer result of division, truncated toward zero.
 #### See Also
 
 - `remainder` - Get the remainder of integer division
-- `/` - Regular division (returns float)
-
-### `remainder`
-
-Integer remainder (modulo operation).
-
-#### Parameters
-
-- `dividend` - The number to be divided (integer or float)
-- `divisor` - The number to divide by (integer or float)
-
-#### Returns
-
-Integer remainder after division.
-
-#### Examples
-
-```lisp
-(remainder 17 5)     ; => 2
-(remainder 10 3)     ; => 1
-(remainder 20 5)     ; => 0
-(remainder -17 5)    ; => -2
-```
-
-#### See Also
-
-- `quotient` - Integer division
 - `/` - Regular division (returns float)
 
 ### `remainder`
@@ -2280,7 +2250,7 @@ Check if a file or directory exists.
 
 #### Returns
 
-##t if path exists, nil otherwise.
+#t if path exists, nil otherwise.
 
 #### Examples
 
@@ -2299,7 +2269,7 @@ Create a directory and all parent directories (like mkdir -p).
 
 #### Returns
 
-##t on success. Succeeds silently if directory already exists.
+#t on success. Succeeds silently if directory already exists.
 
 #### Examples
 
@@ -2556,6 +2526,10 @@ String with the current working directory path.
 - `data-directory` - Get data directory (platform-specific)
 - `*load-pathname*` - Get path of currently loading file
 
+### `pwd`
+
+Alias for `current-directory`. See `current-directory`.
+
 ### `temporary-file-directory`
 
 Return the directory used for temporary files. Emacs Lisp style.
@@ -2673,43 +2647,6 @@ String with the absolute or resolved path of the file currently being loaded, or
 ## Functions
 
 Function introspection and evaluation.
-
-### `lambda`
-
-Create an anonymous function.
-
-#### Syntax
-
-```lisp
-(lambda (params...) body...)
-```
-
-Parameters may include:
-
-- Required parameters: `x`
-- Optional parameters with defaults: `&optional (y 10)` or `&optional y`
-- Rest parameter: `&rest args`
-
-Optional defaults can reference earlier parameters.
-
-#### Examples
-
-```lisp
-((lambda (x) (* x 2)) 5)              ; => 10
-
-((lambda (x &optional (y 10)) (+ x y)) 3)      ; => 13
-((lambda (x &optional (y 10)) (+ x y)) 3 4)    ; => 7
-
-((lambda (a &optional (b (* a 2))) (+ a b)) 3) ; => 9
-
-((lambda (a &optional b &rest rest) (list a b rest)) 1 2 3 4)
-; => (1 2 (3 4))
-```
-
-#### See Also
-
-- `define` - Bind a function to a name
-- `apply` - Apply a function to a list of arguments
 
 ### `function-params`
 
@@ -4328,7 +4265,7 @@ The object that was printed.
 ;; User-facing messages
 (princ "Hello, world!")    ; Prints: Hello, world! (no quotes)
 (princ "Line 1\nLine 2")   ; Prints: Line 1 (actual newline)
-                            ;         Line 2
+                           ;         Line 2
 
 ;; Escape sequences are interpreted
 (princ "Tab:\there")       ; Prints: Tab:  here (actual tab)
@@ -4539,9 +4476,16 @@ strings are _not_ regex objects.
 #### Examples
 
 ```lisp
-(regex? (regex-compile "\\d+"))  ; => #t
-(regex? "\\d+")                  ; => nil
+(define digits (regex-compile "\\d+"))
+(regex? digits)                  ; => #t
+(regex? "\\d+")                  ; => nil (pattern string, not compiled regex)
+(regex? 42)                      ; => nil
 ```
+
+#### See Also
+
+- `regex-compile` - Compile a pattern string into a regex object
+- `regex-valid?` - Test if a pattern compiles
 
 ### `regex-match?`
 
@@ -4917,6 +4861,9 @@ An optional docstring may be provided as the first body expression.
 #### Parameters
 
 - `params` - Parameter list with required, `&optional`, and `&rest` markers
+  - Required parameters: `x`
+  - Optional parameters with defaults: `&optional (y 10)` or `&optional y`. Optional defaults can reference earlier parameters.
+  - Rest parameter: `&rest args`
 - `body...` - Expressions evaluated sequentially; last value returned
 
 #### Examples
@@ -4928,14 +4875,24 @@ An optional docstring may be provided as the first body expression.
 
 ((lambda (a &optional b) (list a b)) 1)         ; => (1 nil)
 ((lambda (a &optional b) (list a b)) 1 2)       ; => (1 2)
+((lambda (x &optional (y 10)) (+ x y)) 3)       ; => 13
+((lambda (x &optional (y 10)) (+ x y)) 3 4)     ; => 7
+((lambda (a &optional (b (* a 2))) (+ a b)) 3)  ; => 9
 
 ((lambda (a &rest more) (list a more)) 1 2 3)   ; => (1 (2 3))
 ((lambda (&rest all) all) 1 2 3 4)              ; => (1 2 3 4)
+((lambda (a &optional b &rest rest) (list a b rest)) 1 2 3 4)
+; => (1 2 (3 4))
 
 (define make-adder (lambda (x) (lambda (y) (+ x y))))
 (define add5 (make-adder 5))
 (add5 10)                                        ; => 15
 ```
+
+#### See Also
+
+- `define` - Bind a function to a name
+- `apply` - Apply a function to a list of arguments
 
 ### `defmacro`
 
@@ -6274,7 +6231,7 @@ features (keyboard decoding, mouse parsing, focus events, bracketed paste,
 clipboard integration) are implemented in the `tui-events.lisp` library by
 parsing the raw byte sequences produced by these primitives.
 
-### `tui-events` library
+### tui-events library
 
 The `tui-events.lisp` library is a proper Ditty module. It lives in its own
 `tui-events` package, exports a public API, and registers itself via
@@ -6844,31 +6801,6 @@ Check if a value is callable (lambda, macro, or builtin).
 (callable? when)              ; => #t
 (callable? 42)                ; => #f
 ```
-
-### `regex?`
-
-Check if a value is a compiled regex object (produced by `regex-compile`).
-
-#### Parameters
-
-- `value` - Any value to test
-
-#### Returns
-
-`#t` if the value is a compiled regex object, `#f` otherwise. A pattern string is not a regex object — use `regex-compile` to create one.
-
-#### Examples
-
-```lisp
-(define digits (regex-compile "\\d+"))
-(regex? digits)              ; => #t
-(regex? "\\d+")             ; => #f (pattern string, not compiled regex)
-(regex? 42)                 ; => #f
-```
-
-#### See Also
-
-- `regex-compile` - Compile a pattern string into a regex object
 
 ---
 
