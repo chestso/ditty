@@ -464,6 +464,10 @@ String with the current working directory path.
 - `data-directory` - Get data directory (platform-specific)
 - `*load-pathname*` - Get path of currently loading file
 
+## `pwd`
+
+Alias for `current-directory`. See `current-directory`.
+
 ## `temporary-file-directory`
 
 Return the directory used for temporary files. Emacs Lisp style.

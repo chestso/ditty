@@ -151,33 +151,6 @@ Integer remainder (modulo operation).
 
 ### Returns
 
-Integer remainder after division.
-
-### Examples
-
-```lisp
-(remainder 17 5)     ; => 2
-(remainder 10 3)     ; => 1
-(remainder 20 5)     ; => 0
-(remainder -17 5)    ; => -2
-```
-
-### See Also
-
-- `quotient` - Integer division
-- `/` - Regular division (returns float)
-
-## `remainder`
-
-Integer remainder (modulo operation).
-
-### Parameters
-
-- `dividend` - The number to be divided (integer or float)
-- `divisor` - The number to divide by (integer or float)
-
-### Returns
-
 Integer remainder after division. The result has the same sign as the dividend.
 
 ### Examples

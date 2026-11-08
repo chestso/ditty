@@ -49,9 +49,16 @@ strings are _not_ regex objects.
 ### Examples
 
 ```lisp
-(regex? (regex-compile "\\d+"))  ; => #t
-(regex? "\\d+")                  ; => nil
+(define digits (regex-compile "\\d+"))
+(regex? digits)                  ; => #t
+(regex? "\\d+")                  ; => nil (pattern string, not compiled regex)
+(regex? 42)                      ; => nil
 ```
+
+### See Also
+
+- `regex-compile` - Compile a pattern string into a regex object
+- `regex-valid?` - Test if a pattern compiles
 
 ## `regex-match?`
 

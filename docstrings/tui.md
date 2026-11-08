@@ -6,7 +6,7 @@ features (keyboard decoding, mouse parsing, focus events, bracketed paste,
 clipboard integration) are implemented in the `tui-events.lisp` library by
 parsing the raw byte sequences produced by these primitives.
 
-## `tui-events` library
+## tui-events library
 
 The `tui-events.lisp` library is a proper Ditty module. It lives in its own
 `tui-events` package, exports a public API, and registers itself via

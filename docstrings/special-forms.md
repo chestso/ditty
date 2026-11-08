@@ -131,6 +131,9 @@ An optional docstring may be provided as the first body expression.
 ### Parameters
 
 - `params` - Parameter list with required, `&optional`, and `&rest` markers
+  - Required parameters: `x`
+  - Optional parameters with defaults: `&optional (y 10)` or `&optional y`. Optional defaults can reference earlier parameters.
+  - Rest parameter: `&rest args`
 - `body...` - Expressions evaluated sequentially; last value returned
 
 ### Examples
@@ -142,14 +145,24 @@ An optional docstring may be provided as the first body expression.
 
 ((lambda (a &optional b) (list a b)) 1)         ; => (1 nil)
 ((lambda (a &optional b) (list a b)) 1 2)       ; => (1 2)
+((lambda (x &optional (y 10)) (+ x y)) 3)       ; => 13
+((lambda (x &optional (y 10)) (+ x y)) 3 4)     ; => 7
+((lambda (a &optional (b (* a 2))) (+ a b)) 3)  ; => 9
 
 ((lambda (a &rest more) (list a more)) 1 2 3)   ; => (1 (2 3))
 ((lambda (&rest all) all) 1 2 3 4)              ; => (1 2 3 4)
+((lambda (a &optional b &rest rest) (list a b rest)) 1 2 3 4)
+; => (1 2 (3 4))
 
 (define make-adder (lambda (x) (lambda (y) (+ x y))))
 (define add5 (make-adder 5))
 (add5 10)                                        ; => 15
 ```
+
+### See Also
+
+- `define` - Bind a function to a name
+- `apply` - Apply a function to a list of arguments
 
 ## `defmacro`
 

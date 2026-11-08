@@ -4,15 +4,31 @@
 # Each .md file uses this structure:
 #   # Category Title        (H1 - skipped)
 #   Category description    (skipped)
-#   ## `function-name`      (H2 - function delimiter)
+#   ## `function-name`      (H2 - function delimiter; exactly this, no trailing text)
 #   Docstring body...       (captured, H3 converted to H2)
 #   ## `next-function`      (next function)
+#   ## Plain heading        (H2 - ends the current section, body skipped)
+# Duplicate function headings anywhere in the tree are an error.
 #
 # Usage: scripts/gen-docstrings.sh doc > src/docstrings.gen.h
 
 set -e
 
 DOC_DIR="${1:?Usage: $0 <doc-directory>}"
+
+# A duplicate heading is ambiguous: lookup_builtin_doc() returns the first
+# match, silently shadowing every later entry. Reject duplicates up front,
+# whether they occur within a single file or across files.
+duplicate_names="$(
+	for md_file in $(find "$DOC_DIR" -name '*.md' -type f | sort); do
+		grep -E '^## `[^`]+`[[:space:]]*$' "$md_file" || true
+	done | sed -E 's/^## `([^`]+)`.*/\1/' | sort | uniq -d
+)"
+if [ -n "$duplicate_names" ]; then
+	echo "gen-docstrings.sh: duplicate docstring headings:" >&2
+	printf '%s\n' "$duplicate_names" >&2
+	exit 1
+fi
 
 cat <<'HEADER'
 // AUTO-GENERATED from docstrings/*.md — do not edit
@@ -41,19 +57,32 @@ for md_file in $(find "$DOC_DIR" -name '*.md' -type f | sort); do
     # Skip H1 headings (category title)
     /^# / { next }
 
-    # H2 heading with backtick-quoted function name
-    /^## `[^`]+`/ {
-        # Emit previous function if we have one
-        if (name != "") {
-            emit(name)
-        }
+    # H2 heading. A backtick-quoted name on its own starts a function
+    # section; any other H2 ends the current section and its body is
+    # skipped until the next function heading. (Without this, a trailing
+    # section such as "## Standard Library Aliases" would leak into the
+    # preceding function docstring, and "## `name` extra text" would be
+    # misread as a function named "name".)
+    /^## / {
+        if ($0 ~ /^## `[^`]+`[[:space:]]*$/) {
+            # Emit previous function if we have one
+            if (name != "") {
+                emit(name)
+            }
 
-        # Extract function name: ## `name` -> name
-        n = $0
-        sub(/^## `/, "", n)
-        sub(/`.*$/, "", n)
-        name = n
-        nlines = 0
+            # Extract function name: ## `name` -> name
+            n = $0
+            sub(/^## `/, "", n)
+            sub(/`.*$/, "", n)
+            name = n
+            nlines = 0
+        } else {
+            if (name != "") {
+                emit(name)
+            }
+            name = ""
+            nlines = 0
+        }
         next
     }
 
