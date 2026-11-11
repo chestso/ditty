@@ -72,7 +72,7 @@ elif test "x$user_cflags" = "x"; then
     CFLAGS="-O1 -g3 -fno-omit-frame-pointer -fno-common"
     AC_MSG_NOTICE([Debug mode (no ASan on Windows): CFLAGS=$CFLAGS])
   else
-    CFLAGS="-O1 -g3 -fno-omit-frame-pointer -fno-common -fsanitize=address,undefined -fno-sanitize-recover=undefined"
+    CFLAGS="-O1 -g3 -fno-omit-frame-pointer -fno-common -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=undefined,float-cast-overflow"
     LDFLAGS="-fsanitize=address,undefined $LDFLAGS"
     AC_MSG_NOTICE([ASan+UBSan mode (default): CFLAGS=$CFLAGS])
   fi

@@ -170,3 +170,34 @@ jobs:
           path: ditty-*-macos-*.zip
           if-no-files-found: error
           retention-days: 30
+
+  linux:
+    name: Linux (x86_64, ASan+UBSan)
+    # The default build mode on Linux enables ASan, UBSan and
+    # float-cast-overflow with -fno-sanitize-recover, so any sanitizer
+    # report fails the run. boba is optional and not built here: the TUI
+    # REPL paths are covered by the Windows and macOS jobs.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout ditty
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake libtool pkg-config \
+            libgc-dev libpcre2-dev
+
+      - name: Build ditty (default ASan+UBSan)
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          ../configure
+          make -j"$(nproc)"
+
+      - name: Run tests
+        run: make -C build check VERBOSE=1
