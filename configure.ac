@@ -117,10 +117,19 @@ BUILD_CC_VERSION=$($CC --version 2>/dev/null | head -1 || echo "$CC")
 AC_DEFINE_UNQUOTED([BUILD_CC], ["$BUILD_CC_VERSION"], [C compiler version string])
 
 # Check for math library (not needed on Windows — math is in the CRT)
+# libditty is a static archive, so every consumer links libm itself. Record
+# what AC_SEARCH_LIBS found ("none required" means it lives in libc) and
+# export it through ditty.pc.
+MATH_LIBS=""
 if test "x$host_windows" != "xyes"; then
-  AC_SEARCH_LIBS([floor], [m], [],
+  AC_SEARCH_LIBS([floor], [m],
+      [case "$ac_cv_search_floor" in
+         "none required") MATH_LIBS="" ;;
+         *) MATH_LIBS="$ac_cv_search_floor" ;;
+       esac],
       [AC_MSG_ERROR([Math library not found])])
 fi
+AC_SUBST([MATH_LIBS])
 
 # Checks for header files
 AC_CHECK_HEADERS([stdlib.h string.h unistd.h termios.h sys/ioctl.h])

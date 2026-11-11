@@ -8,4 +8,4 @@ Description: Embeddable Lisp interpreter library with syntax highlighting
 Version: @PACKAGE_VERSION@
 Requires: bdw-gc libpcre2-8
 Cflags: -I${includedir}
-Libs: -L${libdir} -lditty
+Libs: -L${libdir} -lditty @MATH_LIBS@
