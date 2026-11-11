@@ -16,7 +16,7 @@ static LispObject *builtin_char_code(LispObject *args, Environment *env)
     CHECK_ARGS_1("char-code");
     LispObject *char_obj = lisp_car(args);
     if (LISP_TYPE(char_obj) != LISP_CHAR) {
-        return lisp_make_error("char-code requires a character");
+        return lisp_raise_error("char-code requires a character");
     }
     return lisp_make_integer(LISP_CHAR_VAL(char_obj));
 }
@@ -27,11 +27,11 @@ static LispObject *builtin_code_char(LispObject *args, Environment *env)
     CHECK_ARGS_1("code-char");
     LispObject *code_obj = lisp_car(args);
     if (LISP_TYPE(code_obj) != LISP_INTEGER) {
-        return lisp_make_error("code-char requires an integer");
+        return lisp_raise_error("code-char requires an integer");
     }
     long long code = LISP_INT_VAL(code_obj);
     if (code < 0 || code > 0x10FFFF) {
-        return lisp_make_error("code-char: invalid Unicode codepoint");
+        return lisp_raise_error("code-char: invalid Unicode codepoint");
     }
     return lisp_make_char((unsigned int)code);
 }
@@ -42,7 +42,7 @@ static LispObject *builtin_char_to_string(LispObject *args, Environment *env)
     CHECK_ARGS_1("char->string");
     LispObject *char_obj = lisp_car(args);
     if (LISP_TYPE(char_obj) != LISP_CHAR) {
-        return lisp_make_error("char->string requires a character");
+        return lisp_raise_error("char->string requires a character");
     }
     char buf[5];
     utf8_put_codepoint(LISP_CHAR_VAL(char_obj), buf);
@@ -55,12 +55,12 @@ static LispObject *builtin_string_to_char(LispObject *args, Environment *env)
     CHECK_ARGS_1("string->char");
     LispObject *str_obj = lisp_car(args);
     if (LISP_TYPE(str_obj) != LISP_STRING) {
-        return lisp_make_error("string->char requires a string");
+        return lisp_raise_error("string->char requires a string");
     }
     const char *str = LISP_STR_VAL(str_obj);
     size_t char_count = utf8_strlen(str);
     if (char_count != 1) {
-        return lisp_make_error("string->char requires a single-character string");
+        return lisp_raise_error("string->char requires a single-character string");
     }
     unsigned int codepoint = utf8_get_codepoint(str);
     return lisp_make_char(codepoint);
@@ -73,7 +73,7 @@ static LispObject *builtin_string_to_char(LispObject *args, Environment *env)
         CHECK_ARGS_2(opname);                                             \
         LispObject *c1 = lisp_car(args), *c2 = lisp_car(lisp_cdr(args));  \
         if (LISP_TYPE(c1) != LISP_CHAR || LISP_TYPE(c2) != LISP_CHAR)     \
-            return lisp_make_error(opname " requires characters");        \
+            return lisp_raise_error(opname " requires characters");       \
         return lisp_make_boolean(LISP_CHAR_VAL(c1) op LISP_CHAR_VAL(c2)); \
     }
 DEFINE_CHAR_CMP(builtin_char_eq, "char=?", ==)
@@ -89,7 +89,7 @@ static LispObject *builtin_char_upcase(LispObject *args, Environment *env)
     CHECK_ARGS_1("char-upcase");
     LispObject *char_obj = lisp_car(args);
     if (LISP_TYPE(char_obj) != LISP_CHAR) {
-        return lisp_make_error("char-upcase requires a character");
+        return lisp_raise_error("char-upcase requires a character");
     }
     unsigned int cp = LISP_CHAR_VAL(char_obj);
     /* ASCII only case conversion */
@@ -105,7 +105,7 @@ static LispObject *builtin_char_downcase(LispObject *args, Environment *env)
     CHECK_ARGS_1("char-downcase");
     LispObject *char_obj = lisp_car(args);
     if (LISP_TYPE(char_obj) != LISP_CHAR) {
-        return lisp_make_error("char-downcase requires a character");
+        return lisp_raise_error("char-downcase requires a character");
     }
     unsigned int cp = LISP_CHAR_VAL(char_obj);
     /* ASCII only case conversion */
@@ -121,7 +121,7 @@ static LispObject *builtin_char_alphabetic_question(LispObject *args, Environmen
     CHECK_ARGS_1("char-alphabetic?");
     LispObject *char_obj = lisp_car(args);
     if (LISP_TYPE(char_obj) != LISP_CHAR) {
-        return lisp_make_error("char-alphabetic? requires a character");
+        return lisp_raise_error("char-alphabetic? requires a character");
     }
     unsigned int cp = LISP_CHAR_VAL(char_obj);
     /* ASCII only check */
@@ -135,7 +135,7 @@ static LispObject *builtin_char_numeric_question(LispObject *args, Environment *
     CHECK_ARGS_1("char-numeric?");
     LispObject *char_obj = lisp_car(args);
     if (LISP_TYPE(char_obj) != LISP_CHAR) {
-        return lisp_make_error("char-numeric? requires a character");
+        return lisp_raise_error("char-numeric? requires a character");
     }
     unsigned int cp = LISP_CHAR_VAL(char_obj);
     int is_numeric = (cp >= '0' && cp <= '9');
@@ -148,7 +148,7 @@ static LispObject *builtin_char_whitespace_question(LispObject *args, Environmen
     CHECK_ARGS_1("char-whitespace?");
     LispObject *char_obj = lisp_car(args);
     if (LISP_TYPE(char_obj) != LISP_CHAR) {
-        return lisp_make_error("char-whitespace? requires a character");
+        return lisp_raise_error("char-whitespace? requires a character");
     }
     unsigned int cp = LISP_CHAR_VAL(char_obj);
     int is_ws = (cp == ' ' || cp == '\t' || cp == '\n' || cp == '\r' || cp == '\f' || cp == '\v');

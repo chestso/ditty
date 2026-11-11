@@ -250,7 +250,11 @@ The library is self-contained and can be integrated into any C project:
 int main() {
     Environment* env = lisp_init();
 
-    LispObject* result = lisp_eval_string("(+ 1 2 3)", env);
+    LispObject* result = NULL;
+    if (lisp_try_eval_string("(+ 1 2 3)", env, &result) != LISP_OK) {
+        fprintf(stderr, "%s\n", lisp_error_report(result));
+        return 1;
+    }
     char* output = lisp_print(result);
     printf("%s\n", output);  // Prints: 6
 

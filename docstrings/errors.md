@@ -2,6 +2,13 @@
 
 Error creation, signaling, and introspection.
 
+Signaling and data are separate channels. `error`, `signal` and every runtime
+failure _raise_: control transfers to the innermost matching `condition-case`
+and nothing between the signal and the handler resumes. An error object,
+once caught, is ordinary data: binding it, returning it from a handler,
+putting it in a list, or passing it to `car`/`apply`/`eval` never re-signals.
+Use `(signal ERR)` to re-raise one.
+
 ## `error?`
 
 Test if value is an error object.
@@ -194,16 +201,25 @@ Returns error if argument is not an error object.
 
 ## `signal`
 
-Raise a typed error (Emacs Lisp-style exception).
+Raise an error (Emacs Lisp-style exception): control transfers to the
+innermost matching `condition-case`.
 
 ### Parameters
 
-- `error-type` - Symbol identifying the error type
+- `error-type` - Symbol identifying the error type, **or** an error object
 - `data` - Optional data payload (any Lisp value)
 
 ### Returns
 
-Does not return (raises error that must be caught with `condition-case`).
+Does not return (raises an error that must be caught with `condition-case`
+or reported by the top level).
+
+### Forms
+
+- `(signal TYPE DATA)` — signal a new error of type `TYPE`.
+- `(signal ERROR)` — re-raise that exact error object: same type, message,
+  data and the stack captured where it was first raised. This is how a
+  handler re-signals an error it has inspected.
 
 ### Examples
 
@@ -222,6 +238,11 @@ Does not return (raises error that must be caught with `condition-case`).
   (division-by-zero "Caught division error")
   (error "Caught other error"))
 ; => "Caught division error"
+
+; Re-signaling a caught error object keeps its identity
+(condition-case outer
+    (condition-case inner (error "boom") (error (signal inner)))
+  (error (error-message outer)))   ; => "boom"
 ```
 
 ### Common Error Types
@@ -247,6 +268,9 @@ You can define custom error types using any symbol:
 ### Notes
 
 If `data` is a string, it's used as the error message. Otherwise, a message is constructed from the error type and data.
+
+The stack trace (`error-stack`) is captured when the error is first raised,
+not when it is constructed, so a re-signaled error keeps its original trace.
 
 ### See Also
 

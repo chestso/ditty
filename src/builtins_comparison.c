@@ -37,14 +37,14 @@ static LispObject *numeric_compare_chain(LispObject *args, const char *name, enu
 
     if (args == NIL || lisp_cdr(args) == NIL) {
         snprintf(message, sizeof(message), "%s requires 2 arguments", name);
-        return lisp_make_error(message);
+        return lisp_raise_error(message);
     }
 
     LispObject *previous = lisp_car(args);
     LispType previous_type = LISP_TYPE(previous);
     if (previous_type != LISP_INTEGER && previous_type != LISP_NUMBER) {
         snprintf(message, sizeof(message), "%s requires numbers", name);
-        return lisp_make_error(message);
+        return lisp_raise_error(message);
     }
 
     for (args = lisp_cdr(args); args != NIL && args != NULL; args = lisp_cdr(args)) {
@@ -52,7 +52,7 @@ static LispObject *numeric_compare_chain(LispObject *args, const char *name, enu
         LispType current_type = LISP_TYPE(current);
         if (current_type != LISP_INTEGER && current_type != LISP_NUMBER) {
             snprintf(message, sizeof(message), "%s requires numbers", name);
-            return lisp_make_error(message);
+            return lisp_raise_error(message);
         }
 
         int unordered = 0;
@@ -113,7 +113,7 @@ static LispObject *builtin_eq_question(LispObject *args, Environment *env)
     (void)env;
     /* Validate exactly 2 arguments */
     if (args == NIL || LISP_CDR(args) == NIL || LISP_CDR(LISP_CDR(args)) != NIL) {
-        return lisp_make_error("eq? expects exactly 2 arguments");
+        return lisp_raise_error("eq? expects exactly 2 arguments");
     }
 
     LispObject *a = LISP_CAR(args);
@@ -128,7 +128,7 @@ static LispObject *builtin_equal_question(LispObject *args, Environment *env)
     (void)env;
     /* Validate exactly 2 arguments */
     if (args == NIL || LISP_CDR(args) == NIL || LISP_CDR(LISP_CDR(args)) != NIL) {
-        return lisp_make_error("equal? expects exactly 2 arguments");
+        return lisp_raise_error("equal? expects exactly 2 arguments");
     }
 
     LispObject *a = LISP_CAR(args);
@@ -143,7 +143,7 @@ static LispObject *builtin_string_eq_question(LispObject *args, Environment *env
     (void)env;
     /* Validate exactly 2 arguments */
     if (args == NIL || LISP_CDR(args) == NIL || LISP_CDR(LISP_CDR(args)) != NIL) {
-        return lisp_make_error("string=? expects exactly 2 arguments");
+        return lisp_raise_error("string=? expects exactly 2 arguments");
     }
 
     LispObject *a = LISP_CAR(args);
@@ -151,10 +151,10 @@ static LispObject *builtin_string_eq_question(LispObject *args, Environment *env
 
     /* Type validation */
     if (LISP_TYPE(a) != LISP_STRING) {
-        return lisp_make_error("string=?: first argument must be a string");
+        return lisp_raise_error("string=?: first argument must be a string");
     }
     if (LISP_TYPE(b) != LISP_STRING) {
-        return lisp_make_error("string=?: second argument must be a string");
+        return lisp_raise_error("string=?: second argument must be a string");
     }
 
     /* String comparison */

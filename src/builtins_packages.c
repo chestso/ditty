@@ -1,4 +1,5 @@
 #include "builtins_internal.h"
+#include "condition_internal.h"
 
 /* ---- Package export registry ---- */
 /* A static hash table mapping package name (string) -> list of exported symbols.
@@ -350,7 +351,7 @@ static void write_value_expr(FILE *f, LispObject *val, ExtractedLambda *extracte
 static LispObject *builtin_package_save(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_make_error("package-save requires 1-2 arguments");
+        return lisp_raise_error("package-save requires 1-2 arguments");
     }
 
     LispObject *first_arg = lisp_car(args);
@@ -379,7 +380,7 @@ static LispObject *builtin_package_save(LispObject *args, Environment *env)
     }
 
     if (LISP_TYPE(filename_obj) != LISP_STRING) {
-        return lisp_make_error("package-save requires a string filename");
+        return lisp_raise_error("package-save requires a string filename");
     }
 
     FILE *f = file_open(LISP_STR_VAL(filename_obj), "w");
@@ -387,7 +388,7 @@ static LispObject *builtin_package_save(LispObject *args, Environment *env)
         char error[512];
         snprintf(error, sizeof(error), "package-save: cannot open '%s': %s", LISP_STR_VAL(filename_obj),
                  strerror(errno));
-        return lisp_make_error(error);
+        return lisp_raise_error(error);
     }
 
     fprintf(f, ";; Ditty Lisp package saved by package-save\n");
@@ -473,14 +474,10 @@ static LispObject *builtin_package_save(LispObject *args, Environment *env)
             fmt_sym = lisp_intern("format-file");
         LispObject *fmt_func = env_lookup(env, LISP_SYM_VAL(fmt_sym));
         if (fmt_func == NULL) {
-            return lisp_make_error(
-                "package-save: :format requires lisp-fmt.lisp to be loaded first");
+            return lisp_raise_error("package-save: :format requires lisp-fmt.lisp to be loaded first");
         }
         LispObject *call = lisp_make_cons(fmt_sym, lisp_make_cons(filename_obj, NIL));
         LispObject *result = lisp_eval(call, env);
-        if (result != NULL && LISP_TYPE(result) == LISP_ERROR) {
-            return result;
-        }
         if (result != NULL && LISP_TYPE(result) == LISP_STRING) {
             FILE *f2 = file_open(LISP_STR_VAL(filename_obj), "w");
             if (f2 != NULL) {
@@ -505,7 +502,7 @@ static LispObject *builtin_in_package(LispObject *args, Environment *env)
     } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
         pkg_sym_obj = arg;
     } else {
-        return lisp_make_error("in-package requires a string or symbol argument");
+        return lisp_raise_error("in-package requires a string or symbol argument");
     }
 
     env_set(env, LISP_SYM_VAL(sym_star_package_star), pkg_sym_obj);
@@ -532,7 +529,7 @@ static LispObject *builtin_provide(LispObject *args, Environment *env)
     } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
         feature_sym = arg;
     } else {
-        return lisp_make_error("provide requires a string or symbol argument");
+        return lisp_raise_error("provide requires a string or symbol argument");
     }
 
     add_feature(env, feature_sym);
@@ -552,7 +549,7 @@ static LispObject *builtin_provided_question(LispObject *args, Environment *env)
     } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
         feature_s = LISP_SYM_VAL(arg);
     } else {
-        return lisp_make_error("provided? requires a string or symbol argument");
+        return lisp_raise_error("provided? requires a string or symbol argument");
     }
 
     return feature_provided(env, feature_s) ? LISP_TRUE : NIL;
@@ -574,7 +571,7 @@ static LispObject *builtin_require(LispObject *args, Environment *env)
         feature_sym = arg;
         name_str = LISP_SYM_VAL(arg)->name;
     } else {
-        return lisp_make_error("require requires a string or symbol argument");
+        return lisp_raise_error("require requires a string or symbol argument");
     }
 
     /* Already loaded? Return immediately. */
@@ -627,23 +624,21 @@ static LispObject *builtin_require(LispObject *args, Environment *env)
     if (path == NULL) {
         char msg[512];
         snprintf(msg, sizeof(msg), "require: cannot find library '%s'", name_str);
-        return lisp_make_error_with_stack(msg, env);
+        return lisp_raise_error(msg);
     }
 
-    /* Save *package* to restore after load. */
-    LispObject *saved_pkg = env_lookup(env, LISP_SYM_VAL(sym_star_package_star));
+    /* Save *package* and restore it on the normal path and on any signal
+     * that unwinds out of the loaded file. */
+    LispObject *volatile saved_pkg = env_lookup(env, LISP_SYM_VAL(sym_star_package_star));
     Symbol *feature_s = LISP_SYM_VAL(feature_sym);
 
     /* Load the library file. */
-    LispObject *result = lisp_load_file(path, env);
-
-    /* Restore *package* (like load does). */
-    if (saved_pkg)
-        env_set(env, LISP_SYM_VAL(sym_star_package_star), saved_pkg);
-
-    /* Check for load error. */
-    if (result != NULL && LISP_TYPE(result) == LISP_ERROR)
-        return result;
+    LispObject *result;
+    LISP_UNWIND_PROTECT(result, lisp_load_file(path, env), {
+        if (saved_pkg)
+            env_set(env, LISP_SYM_VAL(sym_star_package_star), saved_pkg);
+    });
+    (void)result;
 
     /* Verify the file called provide for this feature. */
     if (!feature_provided(env, feature_s)) {
@@ -651,7 +646,7 @@ static LispObject *builtin_require(LispObject *args, Environment *env)
         snprintf(msg, sizeof(msg),
                  "require: file for '%s' did not call (provide '%s)",
                  name_str, name_str);
-        return lisp_make_error_with_stack(msg, env);
+        return lisp_raise_error(msg);
     }
 
     return feature_sym;
@@ -661,7 +656,7 @@ static LispObject *builtin_require(LispObject *args, Environment *env)
 static LispObject *builtin_export(LispObject *args, Environment *env)
 {
     if (args == NIL)
-        return lisp_make_error("export requires at least one argument");
+        return lisp_raise_error("export requires at least one argument");
 
     Symbol *pkg = env_current_package(env);
     LispObject *table = get_export_table();
@@ -681,7 +676,7 @@ static LispObject *builtin_export(LispObject *args, Environment *env)
     while (cur != NIL && LISP_TYPE(cur) == LISP_CONS) {
         LispObject *sym = lisp_car(cur);
         if (LISP_TYPE(sym) != LISP_SYMBOL) {
-            return lisp_make_error("export requires symbol arguments");
+            return lisp_raise_error("export requires symbol arguments");
         }
 
         /* Check if already in export list. */
@@ -723,7 +718,7 @@ static LispObject *builtin_package_exports(LispObject *args, Environment *env)
     } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
         pkg_name = LISP_SYM_VAL(arg)->name;
     } else {
-        return lisp_make_error("package-exports requires a string or symbol argument");
+        return lisp_raise_error("package-exports requires a string or symbol argument");
     }
 
     LispObject *table = get_export_table();
@@ -749,7 +744,7 @@ static LispObject *builtin_use_package(LispObject *args, Environment *env)
     } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
         src_pkg = LISP_SYM_VAL(arg);
     } else {
-        return lisp_make_error("use-package requires a string or symbol argument");
+        return lisp_raise_error("use-package requires a string or symbol argument");
     }
 
     /* Check if the package exists by looking for any bindings. */
@@ -771,7 +766,7 @@ static LispObject *builtin_use_package(LispObject *args, Environment *env)
     if (!pkg_exists) {
         char msg[256];
         snprintf(msg, sizeof(msg), "use-package: unknown package '%s'", src_pkg->name);
-        return lisp_make_error(msg);
+        return lisp_raise_error(msg);
     }
 
     /* Import exported bindings from src_pkg into the current package.
@@ -818,7 +813,7 @@ static LispObject *builtin_package_symbols(LispObject *args, Environment *env)
     } else if (LISP_TYPE(arg) == LISP_SYMBOL) {
         target_pkg = LISP_SYM_VAL(arg);
     } else {
-        return lisp_make_error("package-symbols requires a string or symbol argument");
+        return lisp_raise_error("package-symbols requires a string or symbol argument");
     }
 
     LispObject *result = NIL;

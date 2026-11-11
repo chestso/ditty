@@ -380,12 +380,26 @@ Logical OR with short-circuit evaluation. Returns the first truthy value, or the
 
 ## `condition-case`
 
-Catch and handle errors by type (Emacs Lisp-style exception handling). Evaluates the body form; if an error is signaled, the handlers are checked in order and the first matching handler is executed.
+Catch a signal by type (Emacs Lisp-style exception handling). Evaluates the
+body form; if it signals, control transfers **here** — the rest of the body
+and every frame between the signal and this form is abandoned — and the first
+matching handler runs.
+
+Handlers are checked in order. An exact type match wins; `error` catches
+everything else. Type names are compared as symbols, so package-qualified
+types work. If nothing matches, the signal keeps unwinding outward.
+
+The handler runs in a child environment of the `condition-case`'s
+environment, with the error object bound to `var` there. `define` inside a
+handler is local to the handler; `set!` still reaches outer variables. The
+handler's last value is the value of the whole form. The `condition-case` is
+popped **before** the handler runs, so an error raised by a handler propagates
+outward instead of being caught again.
 
 ### Parameters
 
-- `var` - Symbol bound to the error object during handler execution (not evaluated)
-- `body` - Expression to evaluate (may signal an error)
+- `var` - Symbol bound to the error object during handler execution (not evaluated; `nil` to bind nothing)
+- `body` - Expression to evaluate (may signal an error); never in tail position
 - `handlers...` - Each handler is `(error-type body...)`; `error` catches all types
 
 ### Examples
@@ -401,16 +415,30 @@ Catch and handle errors by type (Emacs Lisp-style exception handling). Evaluates
   (error (error-message e)))
 ; => "test message"
 
-(condition-case e
-    (some-risky-operation)
-  (file-error "File problem")
-  (network-error "Network problem")
-  (error "Other error"))
+; Nothing after the signal runs, and a raising handler goes outward.
+(condition-case outer
+    (condition-case inner (error "boom") (error (error "again")))
+  (error 'outer))
+; => outer
+
+; The handler's value is the form's value, even when it is an error object.
+(condition-case e (error "boom") (error e))
+; => #<error error "boom">
 ```
 
 ## `unwind-protect`
 
-Guarantee cleanup code execution regardless of whether the body form succeeds or signals an error. Like `try-finally` in other languages.
+Guarantee cleanup code execution regardless of whether the body form succeeds
+or signals an error. Like `try-finally` in other languages.
+
+The body is evaluated (never in tail position), then the cleanups run. If a
+signal is unwinding outward when it reaches this form, the cleanups run
+innermost-first, once, in this form's environment, and the original error
+object is re-raised — nothing after the signal point in the body runs.
+
+A cleanup that signals replaces the pending error: the outer handler sees the
+cleanup's error and the original one is lost. A cleanup that signals and
+catches its own error does not disturb the pending one.
 
 ### Parameters
 
@@ -424,8 +452,10 @@ Guarantee cleanup code execution regardless of whether the body form succeeds or
     (read-line file)
   (close file))  ; Always closes, even on error
 
-(unwind-protect
-    (signal 'test-error "boom")
-  (define cleaned-up #t))
-cleaned-up  ; => #t (cleanup ran despite error)
+; The cleanup runs even though the body raises, and the error still
+; reaches the enclosing condition-case.
+(condition-case e
+    (unwind-protect (error "boom") (princ "cleanup"))
+  (error 'caught))
+; prints "cleanup", => caught
 ```

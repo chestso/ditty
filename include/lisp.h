@@ -14,8 +14,6 @@
 typedef struct LispObject LispObject;
 typedef struct Environment Environment;
 typedef struct CallStackFrame CallStackFrame;
-typedef struct HandlerContext HandlerContext;
-typedef struct CleanupContext CleanupContext;
 typedef struct Symbol Symbol;
 
 /* Symbol structure - interned with optional docstring.
@@ -60,23 +58,6 @@ extern ProfileState g_profile_state;
 uint64_t profile_get_time_ns(void);
 void profile_record(const char *function_name, uint64_t elapsed_ns);
 void profile_reset(void);
-
-/* Handler context for condition-case */
-struct HandlerContext
-{
-    LispObject *handlers;       /* Assoc list: ((ERROR-SYMBOL . HANDLER-BODY) ...) */
-    LispObject *error_var_name; /* Symbol: variable to bind error (or NIL) */
-    Environment *handler_env;   /* Environment for handler evaluation */
-    HandlerContext *parent;     /* Previous handler context */
-};
-
-/* Cleanup context for unwind-protect */
-struct CleanupContext
-{
-    LispObject *cleanup_forms; /* List of cleanup expressions */
-    Environment *cleanup_env;  /* Environment for cleanup evaluation */
-    CleanupContext *parent;    /* Previous cleanup context */
-};
 
 /* Object types */
 typedef enum
@@ -136,8 +117,7 @@ typedef struct ErrorInfo
     LispObject *error_type;  /* Symbol: 'error, 'division-by-zero, etc. */
     char *message;           /* Human-readable error message */
     LispObject *data;        /* Optional arbitrary data (can be NIL) */
-    LispObject *stack_trace; /* List of function names */
-    int caught;              /* Flag: if true, error won't propagate (caught by condition-case) */
+    LispObject *stack_trace; /* List of function names, captured at the signal point */
 } ErrorInfo;
 
 typedef struct StringPortInfo
@@ -237,9 +217,6 @@ struct Environment
     size_t bucket_count;
     size_t binding_count;
     Environment *parent;
-    CallStackFrame *call_stack;    /* Current call stack */
-    HandlerContext *handler_stack; /* Active condition-case handlers */
-    CleanupContext *cleanup_stack; /* Active unwind-protect cleanups */
 };
 
 /* Iterate all bindings in an environment frame */
@@ -253,10 +230,22 @@ struct Environment
 
 /* Simple API */
 Environment *lisp_init(void);
-LispObject *lisp_eval_string(const char *code, Environment *env);
 void lisp_cleanup(void);
 
-/* Advanced API */
+/* Advanced API
+ *
+ * Two modes, named apart:
+ *
+ *   Raising: lisp_eval / lisp_apply / lisp_call_N / lisp_load_file run Lisp
+ *   and transfer control to the innermost condition-case (or lisp_try_*
+ *   frame) when the code signals. They require an active frame — a builtin,
+ *   a special form, or a lisp_try_* call — and are an internal error
+ *   elsewhere.
+ *
+ *   Protected: lisp_try_* establish a frame and never raise. They return a
+ *   status; *out holds the value on LISP_OK and the error object on
+ *   LISP_SIGNALED. A returned error value (for example the value of a
+ *   condition-case handler) is LISP_OK, never LISP_SIGNALED. */
 LispObject *lisp_read(const char **input);
 LispObject *lisp_eval(LispObject *expr, Environment *env);
 
@@ -276,6 +265,37 @@ void lisp_prin1(LispObject *obj);
 void lisp_print_cl(LispObject *obj);
 LispObject *lisp_load_file(const char *filename, Environment *env);
 
+/* Protected API — the boundary between C and Lisp signals. */
+typedef enum
+{
+    LISP_OK = 0,
+    LISP_SIGNALED = 1
+} LispStatus;
+
+typedef LispObject *(*LispThunk)(void *data);
+
+LispStatus lisp_try(LispThunk fn, void *data, LispObject **out);
+LispStatus lisp_try_eval(LispObject *expr, Environment *env, LispObject **out);
+LispStatus lisp_try_apply(LispObject *func, LispObject *args, Environment *env, LispObject **out);
+/* Parse and evaluate the first expression in CODE. A parse error is
+ * reported as LISP_SIGNALED with the reader's error object in *out. */
+LispStatus lisp_try_eval_string(const char *code, Environment *env, LispObject **out);
+LispStatus lisp_try_load_file(const char *filename, Environment *env, LispObject **out);
+
+/* Signaling. lisp_raise transfers control to the innermost EvalFrame and
+ * never returns. The error object is data everywhere else: returning one
+ * from a builtin, binding one to a variable, or passing one to car/apply/
+ * eval does not signal. */
+_Noreturn LispObject *lisp_raise(LispObject *error);
+_Noreturn LispObject *lisp_raise_error(const char *message); /* type 'error */
+_Noreturn LispObject *lisp_raise_typed(const char *type_name, const char *message);
+_Noreturn LispObject *lisp_raise_typed_data(LispObject *type, const char *message, LispObject *data);
+
+/* The multi-line diagnostic for a signaled error ("ERROR: [...] ... Call
+ * stack:"). The CLI uses this on LISP_SIGNALED; lisp_print()/lisp_princ()
+ * of an error object produce the single-line data form instead. */
+char *lisp_error_report(LispObject *error);
+
 /* Object creation */
 LispObject *lisp_make_number(double value);
 LispObject *lisp_make_integer(long long value);
@@ -284,7 +304,9 @@ LispObject *lisp_make_string(const char *value);
 LispObject *lisp_make_symbol(const char *name);
 LispObject *lisp_make_boolean(int value);
 LispObject *lisp_make_cons(LispObject *car, LispObject *cdr);
-LispObject *lisp_make_error(const char *message);
+/* Pure constructor: builds an error object. No stack trace is captured and
+ * nothing is signaled. Most callers want lisp_raise* instead. */
+LispObject *lisp_make_typed_error(LispObject *error_type, const char *message, LispObject *data);
 LispObject *lisp_make_builtin(BuiltinFunc func, const char *name);
 LispObject *lisp_make_lambda(LispObject *params, LispObject *body, Environment *closure, const char *name);
 LispObject *lisp_make_lambda_ext(LispObject *params, LispObject *required_params, LispObject *optional_params,
@@ -409,14 +431,12 @@ int env_set(Environment *env, Symbol *sym, LispObject *value);
 int env_set_in_package(Environment *env, Symbol *sym, Symbol *package, LispObject *value);
 void env_free(Environment *env);
 Symbol *env_current_package(Environment *env);
-/* Call stack functions */
-void push_call_frame(Environment *env, const char *function_name);
-void pop_call_frame(Environment *env);
-LispObject *capture_call_stack(Environment *env);
-LispObject *lisp_make_error_with_stack(const char *message, Environment *env);
-LispObject *lisp_attach_stack_trace(LispObject *error, Environment *env);
-LispObject *lisp_make_typed_error(LispObject *error_type, const char *message, LispObject *data, Environment *env);
-LispObject *lisp_make_typed_error_simple(const char *error_type_name, const char *message, Environment *env);
+/* Call stack — dynamic-extent state, deliberately process-global (like the
+ * eval frame stack): it describes what is currently *active*, not what is
+ * reachable. Frames snapshot it and restore it on a non-local exit. */
+void push_call_frame(const char *function_name);
+void pop_call_frame(void);
+LispObject *capture_call_stack(void);
 
 /* Completion context for position-aware completion */
 typedef enum

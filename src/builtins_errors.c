@@ -15,11 +15,11 @@ static LispObject *builtin_error_question(LispObject *args, Environment *env)
 static LispObject *builtin_error_type(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_make_typed_error_simple("wrong-number-of-arguments", "error-type requires 1 argument", env);
+        return lisp_raise_typed("wrong-number-of-arguments", "error-type requires 1 argument");
     }
     LispObject *obj = lisp_car(args);
     if (LISP_TYPE(obj) != LISP_ERROR) {
-        return lisp_make_typed_error_simple("wrong-type-argument", "error-type: argument must be an error", env);
+        return lisp_raise_typed("wrong-type-argument", "error-type: argument must be an error");
     }
     /* Return error type (guaranteed to be a symbol) */
     if (LISP_ERROR_TYPE(obj) != NULL) {
@@ -33,11 +33,11 @@ static LispObject *builtin_error_type(LispObject *args, Environment *env)
 static LispObject *builtin_error_message(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_make_typed_error_simple("wrong-number-of-arguments", "error-message requires 1 argument", env);
+        return lisp_raise_typed("wrong-number-of-arguments", "error-message requires 1 argument");
     }
     LispObject *obj = lisp_car(args);
     if (LISP_TYPE(obj) != LISP_ERROR) {
-        return lisp_make_typed_error_simple("wrong-type-argument", "error-message: argument must be an error", env);
+        return lisp_raise_typed("wrong-type-argument", "error-message: argument must be an error");
     }
     return lisp_make_string(LISP_ERROR_MESSAGE(obj));
 }
@@ -46,11 +46,11 @@ static LispObject *builtin_error_message(LispObject *args, Environment *env)
 static LispObject *builtin_error_stack(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_make_typed_error_simple("wrong-number-of-arguments", "error-stack requires 1 argument", env);
+        return lisp_raise_typed("wrong-number-of-arguments", "error-stack requires 1 argument");
     }
     LispObject *obj = lisp_car(args);
     if (LISP_TYPE(obj) != LISP_ERROR) {
-        return lisp_make_typed_error_simple("wrong-type-argument", "error-stack: argument must be an error", env);
+        return lisp_raise_typed("wrong-type-argument", "error-stack: argument must be an error");
     }
     LispObject *stack = LISP_ERROR_STACK_TRACE(obj);
     return (stack != NULL) ? stack : NIL;
@@ -60,28 +60,36 @@ static LispObject *builtin_error_stack(LispObject *args, Environment *env)
 static LispObject *builtin_error_data(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_make_typed_error_simple("wrong-number-of-arguments", "error-data requires 1 argument", env);
+        return lisp_raise_typed("wrong-number-of-arguments", "error-data requires 1 argument");
     }
     LispObject *obj = lisp_car(args);
     if (LISP_TYPE(obj) != LISP_ERROR) {
-        return lisp_make_typed_error_simple("wrong-type-argument", "error-data: argument must be an error", env);
+        return lisp_raise_typed("wrong-type-argument", "error-data: argument must be an error");
     }
     LispObject *data = LISP_ERROR_DATA(obj);
     return (data != NULL) ? data : NIL;
 }
 
-/* signal - Raise a typed error
+/* signal - Raise a typed error, or re-raise an error object
  * (signal ERROR-SYMBOL DATA)
+ * (signal ERROR-OBJECT)
  */
 static LispObject *builtin_signal(LispObject *args, Environment *env)
 {
+    (void)env;
     if (args == NIL) {
-        return lisp_make_typed_error_simple("wrong-number-of-arguments", "signal requires at least 1 argument", env);
+        return lisp_raise_typed("wrong-number-of-arguments", "signal requires at least 1 argument");
     }
 
     LispObject *error_type = lisp_car(args);
+
+    /* (signal ERR) re-raises the very same object — same type, message and
+     * original stack. It is the one way to re-signal from a handler. */
+    if (LISP_TYPE(error_type) == LISP_ERROR)
+        lisp_raise(error_type);
+
     if (LISP_TYPE(error_type) != LISP_SYMBOL) {
-        return lisp_make_typed_error_simple("wrong-type-argument", "signal: first argument must be a symbol", env);
+        return lisp_raise_typed("wrong-type-argument", "signal: first argument must be a symbol or an error");
     }
 
     /* Get optional data argument */
@@ -99,7 +107,7 @@ static LispObject *builtin_signal(LispObject *args, Environment *env)
         snprintf(message, sizeof(message), "%s", LISP_SYM_VAL(error_type)->name);
     }
 
-    return lisp_make_typed_error(error_type, message, data, env);
+    return lisp_raise_typed_data(error_type, message, data);
 }
 
 /* error - Convenience function to signal generic error
@@ -107,8 +115,9 @@ static LispObject *builtin_signal(LispObject *args, Environment *env)
  */
 static LispObject *builtin_error(LispObject *args, Environment *env)
 {
+    (void)env;
     if (args == NIL) {
-        return lisp_make_typed_error_simple("wrong-number-of-arguments", "error requires 1 argument", env);
+        return lisp_raise_typed("wrong-number-of-arguments", "error requires 1 argument");
     }
 
     LispObject *message_obj = lisp_car(args);
@@ -120,7 +129,7 @@ static LispObject *builtin_error(LispObject *args, Environment *env)
         message = lisp_print(message_obj);
     }
 
-    return lisp_make_typed_error_simple("error", message, env);
+    return lisp_raise_typed_data(sym_error, message, NIL);
 }
 
 void register_errors_builtins(Environment *env)

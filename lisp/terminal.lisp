@@ -9,8 +9,9 @@
 ;;
 ;; The event loop blocks in exactly one place (`terminal-wait`) and never
 ;; sleeps or polls: idle CPU is zero and input latency is not quantised by a
-;; poll interval. Errors are values: the loop returns the error object instead
-;; of printing or exiting.
+;; poll interval. An error raised by user code unwinds the loop (running its
+;; cleanups) to the loop's own `condition-case`, which returns the error
+;; object instead of printing or exiting.
 ;;
 ;; Usage:
 ;;   (require 'terminal)
@@ -739,21 +740,14 @@
          (tty-p (terminal-opt-value opts :tty-p (terminal-tty-p)))
          (stop #f)
          (eof #f)
-         (loop-error nil)
          (probe-pending (if (and probe tty-p) #t nil))
          (replies nil)
          (flags-pushed #f)
          (last-tick (current-time-ms)))
-    ;; Ditty only propagates an error raised in a tail position; elsewhere the
-    ;; error object is returned as a value.  Every call into user code is
-    ;; therefore bound first and checked for `error?`, so a failing handler
-    ;; stops the loop and comes back as the loop's return value.
-    (define (deliver ev)
-      (let ((outcome (handler ev)))
-        (cond
-          ((error? outcome) (set! loop-error outcome) (set! stop #t))
-          ((equal? outcome 'stop) (set! stop #t))
-          (#t nil))))
+    ;; A signal from the handler, the reader, the wait function or `:on-start'
+    ;; unwinds out of `body' (running the `unwind-protect' cleanups) to the
+    ;; `condition-case' at the bottom, which returns the error object.
+    (define (deliver ev) (when (equal? (handler ev) 'stop) (set! stop #t)))
     (define (deliver-tick) (set! last-tick (current-time-ms))
       (deliver (list (cons 'type 'tick))))
     (define (tick-due?)
@@ -776,7 +770,6 @@
     (define (dispatch ev)
       (cond
         ((null? ev) (set! eof #t))
-        ((error? ev) (set! loop-error ev) (set! stop #t))
         ((and probe-pending (terminal-reply-event? ev))
          (set! replies (cons ev replies))
          (if
@@ -795,7 +788,6 @@
         (let ((ev (terminal-read-event (make-reader))))
           (cond
             ((null? ev) (set! eof #t))
-            ((error? ev) (set! loop-error ev) (set! stop #t))
             (#t
              (dispatch ev)
              (deliver-maybe-tick)
@@ -810,16 +802,12 @@
         nil
         (let ((why (wait-fn (next-timeout))))
           (cond
-            ((error? why) (set! loop-error why) (set! stop #t))
             ((equal? why 'resize) (deliver-resize) (deliver-maybe-tick))
             ((equal? why 'timeout) (deliver-maybe-tick))
             ((equal? why 'input) (drain-input))
             (#t nil))
           (when (and (not stop) (not eof)) (loop)))))
-    (define (body)
-      (let ((started (if (null? on-start) nil (on-start))))
-        (when (error? started) (set! loop-error started)
-          (set! stop #t)))
+    (define (body) (when (not (null? on-start)) (on-start))
       (when probe
         (if tty-p
           (princ *terminal-probe*)
@@ -827,18 +815,13 @@
            (list (cons 'type 'capabilities)
             (cons 'caps (terminal-capabilities-from-replies nil))))))
       (unless stop (loop)))
-    (let ((result
-           (condition-case err
-             (terminal-call-with-raw
-              (lambda ()
-                (unwind-protect (body)
-                  (when flags-pushed (terminal-pop-keyboard-flags)
-                    (set! flags-pushed #f))))
-              opts)
-             (error err))))
-      (cond
-        ((error? result) result)
-        ((error? loop-error) loop-error)
-        (#t nil)))))
+    (condition-case err
+      (terminal-call-with-raw
+       (lambda ()
+         (unwind-protect (body)
+           (when flags-pushed (terminal-pop-keyboard-flags)
+             (set! flags-pushed #f))))
+       opts)
+      (error err))))
 
 (provide 'terminal)

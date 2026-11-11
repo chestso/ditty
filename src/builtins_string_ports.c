@@ -7,7 +7,7 @@ static LispObject *builtin_open_input_string(LispObject *args, Environment *env)
 
     LispObject *str = lisp_car(args);
     if (LISP_TYPE(str) != LISP_STRING) {
-        return lisp_make_error("open-input-string requires a string");
+        return lisp_raise_error("open-input-string requires a string");
     }
 
     return lisp_make_string_port(LISP_STR_VAL(str));
@@ -20,7 +20,7 @@ static LispObject *builtin_port_peek_char(LispObject *args, Environment *env)
 
     LispObject *port = lisp_car(args);
     if (LISP_TYPE(port) != LISP_STRING_PORT) {
-        return lisp_make_error("port-peek-char requires a string port");
+        return lisp_raise_error("port-peek-char requires a string port");
     }
 
     if (LISP_STRING_PORT_BYTE_POS(port) >= LISP_STRING_PORT_BYTE_LEN(port)) {
@@ -38,7 +38,7 @@ static LispObject *builtin_port_read_char(LispObject *args, Environment *env)
 
     LispObject *port = lisp_car(args);
     if (LISP_TYPE(port) != LISP_STRING_PORT) {
-        return lisp_make_error("port-read-char requires a string port");
+        return lisp_raise_error("port-read-char requires a string port");
     }
 
     if (LISP_STRING_PORT_BYTE_POS(port) >= LISP_STRING_PORT_BYTE_LEN(port)) {
@@ -61,7 +61,7 @@ static LispObject *builtin_port_position(LispObject *args, Environment *env)
 
     LispObject *port = lisp_car(args);
     if (LISP_TYPE(port) != LISP_STRING_PORT) {
-        return lisp_make_error("port-position requires a string port");
+        return lisp_raise_error("port-position requires a string port");
     }
 
     return lisp_make_integer((long long)LISP_STRING_PORT_CHAR_POS(port));
@@ -74,7 +74,7 @@ static LispObject *builtin_port_source(LispObject *args, Environment *env)
 
     LispObject *port = lisp_car(args);
     if (LISP_TYPE(port) != LISP_STRING_PORT) {
-        return lisp_make_error("port-source requires a string port");
+        return lisp_raise_error("port-source requires a string port");
     }
 
     return lisp_make_string(LISP_STRING_PORT_BUFFER(port));
@@ -87,7 +87,7 @@ static LispObject *builtin_port_eof_question(LispObject *args, Environment *env)
 
     LispObject *port = lisp_car(args);
     if (LISP_TYPE(port) != LISP_STRING_PORT) {
-        return lisp_make_error("port-eof? requires a string port");
+        return lisp_raise_error("port-eof? requires a string port");
     }
 
     if (LISP_STRING_PORT_BYTE_POS(port) >= LISP_STRING_PORT_BYTE_LEN(port)) {
@@ -121,15 +121,15 @@ static LispObject *builtin_port_write_string(LispObject *args, Environment *env)
     LispObject *str = lisp_car(lisp_cdr(args));
     if (LISP_TYPE(port) != LISP_STRING_PORT ||
         !LISP_STRING_PORT_IS_OUTPUT(port)) {
-        return lisp_make_error("port-write-string requires an output string port");
+        return lisp_raise_error("port-write-string requires an output string port");
     }
     if (LISP_TYPE(str) != LISP_STRING) {
-        return lisp_make_error("port-write-string requires a string");
+        return lisp_raise_error("port-write-string requires a string");
     }
 
     const char *s = LISP_STR_VAL(str);
     if (lisp_string_port_write(port, s, strlen(s), utf8_strlen(s)) != 0) {
-        return lisp_make_error("port-write-string: out of memory");
+        return lisp_raise_error("port-write-string: out of memory");
     }
     return NIL;
 }
@@ -143,19 +143,19 @@ static LispObject *builtin_port_write_char(LispObject *args, Environment *env)
     LispObject *ch = lisp_car(lisp_cdr(args));
     if (LISP_TYPE(port) != LISP_STRING_PORT ||
         !LISP_STRING_PORT_IS_OUTPUT(port)) {
-        return lisp_make_error("port-write-char requires an output string port");
+        return lisp_raise_error("port-write-char requires an output string port");
     }
     if (LISP_TYPE(ch) != LISP_CHAR) {
-        return lisp_make_error("port-write-char requires a character");
+        return lisp_raise_error("port-write-char requires a character");
     }
 
     char buf[8];
     int n = utf8_put_codepoint(LISP_CHAR_VAL(ch), buf);
     if (n <= 0) {
-        return lisp_make_error("port-write-char: invalid codepoint");
+        return lisp_raise_error("port-write-char: invalid codepoint");
     }
     if (lisp_string_port_write(port, buf, (size_t)n, 1) != 0) {
-        return lisp_make_error("port-write-char: out of memory");
+        return lisp_raise_error("port-write-char: out of memory");
     }
     return NIL;
 }
@@ -168,7 +168,7 @@ static LispObject *builtin_get_output_string(LispObject *args, Environment *env)
     LispObject *port = lisp_car(args);
     if (LISP_TYPE(port) != LISP_STRING_PORT ||
         !LISP_STRING_PORT_IS_OUTPUT(port)) {
-        return lisp_make_error("get-output-string requires an output string port");
+        return lisp_raise_error("get-output-string requires an output string port");
     }
     return lisp_make_string(LISP_STRING_PORT_BUFFER(port));
 }

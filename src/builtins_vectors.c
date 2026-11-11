@@ -4,11 +4,11 @@ static LispObject *builtin_make_vector(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL) {
-        return lisp_make_error("make-vector requires at least 1 argument");
+        return lisp_raise_error("make-vector requires at least 1 argument");
     }
     LispObject *size_obj = lisp_car(args);
     if (LISP_TYPE(size_obj) != LISP_NUMBER && LISP_TYPE(size_obj) != LISP_INTEGER) {
-        return lisp_make_error("make-vector size must be a number");
+        return lisp_raise_error("make-vector size must be a number");
     }
     size_t size = (size_t)(LISP_TYPE(size_obj) == LISP_INTEGER ? LISP_INT_VAL(size_obj) : LISP_NUM_VAL(size_obj));
 
@@ -34,15 +34,15 @@ static LispObject *builtin_vector_ref(LispObject *args, Environment *env)
     CHECK_ARGS_2("vector-ref");
     LispObject *vec_obj = lisp_car(args);
     if (LISP_TYPE(vec_obj) != LISP_VECTOR) {
-        return lisp_make_error("vector-ref requires a vector");
+        return lisp_raise_error("vector-ref requires a vector");
     }
     LispObject *idx_obj = lisp_car(lisp_cdr(args));
     if (LISP_TYPE(idx_obj) != LISP_NUMBER && LISP_TYPE(idx_obj) != LISP_INTEGER) {
-        return lisp_make_error("vector-ref index must be a number");
+        return lisp_raise_error("vector-ref index must be a number");
     }
     size_t idx = (size_t)(LISP_TYPE(idx_obj) == LISP_INTEGER ? LISP_INT_VAL(idx_obj) : LISP_NUM_VAL(idx_obj));
     if (idx >= LISP_VECTOR_SIZE(vec_obj)) {
-        return lisp_make_error("vector-ref: index out of bounds");
+        return lisp_raise_error("vector-ref: index out of bounds");
     }
     return LISP_VECTOR_ITEMS(vec_obj)[idx];
 }
@@ -53,11 +53,11 @@ static LispObject *builtin_vector_set_bang(LispObject *args, Environment *env)
     CHECK_ARGS_3("vector-set!");
     LispObject *vec_obj = lisp_car(args);
     if (LISP_TYPE(vec_obj) != LISP_VECTOR) {
-        return lisp_make_error("vector-set! requires a vector");
+        return lisp_raise_error("vector-set! requires a vector");
     }
     LispObject *idx_obj = lisp_car(lisp_cdr(args));
     if (LISP_TYPE(idx_obj) != LISP_NUMBER && LISP_TYPE(idx_obj) != LISP_INTEGER) {
-        return lisp_make_error("vector-set! index must be a number");
+        return lisp_raise_error("vector-set! index must be a number");
     }
     size_t idx = (size_t)(LISP_TYPE(idx_obj) == LISP_INTEGER ? LISP_INT_VAL(idx_obj) : LISP_NUM_VAL(idx_obj));
     if (idx >= LISP_VECTOR_SIZE(vec_obj)) {
@@ -91,7 +91,7 @@ static LispObject *builtin_vector_push_bang(LispObject *args, Environment *env)
     CHECK_ARGS_2("vector-push!");
     LispObject *vec_obj = lisp_car(args);
     if (LISP_TYPE(vec_obj) != LISP_VECTOR) {
-        return lisp_make_error("vector-push! requires a vector");
+        return lisp_raise_error("vector-push! requires a vector");
     }
     LispObject *value = lisp_car(lisp_cdr(args));
     /* Check if we need to expand */
@@ -120,10 +120,10 @@ static LispObject *builtin_vector_pop_bang(LispObject *args, Environment *env)
     CHECK_ARGS_1("vector-pop!");
     LispObject *vec_obj = lisp_car(args);
     if (LISP_TYPE(vec_obj) != LISP_VECTOR) {
-        return lisp_make_error("vector-pop! requires a vector");
+        return lisp_raise_error("vector-pop! requires a vector");
     }
     if (LISP_VECTOR_SIZE(vec_obj) == 0) {
-        return lisp_make_error("vector-pop!: cannot pop from empty vector");
+        return lisp_raise_error("vector-pop!: cannot pop from empty vector");
     }
     LISP_VECTOR_SIZE(vec_obj)
     --;

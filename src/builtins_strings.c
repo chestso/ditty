@@ -80,7 +80,7 @@ static LispObject *builtin_concat(LispObject *args, Environment *env)
     while (curr != NIL && curr != NULL) {
         LispObject *arg = lisp_car(curr);
         if (LISP_TYPE(arg) != LISP_STRING) {
-            return lisp_make_error("concat requires strings");
+            return lisp_raise_error("concat requires strings");
         }
         total_len += strlen(LISP_STR_VAL(arg));
         curr = lisp_cdr(curr);
@@ -105,7 +105,7 @@ static LispObject *builtin_number_to_string(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NULL || args == NIL) {
-        return lisp_make_error("number->string: expected at least 1 argument");
+        return lisp_raise_error("number->string: expected at least 1 argument");
     }
 
     /* Parse arguments: number (required), radix (optional) */
@@ -113,12 +113,12 @@ static LispObject *builtin_number_to_string(LispObject *args, Environment *env)
     LispObject *radix_obj = (lisp_cdr(args) != NIL) ? lisp_car(lisp_cdr(args)) : NIL;
 
     if (num == NULL || num == NIL) {
-        return lisp_make_error("number->string: first argument cannot be nil");
+        return lisp_raise_error("number->string: first argument cannot be nil");
     }
 
     /* Validate number argument */
     if (LISP_TYPE(num) != LISP_INTEGER && LISP_TYPE(num) != LISP_NUMBER) {
-        return lisp_make_error("number->string: first argument must be a number");
+        return lisp_raise_error("number->string: first argument must be a number");
     }
 
     int radix = 10; /* default base */
@@ -126,18 +126,18 @@ static LispObject *builtin_number_to_string(LispObject *args, Environment *env)
     /* Parse optional radix */
     if (radix_obj != NIL) {
         if (LISP_TYPE(radix_obj) != LISP_INTEGER) {
-            return lisp_make_error("number->string: radix must be an integer");
+            return lisp_raise_error("number->string: radix must be an integer");
         }
         radix = (int)LISP_INT_VAL(radix_obj);
         if (radix < 2 || radix > 36) {
-            return lisp_make_error("number->string: radix must be between 2 and 36");
+            return lisp_raise_error("number->string: radix must be between 2 and 36");
         }
     }
 
     /* Float formatting (only base 10) */
     if (LISP_TYPE(num) == LISP_NUMBER) {
         if (radix != 10) {
-            return lisp_make_error("number->string: floats only supported in base 10");
+            return lisp_raise_error("number->string: floats only supported in base 10");
         }
         char buffer[64];
         double val = LISP_NUM_VAL(num);
@@ -205,7 +205,7 @@ static LispObject *builtin_string_to_number(LispObject *args, Environment *env)
     (void)env;
 
     if (args == NULL || args == NIL) {
-        return lisp_make_error("string->number: expected at least 1 argument");
+        return lisp_raise_error("string->number: expected at least 1 argument");
     }
 
     /* Parse arguments: string (required), radix (optional) */
@@ -214,10 +214,10 @@ static LispObject *builtin_string_to_number(LispObject *args, Environment *env)
 
     /* Validate string argument */
     if (str_obj == NULL || str_obj == NIL) {
-        return lisp_make_error("string->number: first argument cannot be nil");
+        return lisp_raise_error("string->number: first argument cannot be nil");
     }
     if (LISP_TYPE(str_obj) != LISP_STRING) {
-        return lisp_make_error("string->number: first argument must be a string");
+        return lisp_raise_error("string->number: first argument must be a string");
     }
 
     const char *str = LISP_STR_VAL(str_obj);
@@ -226,11 +226,11 @@ static LispObject *builtin_string_to_number(LispObject *args, Environment *env)
     /* Parse optional radix */
     if (radix_obj != NIL) {
         if (LISP_TYPE(radix_obj) != LISP_INTEGER) {
-            return lisp_make_error("string->number: radix must be an integer");
+            return lisp_raise_error("string->number: radix must be an integer");
         }
         radix = (int)LISP_INT_VAL(radix_obj);
         if (radix < 2 || radix > 36) {
-            return lisp_make_error("string->number: radix must be between 2 and 36");
+            return lisp_raise_error("string->number: radix must be between 2 and 36");
         }
     }
 
@@ -307,7 +307,7 @@ static LispObject *builtin_split(LispObject *args, Environment *env)
     LispObject *pattern_obj = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(str_obj) != LISP_STRING || LISP_TYPE(pattern_obj) != LISP_STRING) {
-        return lisp_make_error("split requires strings");
+        return lisp_raise_error("split requires strings");
     }
 
     const char *str = LISP_STR_VAL(str_obj);
@@ -371,7 +371,7 @@ static LispObject *builtin_join(LispObject *args, Environment *env)
     LispObject *sep_obj = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(sep_obj) != LISP_STRING) {
-        return lisp_make_error("join: separator must be a string");
+        return lisp_raise_error("join: separator must be a string");
     }
 
     const char *sep = LISP_STR_VAL(sep_obj);
@@ -389,7 +389,7 @@ static LispObject *builtin_join(LispObject *args, Environment *env)
     while (curr != NIL && curr != NULL && LISP_TYPE(curr) == LISP_CONS) {
         LispObject *elem = lisp_car(curr);
         if (LISP_TYPE(elem) != LISP_STRING) {
-            return lisp_make_error("join: all list elements must be strings");
+            return lisp_raise_error("join: all list elements must be strings");
         }
         total_len += strlen(LISP_STR_VAL(elem));
         count++;
@@ -427,7 +427,7 @@ static LispObject *builtin_join(LispObject *args, Environment *env)
         CHECK_ARGS_2(opname);                                           \
         LispObject *a = lisp_car(args), *b = lisp_car(lisp_cdr(args));  \
         if (LISP_TYPE(a) != LISP_STRING || LISP_TYPE(b) != LISP_STRING) \
-            return lisp_make_error(opname " requires strings");         \
+            return lisp_raise_error(opname " requires strings");        \
         return (strcmp(LISP_STR_VAL(a), LISP_STR_VAL(b)) op 0)          \
                    ? LISP_TRUE                                          \
                    : NIL;                                               \
@@ -447,7 +447,7 @@ static LispObject *builtin_string_contains_question(LispObject *args, Environmen
     LispObject *needle = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(haystack) != LISP_STRING || LISP_TYPE(needle) != LISP_STRING) {
-        return lisp_make_error("string-contains? requires strings");
+        return lisp_raise_error("string-contains? requires strings");
     }
 
     return (strstr(LISP_STR_VAL(haystack), LISP_STR_VAL(needle)) != NULL) ? LISP_TRUE : NIL;
@@ -462,7 +462,7 @@ static LispObject *builtin_string_index(LispObject *args, Environment *env)
     LispObject *needle = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(haystack) != LISP_STRING || LISP_TYPE(needle) != LISP_STRING) {
-        return lisp_make_error("string-index requires strings");
+        return lisp_raise_error("string-index requires strings");
     }
 
     /* Find byte offset where needle occurs in haystack */
@@ -494,7 +494,7 @@ static LispObject *builtin_string_match_question(LispObject *args, Environment *
     LispObject *pattern = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(str) != LISP_STRING || LISP_TYPE(pattern) != LISP_STRING) {
-        return lisp_make_error("string-match? requires strings");
+        return lisp_raise_error("string-match? requires strings");
     }
 
     return wildcard_match(LISP_STR_VAL(pattern), LISP_STR_VAL(str)) ? LISP_TRUE : NIL;
@@ -509,7 +509,7 @@ static LispObject *builtin_string_prefix_question(LispObject *args, Environment 
     LispObject *str = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(prefix) != LISP_STRING || LISP_TYPE(str) != LISP_STRING) {
-        return lisp_make_error("string-prefix? requires strings");
+        return lisp_raise_error("string-prefix? requires strings");
     }
 
     size_t prefix_len = strlen(LISP_STR_VAL(prefix));
@@ -529,7 +529,7 @@ static LispObject *builtin_substring(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL || lisp_cdr(args) == NIL) {
-        return lisp_make_error("substring requires at least 2 arguments");
+        return lisp_raise_error("substring requires at least 2 arguments");
     }
 
     LispObject *str_obj = lisp_car(args);
@@ -537,10 +537,10 @@ static LispObject *builtin_substring(LispObject *args, Environment *env)
     LispObject *end_obj = lisp_cdr(lisp_cdr(args)) != NIL ? lisp_car(lisp_cdr(lisp_cdr(args))) : NIL;
 
     if (LISP_TYPE(str_obj) != LISP_STRING) {
-        return lisp_make_error("substring requires a string");
+        return lisp_raise_error("substring requires a string");
     }
     if (LISP_TYPE(start_obj) != LISP_INTEGER) {
-        return lisp_make_error("substring requires integer start index");
+        return lisp_raise_error("substring requires integer start index");
     }
 
     long long start = LISP_INT_VAL(start_obj);
@@ -551,13 +551,13 @@ static LispObject *builtin_substring(LispObject *args, Environment *env)
         end = utf8_strlen(LISP_STR_VAL(str_obj));
     } else {
         if (LISP_TYPE(end_obj) != LISP_INTEGER) {
-            return lisp_make_error("substring requires integer end index");
+            return lisp_raise_error("substring requires integer end index");
         }
         end = LISP_INT_VAL(end_obj);
     }
 
     if (start < 0 || end < 0 || start > end) {
-        return lisp_make_error("substring: invalid start/end indices");
+        return lisp_raise_error("substring: invalid start/end indices");
     }
 
     /* Use codepoint-based indexing for consistency with length and string-ref */
@@ -581,25 +581,25 @@ static LispObject *builtin_string_ref(LispObject *args, Environment *env)
     LispObject *index_obj = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(str_obj) != LISP_STRING) {
-        return lisp_make_error("string-ref requires a string");
+        return lisp_raise_error("string-ref requires a string");
     }
     if (LISP_TYPE(index_obj) != LISP_INTEGER) {
-        return lisp_make_error("string-ref requires an integer index");
+        return lisp_raise_error("string-ref requires an integer index");
     }
 
     long long index = LISP_INT_VAL(index_obj);
     if (index < 0) {
-        return lisp_make_error("string-ref: negative index");
+        return lisp_raise_error("string-ref: negative index");
     }
 
     size_t char_count = utf8_strlen(LISP_STR_VAL(str_obj));
     if (index >= (long long)char_count) {
-        return lisp_make_error("string-ref: index out of bounds");
+        return lisp_raise_error("string-ref: index out of bounds");
     }
 
     const char *char_ptr = utf8_char_at(LISP_STR_VAL(str_obj), index);
     if (char_ptr == NULL) {
-        return lisp_make_error("string-ref: invalid character at index");
+        return lisp_raise_error("string-ref: invalid character at index");
     }
 
     unsigned int codepoint = utf8_get_codepoint(char_ptr);
@@ -617,7 +617,7 @@ static LispObject *builtin_string_replace(LispObject *args, Environment *env)
     LispObject *new_obj = lisp_car(lisp_cdr(lisp_cdr(args)));
 
     if (LISP_TYPE(old_obj) != LISP_STRING || LISP_TYPE(new_obj) != LISP_STRING || LISP_TYPE(str_obj) != LISP_STRING) {
-        return lisp_make_error("string-replace requires strings");
+        return lisp_raise_error("string-replace requires strings");
     }
 
     const char *old_str = LISP_STR_VAL(old_obj);
@@ -701,7 +701,7 @@ static LispObject *builtin_string_upcase(LispObject *args, Environment *env)
     CHECK_ARGS_1("string-upcase");
     LispObject *str_obj = lisp_car(args);
     if (LISP_TYPE(str_obj) != LISP_STRING)
-        return lisp_make_error("string-upcase requires a string");
+        return lisp_raise_error("string-upcase requires a string");
     return string_case_convert(LISP_STR_VAL(str_obj), toupper);
 }
 
@@ -711,7 +711,7 @@ static LispObject *builtin_string_downcase(LispObject *args, Environment *env)
     CHECK_ARGS_1("string-downcase");
     LispObject *str_obj = lisp_car(args);
     if (LISP_TYPE(str_obj) != LISP_STRING)
-        return lisp_make_error("string-downcase requires a string");
+        return lisp_raise_error("string-downcase requires a string");
     return string_case_convert(LISP_STR_VAL(str_obj), tolower);
 }
 
@@ -723,7 +723,7 @@ static LispObject *builtin_string_trim(LispObject *args, Environment *env)
 
     LispObject *str_obj = lisp_car(args);
     if (LISP_TYPE(str_obj) != LISP_STRING) {
-        return lisp_make_error("string-trim requires a string");
+        return lisp_raise_error("string-trim requires a string");
     }
 
     const char *str = LISP_STR_VAL(str_obj);
@@ -762,12 +762,12 @@ static LispObject *builtin_make_string(LispObject *args, Environment *env)
 
     LispObject *len_arg = lisp_car(args);
     if (LISP_TYPE(len_arg) != LISP_INTEGER) {
-        return lisp_make_error("make-string: length must be an integer");
+        return lisp_raise_error("make-string: length must be an integer");
     }
 
     long long len = LISP_INT_VAL(len_arg);
     if (len < 0) {
-        return lisp_make_error("make-string: length cannot be negative");
+        return lisp_raise_error("make-string: length cannot be negative");
     }
 
     // Default fill character is space
@@ -777,7 +777,7 @@ static LispObject *builtin_make_string(LispObject *args, Environment *env)
     if (cdr_args != NIL) {
         LispObject *char_arg = lisp_car(cdr_args);
         if (LISP_TYPE(char_arg) != LISP_CHAR) {
-            return lisp_make_error("make-string: fill must be a character");
+            return lisp_raise_error("make-string: fill must be a character");
         }
         fill = LISP_CHAR_VAL(char_arg);
     }
@@ -822,7 +822,7 @@ static LispObject *builtin_utf8_display_width(LispObject *args, Environment *env
 
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_STRING) {
-        return lisp_make_error("utf8-display-width: argument must be a string");
+        return lisp_raise_error("utf8-display-width: argument must be a string");
     }
 
     int width = utf8_display_width(LISP_STR_VAL(arg));
@@ -854,10 +854,10 @@ static LispObject *builtin_base64_encode(LispObject *args, Environment *env)
         for (size_t i = 0; i < count; i++) {
             LispObject *item = items[i];
             if (LISP_TYPE(item) != LISP_INTEGER)
-                return lisp_make_error("base64-encode: elements must be integers");
+                return lisp_raise_error("base64-encode: elements must be integers");
             long long value = LISP_INT_VAL(item);
             if (value < 0 || value > 255)
-                return lisp_make_error("base64-encode: elements must be between 0 and 255");
+                return lisp_raise_error("base64-encode: elements must be between 0 and 255");
             bytes[i] = (unsigned char)value;
         }
 
@@ -877,10 +877,10 @@ static LispObject *builtin_base64_encode(LispObject *args, Environment *env)
         while (rest != NIL && rest != NULL) {
             LispObject *item = lisp_car(rest);
             if (LISP_TYPE(item) != LISP_INTEGER)
-                return lisp_make_error("base64-encode: elements must be integers");
+                return lisp_raise_error("base64-encode: elements must be integers");
             long long value = LISP_INT_VAL(item);
             if (value < 0 || value > 255)
-                return lisp_make_error("base64-encode: elements must be between 0 and 255");
+                return lisp_raise_error("base64-encode: elements must be between 0 and 255");
             bytes[index++] = (unsigned char)value;
             rest = lisp_cdr(rest);
         }
@@ -888,13 +888,13 @@ static LispObject *builtin_base64_encode(LispObject *args, Environment *env)
         data = bytes;
         length = count;
     } else {
-        return lisp_make_error("base64-encode requires a string, list, or vector");
+        return lisp_raise_error("base64-encode requires a string, list, or vector");
     }
 
     size_t out_length = 4 * ((length + 2) / 3);
     char *out = malloc(out_length + 1);
     if (out == NULL)
-        return lisp_make_error("base64-encode: out of memory");
+        return lisp_raise_error("base64-encode: out of memory");
 
     size_t pos = 0;
     for (size_t i = 0; i < length; i += 3) {

@@ -6,7 +6,7 @@ static LispObject *builtin_symbol_to_string(LispObject *args, Environment *env)
     CHECK_ARGS_1("symbol->string");
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_SYMBOL) {
-        return lisp_make_error("symbol->string requires a symbol argument");
+        return lisp_raise_error("symbol->string requires a symbol argument");
     }
     Symbol *sym = LISP_SYM_VAL(arg);
     if (sym->namespace != NULL) {
@@ -28,7 +28,7 @@ static LispObject *builtin_string_to_symbol(LispObject *args, Environment *env)
     CHECK_ARGS_1("string->symbol");
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_STRING) {
-        return lisp_make_error("string->symbol requires a string argument");
+        return lisp_raise_error("string->symbol requires a string argument");
     }
     return lisp_intern(LISP_STR_VAL(arg));
 }
@@ -39,7 +39,7 @@ static LispObject *builtin_keyword_name(LispObject *args, Environment *env)
     CHECK_ARGS_1("keyword-name");
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_KEYWORD) {
-        return lisp_make_error("keyword-name requires a keyword argument");
+        return lisp_raise_error("keyword-name requires a keyword argument");
     }
     /* Return name without the leading colon */
     const char *name = LISP_SYM_VAL(arg)->name;

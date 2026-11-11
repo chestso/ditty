@@ -131,7 +131,6 @@ static inline long long lisp_int_val_inline(LispObject *v)
 #define LISP_ERROR_MESSAGE(v)     ((v)->value.error_with_stack->message)
 #define LISP_ERROR_DATA(v)        ((v)->value.error_with_stack->data)
 #define LISP_ERROR_STACK_TRACE(v) ((v)->value.error_with_stack->stack_trace)
-#define LISP_ERROR_CAUGHT(v)      ((v)->value.error_with_stack->caught)
 
 /* ---- String port fields (boxed out — pointer indirection) ---- */
 #define LISP_STRING_PORT_BUFFER(v)    ((v)->value.string_port->buffer)

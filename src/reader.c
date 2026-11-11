@@ -3,6 +3,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The reader is a parser: it returns parse results, including failures, as
+ * values. Nothing here signals. These two helpers keep it that way — the
+ * pure constructor builds an error object that a caller (lisp_load_file,
+ * read-sexp, lisp_try_eval_string) may choose to raise. */
+static LispObject *reader_error(const char *message)
+{
+    return lisp_make_typed_error(sym_error, message, NIL);
+}
+
+static LispObject *reader_unclosed(const char *message)
+{
+    return lisp_make_typed_error(sym_unclosed_input, message, NIL);
+}
+
 static void skip_whitespace(const char **input);
 static LispObject *read_atom(const char **input);
 static LispObject *read_string(const char **input);
@@ -102,7 +116,7 @@ static LispObject *read_string(const char **input)
         (*input)++;
     } else {
         /* Unclosed string - hit end of input without closing quote */
-        return lisp_make_typed_error(sym_unclosed_input, "Unclosed string", NIL, NULL);
+        return reader_unclosed("Unclosed string");
     }
 
     buffer[length] = '\0';
@@ -211,28 +225,28 @@ static LispObject *read_list(const char **input)
             /* Read the cdr */
             LispObject *cdr_elem = lisp_read(input);
             if (cdr_elem == NULL) {
-                return lisp_make_error("Syntax error after dot in list");
+                return reader_error("Syntax error after dot in list");
             }
 
             /* Set the cdr of the last cons cell */
             if (tail != NULL) {
                 LISP_CDR(tail) = cdr_elem;
             } else {
-                return lisp_make_error("Dot cannot appear at start of list");
+                return reader_error("Dot cannot appear at start of list");
             }
 
             skip_whitespace(input);
 
             /* Should be closing paren now */
             if (**input != ')') {
-                return lisp_make_error("Expected ) after dotted pair");
+                return reader_error("Expected ) after dotted pair");
             }
             break;
         }
 
         LispObject *elem = lisp_read(input);
         if (elem == NULL) {
-            return lisp_make_error("Syntax error in list");
+            return reader_error("Syntax error in list");
         }
         if (LISP_TYPE(elem) == LISP_ERROR) {
             return elem;
@@ -254,7 +268,7 @@ static LispObject *read_list(const char **input)
     if (**input == ')') {
         (*input)++;
     } else {
-        return lisp_make_typed_error(sym_unclosed_input, "Unclosed list", NIL, NULL);
+        return reader_unclosed("Unclosed list");
     }
 
     return head;
@@ -276,7 +290,7 @@ static LispObject *read_vector(const char **input)
     while (**input && **input != ')') {
         LispObject *elem = lisp_read(input);
         if (elem == NULL) {
-            return lisp_make_error("Syntax error in vector");
+            return reader_error("Syntax error in vector");
         }
         if (LISP_TYPE(elem) == LISP_ERROR) {
             return elem;
@@ -306,7 +320,7 @@ static LispObject *read_vector(const char **input)
     if (**input == ')') {
         (*input)++;
     } else {
-        return lisp_make_typed_error(sym_unclosed_input, "Unclosed vector", NIL, NULL);
+        return reader_unclosed("Unclosed vector");
     }
 
     return vec;
@@ -328,7 +342,7 @@ static LispObject *read_character(const char **input)
     (*input) += 2; /* Skip #\ */
 
     if (**input == '\0') {
-        return lisp_make_error("Unexpected end of input after #\\");
+        return reader_error("Unexpected end of input after #\\");
     }
 
     /* Check for hex notation #\x followed by hex digits */
@@ -376,7 +390,7 @@ static LispObject *read_character(const char **input)
     }
 
     if (length == 0) {
-        return lisp_make_error("Empty character literal");
+        return reader_error("Empty character literal");
     }
 
     /* Single character */
@@ -413,7 +427,7 @@ static LispObject *read_character(const char **input)
     /* Unknown character name - return error */
     char errbuf[128];
     snprintf(errbuf, sizeof(errbuf), "Unknown character name: %s", name);
-    return lisp_make_error(errbuf);
+    return reader_error(errbuf);
 }
 
 static LispObject *read_number_with_base(const char **input, int base)
@@ -428,7 +442,7 @@ static LispObject *read_number_with_base(const char **input, int base)
     }
 
     if (**input == '\0' || !isxdigit((unsigned char)**input)) {
-        return lisp_make_error("Expected digits after radix prefix");
+        return reader_error("Expected digits after radix prefix");
     }
 
     long long value = 0;
@@ -448,7 +462,7 @@ static LispObject *read_number_with_base(const char **input, int base)
         if (digit >= base) {
             char errbuf[64];
             snprintf(errbuf, sizeof(errbuf), "Invalid digit '%c' for base %d", c, base);
-            return lisp_make_error(errbuf);
+            return reader_error(errbuf);
         }
 
         value = value * base + digit;
@@ -466,7 +480,7 @@ static LispObject *read_quote(const char **input)
     (*input)++; /* Skip quote character */
     LispObject *quoted = lisp_read(input);
     if (quoted == NULL) {
-        return lisp_make_error("Nothing to quote");
+        return reader_error("Nothing to quote");
     }
     if (LISP_TYPE(quoted) == LISP_ERROR) {
         return quoted; /* propagate parse errors (e.g. unclosed-input) */
@@ -482,7 +496,7 @@ static LispObject *read_backquote(const char **input)
     (*input)++; /* Skip backquote character */
     LispObject *expr = lisp_read(input);
     if (expr == NULL) {
-        return lisp_make_error("Nothing to backquote");
+        return reader_error("Nothing to backquote");
     }
     if (LISP_TYPE(expr) == LISP_ERROR) {
         return expr;
@@ -498,7 +512,7 @@ static LispObject *read_unquote(const char **input)
     (*input)++; /* Skip comma character */
     LispObject *expr = lisp_read(input);
     if (expr == NULL) {
-        return lisp_make_error("Nothing to unquote");
+        return reader_error("Nothing to unquote");
     }
     if (LISP_TYPE(expr) == LISP_ERROR) {
         return expr;
@@ -514,7 +528,7 @@ static LispObject *read_unquote_splicing(const char **input)
     (*input) += 2; /* Skip ,@ characters */
     LispObject *expr = lisp_read(input);
     if (expr == NULL) {
-        return lisp_make_error("Nothing to unquote-splice");
+        return reader_error("Nothing to unquote-splice");
     }
     if (LISP_TYPE(expr) == LISP_ERROR) {
         return expr;
@@ -538,7 +552,7 @@ LispObject *lisp_read(const char **input)
     }
 
     if (**input == ')') {
-        return lisp_make_error("Unexpected ')'");
+        return reader_error("Unexpected ')'");
     }
 
     if (**input == '\'') {
@@ -589,7 +603,7 @@ LispObject *lisp_read(const char **input)
         }
         /* Unknown # syntax - advance past # and next char to prevent silent exit */
         (*input) += (*p ? 2 : 1);
-        return lisp_make_error("Unknown # syntax");
+        return reader_error("Unknown # syntax");
     }
 
     return read_atom(input);

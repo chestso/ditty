@@ -110,7 +110,8 @@ Run `make format` before submitting changes. The formatter is the source of trut
 - **Disable clang-format** in a section: wrap with `/* clang-format off */` / `/* clang-format on */`.
 - **Includes**: Never sorted (`.clang-format` sets `SortIncludes: Never`). `#include "builtins_internal.h"` is always first in `builtins_*.c` files.
 - **Memory**: Boehm GC (`GC_malloc`, `GC_strdup`, `GC_malloc_atomic`). No manual `free()` for GC-managed allocations. Use `GC_MALLOC_ATOMIC` for pointer-free data (numbers, raw bytes).
-- **Error returns**: Return `lisp_make_error("message")` or `lisp_make_error_with_stack("message", env)`. Check propagation via `should_propagate_error()` (type is `LISP_ERROR` and `!LISP_ERROR_CAUGHT`).
+- **Errors signal, they do not return**: builtins and evaluator helpers call `lisp_raise_error("message")` / `lisp_raise_typed(type, msg)` / `lisp_raise_typed_data(type, msg, data)`. These never return, so `return lisp_raise_error(...)` is the idiomatic failure exit. A returned `LISP_ERROR` object is ordinary data — never test a return value for failure. To run Lisp from C use `lisp_try_*` (status + out-parameter); the raising API (`lisp_eval`, `lisp_apply`, `lisp_call_*`, `lisp_load_file`) requires an active frame.
+- **Resources across a Lisp call**: a builtin holding a `FILE *`, a `malloc`'d buffer, a PCRE2 handle or dynamic state across `lisp_eval`/`lisp_apply`/`lisp_call_*`/`lisp_load_file` must wrap it in `LISP_UNWIND_PROTECT(result, body, cleanup)` from `src/condition_internal.h` — a signal skips normal C cleanup.
 - **Unused parameter suppression**: `(void)env;` pattern in builtins that don't use the environment.
 - **Argument checking**: Use `CHECK_ARGS_1(name)`, `CHECK_ARGS_2(name)`, `CHECK_ARGS_3(name)` macros from `builtins_internal.h`.
 - **List building**: Use `LIST_APPEND(result, tail, item)` macro for efficient tail-insertion.
@@ -136,11 +137,13 @@ include/           Public headers (installed to $includedir/ditty/)
   ditty/highlight.h  Flare public API (lexers, styles, formatters, highlight)
 
 src/               Library source → builds libditty.a
-  lisp.c           Object constructors, symbol interning, lisp_init(), lisp_eval_string()
-  reader.c         S-expression parser (lisp_read)
-  eval.c           Evaluator with trampoline-based TCO, special form dispatch
-  print.c          Print/princ/prin1 output
-  env.c            Environment frames, profiling, call stack
+  lisp.c           Object constructors, symbol interning, lisp_init(), lisp_load_file()
+  reader.c         S-expression parser (lisp_read) — returns parse results, never signals
+  eval.c           Evaluator with trampoline-based TCO, special form dispatch, unwinding forms
+  condition.c      EvalFrames, lisp_raise, lisp_try_* boundaries, handler matching
+  condition_internal.h  Frame push/pop/unwind, setjmp wrappers, LISP_UNWIND_PROTECT
+  print.c          Print/princ/prin1 output, lisp_error_report
+  env.c            Environment frames, profiling, global call stack
   builtins.c       Dispatches to per-category registration, assigns SF docstrings
   builtins_*.c     Category-specific builtins (one file per docstrings/ category)
   builtins_internal.h  Shared header for all builtins_*.c files
@@ -182,6 +185,7 @@ For the full object representation and GC rules, see [EMBEDDING.md](EMBEDDING.md
 3. `eval_list()` checks the first element against interned special form symbols (`sym_quote`, `sym_if`, etc.), then falls through to function application.
 4. For tail calls, the evaluator returns a `LISP_TAIL_CALL` sentinel. The trampoline loop in `lisp_eval()` unwraps it by calling `apply()`, repeating until a real result emerges.
 5. `lisp_apply()` is the public "call a function with evaluated args" API.
+6. Failure paths call `lisp_raise()` (`src/condition.c`), which captures the stack trace once and longjmps to the innermost `EvalFrame`: a `condition-case`, an `unwind-protect`, or a `lisp_try_*` boundary. `frame_unwind()` restores `g_call_stack`, so an abandoned evaluation leaves no phantom call frames.
 
 ### Flare pipeline
 

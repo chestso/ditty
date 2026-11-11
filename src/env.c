@@ -99,9 +99,6 @@ Environment *env_create(Environment *parent)
     env->bucket_count = ENV_INLINE_BUCKETS;
     env->binding_count = 0;
     env->parent = parent;
-    env->call_stack = (parent != NULL) ? parent->call_stack : NULL;
-    env->handler_stack = (parent != NULL) ? parent->handler_stack : NULL;
-    env->cleanup_stack = (parent != NULL) ? parent->cleanup_stack : NULL;
     return env;
 }
 
@@ -224,8 +221,13 @@ void env_free(Environment *env)
 /* Call stack frame free-list (LIFO reuse, avoids GC_malloc per call) */
 static CallStackFrame *frame_free_list = NULL;
 
+/* Innermost live call frame. Global on purpose: the call stack is
+ * dynamic-extent state, not a property of an environment (which is copied
+ * around by closures and tail calls). EvalFrames snapshot and restore it. */
+CallStackFrame *g_call_stack = NULL;
+
 /* Call stack functions */
-void push_call_frame(Environment *env, const char *function_name)
+void push_call_frame(const char *function_name)
 {
     CallStackFrame *frame;
     if (frame_free_list != NULL) {
@@ -235,34 +237,34 @@ void push_call_frame(Environment *env, const char *function_name)
         frame = GC_malloc(sizeof(CallStackFrame));
     }
     frame->function_name = (char *)function_name;
-    frame->parent = env->call_stack;
+    frame->parent = g_call_stack;
     frame->entry_time_ns = 0;
 
     if (g_profile_state.enabled) {
         frame->entry_time_ns = profile_get_time_ns();
     }
 
-    env->call_stack = frame;
+    g_call_stack = frame;
 }
 
-void pop_call_frame(Environment *env)
+void pop_call_frame(void)
 {
-    if (env->call_stack != NULL) {
-        if (g_profile_state.enabled && env->call_stack->entry_time_ns != 0) {
-            uint64_t elapsed = profile_get_time_ns() - env->call_stack->entry_time_ns;
-            profile_record(env->call_stack->function_name, elapsed);
+    if (g_call_stack != NULL) {
+        if (g_profile_state.enabled && g_call_stack->entry_time_ns != 0) {
+            uint64_t elapsed = profile_get_time_ns() - g_call_stack->entry_time_ns;
+            profile_record(g_call_stack->function_name, elapsed);
         }
-        CallStackFrame *frame = env->call_stack;
-        env->call_stack = frame->parent;
+        CallStackFrame *frame = g_call_stack;
+        g_call_stack = frame->parent;
         frame->parent = frame_free_list;
         frame_free_list = frame;
     }
 }
 
-LispObject *capture_call_stack(Environment *env)
+LispObject *capture_call_stack(void)
 {
     LispObject *stack = NIL;
-    CallStackFrame *frame = env->call_stack;
+    CallStackFrame *frame = g_call_stack;
     int depth = 0;
     const int MAX_STACK_DEPTH = 20;
 

@@ -14,7 +14,7 @@ static LispObject *builtin_hash_ref(LispObject *args, Environment *env)
 
     LispObject *table = lisp_car(args);
     if (LISP_TYPE(table) != LISP_HASH_TABLE) {
-        return lisp_make_error("hash-ref requires a hash table");
+        return lisp_raise_error("hash-ref requires a hash table");
     }
 
     LispObject *key_obj = lisp_car(lisp_cdr(args));
@@ -34,7 +34,7 @@ static LispObject *builtin_hash_set_bang(LispObject *args, Environment *env)
 
     LispObject *table = lisp_car(args);
     if (LISP_TYPE(table) != LISP_HASH_TABLE) {
-        return lisp_make_error("hash-set! requires a hash table");
+        return lisp_raise_error("hash-set! requires a hash table");
     }
 
     LispObject *key_obj = lisp_car(lisp_cdr(args));
@@ -51,7 +51,7 @@ static LispObject *builtin_hash_remove_bang(LispObject *args, Environment *env)
 
     LispObject *table = lisp_car(args);
     if (LISP_TYPE(table) != LISP_HASH_TABLE) {
-        return lisp_make_error("hash-remove! requires a hash table");
+        return lisp_raise_error("hash-remove! requires a hash table");
     }
 
     LispObject *key_obj = lisp_car(lisp_cdr(args));
@@ -67,7 +67,7 @@ static LispObject *builtin_hash_clear_bang(LispObject *args, Environment *env)
 
     LispObject *table = lisp_car(args);
     if (LISP_TYPE(table) != LISP_HASH_TABLE) {
-        return lisp_make_error("hash-clear! requires a hash table");
+        return lisp_raise_error("hash-clear! requires a hash table");
     }
 
     hash_table_clear(table);
@@ -81,7 +81,7 @@ static LispObject *builtin_hash_count(LispObject *args, Environment *env)
 
     LispObject *table = lisp_car(args);
     if (LISP_TYPE(table) != LISP_HASH_TABLE) {
-        return lisp_make_error("hash-count requires a hash table");
+        return lisp_raise_error("hash-count requires a hash table");
     }
 
     return lisp_make_integer((long long)LISP_HT_ENTRY_COUNT(table));
@@ -127,7 +127,7 @@ static LispObject *builtin_hash_keys(LispObject *args, Environment *env)
     CHECK_ARGS_1("hash-keys");
     LispObject *table = lisp_car(args);
     if (LISP_TYPE(table) != LISP_HASH_TABLE)
-        return lisp_make_error("hash-keys requires a hash table");
+        return lisp_raise_error("hash-keys requires a hash table");
     return hash_table_collect(table, HASH_KEYS);
 }
 
@@ -137,7 +137,7 @@ static LispObject *builtin_hash_values(LispObject *args, Environment *env)
     CHECK_ARGS_1("hash-values");
     LispObject *table = lisp_car(args);
     if (LISP_TYPE(table) != LISP_HASH_TABLE)
-        return lisp_make_error("hash-values requires a hash table");
+        return lisp_raise_error("hash-values requires a hash table");
     return hash_table_collect(table, HASH_VALUES);
 }
 
@@ -147,7 +147,7 @@ static LispObject *builtin_hash_entries(LispObject *args, Environment *env)
     CHECK_ARGS_1("hash-entries");
     LispObject *table = lisp_car(args);
     if (LISP_TYPE(table) != LISP_HASH_TABLE)
-        return lisp_make_error("hash-entries requires a hash table");
+        return lisp_raise_error("hash-entries requires a hash table");
     return hash_table_collect(table, HASH_ENTRIES);
 }
 

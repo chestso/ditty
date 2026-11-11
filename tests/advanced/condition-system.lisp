@@ -5,7 +5,7 @@
 ;;; Basic error introspection (capture error with condition-case)
 (define err nil)
 
-(condition-case e (signal 'my-error "test message") (error (define err e)))
+(condition-case e (signal 'my-error "test message") (error (set! err e)))
 
 (assert-true (error? err) "error? recognizes error object")
 
@@ -20,7 +20,7 @@
 (define generic-err nil)
 
 (condition-case e (error "generic error message")
-  (error (define generic-err e)))
+  (error (set! generic-err e)))
 
 (assert-true (error? generic-err) "error function creates error")
 
@@ -38,11 +38,11 @@
    (division-by-zero "wrong handler")
    (error "caught any error")) "caught any error"
  "condition-case error handler catches all errors")
-;;; condition-case no match propagates error (skipped - complex propagation semantics)
-;; (condition-case e
-;;   (signal 'my-error "unhandled")
-;;   (other-error "wrong handler"))
-;; TODO: This test demonstrates error propagation when no handler matches
+;;;;; condition-case with no matching handler keeps raising
+(assert-error
+ (condition-case e (signal 'my-error "unhandled")
+   (other-error "wrong handler"))
+ "condition-case propagates an error that no handler matches")
 ;;; condition-case normal execution (no error)
 (assert-equal 6 (condition-case e (+ 1 2 3) (error "should not run"))
  "condition-case returns value when no error")
@@ -93,7 +93,7 @@
 ;;; Signal with data
 (define err-with-data nil)
 
-(condition-case e (signal 'my-error '(1 2 3)) (error (define err-with-data e)))
+(condition-case e (signal 'my-error '(1 2 3)) (error (set! err-with-data e)))
 
 (assert-equal 'my-error (error-type err-with-data) "error-type with list data")
 (assert-equal '(1 2 3) (error-data err-with-data) "error-data returns list")
@@ -102,7 +102,7 @@
 (define err-with-str nil)
 
 (condition-case e (signal 'file-error "cannot open file")
-  (error (define err-with-str e)))
+  (error (set! err-with-str e)))
 
 (assert-equal "cannot open file" (error-message err-with-str)
  "error-message with string data")

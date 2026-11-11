@@ -225,6 +225,7 @@ TESTS = \
     regression/colon_symbol.lisp \
     regression/cond_case_multi_expr.lisp \
     regression/condition_case_tail_call.lisp \
+    regression/condition_case_unwind.lisp \
     regression/integer_precision.lisp \
     regression/list_ref_type_check.lisp \
     regression/multiline_parsing.lisp \
@@ -321,6 +322,7 @@ EXTRA_DIST = \
     regression/colon_symbol.lisp \
     regression/cond_case_multi_expr.lisp \
     regression/condition_case_tail_call.lisp \
+    regression/condition_case_unwind.lisp \
     regression/integer_precision.lisp \
     regression/list_ref_type_check.lisp \
     regression/multiline_parsing.lisp \
@@ -329,5 +331,9 @@ EXTRA_DIST = \
     regression/unwind_protect_tail_call.lisp \
     regression/test_caught_error_suppress_print.sh \
     regression/caught_error_suppress_print.lisp \
+    bench/fib.lisp \
+    bench/loop.lisp \
+    bench/signal.lisp \
+    bench/run.sh \
     fixtures/app_lib/app-helper.lisp \
     fixtures/extra_lib/extra-lib.lisp

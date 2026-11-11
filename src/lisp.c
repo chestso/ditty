@@ -1,5 +1,6 @@
 #include "../include/lisp.h"
 #include "../include/file_utils.h"
+#include "condition_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -248,8 +249,11 @@ LispObject *lisp_make_cons(LispObject *car, LispObject *cdr)
     return obj;
 }
 
-/* New typed error creation function */
-LispObject *lisp_make_typed_error(LispObject *error_type, const char *message, LispObject *data, Environment *env)
+/* Pure error constructor: builds the object only. No stack trace is
+ * captured (lisp_raise does that at the signal point) and nothing is
+ * signaled. Used by the reader, which returns parse results as values, and
+ * by the lisp_raise* family. */
+LispObject *lisp_make_typed_error(LispObject *error_type, const char *message, LispObject *data)
 {
     LispObject *obj = GC_malloc(sizeof(LispObject));
     obj->type = LISP_ERROR;
@@ -257,37 +261,8 @@ LispObject *lisp_make_typed_error(LispObject *error_type, const char *message, L
     LISP_ERROR_TYPE(obj) = error_type;
     LISP_ERROR_MESSAGE(obj) = GC_strdup(message);
     LISP_ERROR_DATA(obj) = data;
-    LISP_ERROR_STACK_TRACE(obj) = (env != NULL) ? capture_call_stack(env) : NIL;
-    LISP_ERROR_CAUGHT(obj) = 0; /* Not caught initially - will propagate */
+    LISP_ERROR_STACK_TRACE(obj) = NIL;
     return obj;
-}
-
-/* Convenience function for creating typed errors from strings */
-LispObject *lisp_make_typed_error_simple(const char *error_type_name, const char *message, Environment *env)
-{
-    return lisp_make_typed_error(lisp_intern(error_type_name), message, NIL, env);
-}
-
-/* Backward-compatible error creation (uses 'error type) */
-LispObject *lisp_make_error(const char *message)
-{
-    return lisp_make_typed_error(sym_error, message, NIL, NULL);
-}
-
-/* Backward-compatible error creation with stack trace */
-LispObject *lisp_make_error_with_stack(const char *message, Environment *env)
-{
-    return lisp_make_typed_error(sym_error, message, NIL, env);
-}
-
-LispObject *lisp_attach_stack_trace(LispObject *error, Environment *env)
-{
-    if (LISP_TYPE(error) == LISP_ERROR) {
-        if (LISP_ERROR_STACK_TRACE(error) == NIL || LISP_ERROR_STACK_TRACE(error) == NULL) {
-            LISP_ERROR_STACK_TRACE(error) = capture_call_stack(env);
-        }
-    }
-    return error;
 }
 
 LispObject *lisp_make_builtin(BuiltinFunc func, const char *name)
@@ -553,7 +528,7 @@ LispObject *lisp_cdr(LispObject *obj)
 LispObject *lisp_set_car(LispObject *cell, LispObject *new_car)
 {
     if (cell == NULL || cell == NIL || LISP_TYPE(cell) != LISP_CONS)
-        return lisp_make_error("set-car: argument must be a cons cell");
+        return lisp_raise_error("set-car: argument must be a cons cell");
     LISP_CAR(cell) = new_car;
     return cell;
 }
@@ -561,7 +536,7 @@ LispObject *lisp_set_car(LispObject *cell, LispObject *new_car)
 LispObject *lisp_set_cdr(LispObject *cell, LispObject *new_cdr)
 {
     if (cell == NULL || cell == NIL || LISP_TYPE(cell) != LISP_CONS)
-        return lisp_make_error("set-cdr: argument must be a cons cell");
+        return lisp_raise_error("set-cdr: argument must be a cons cell");
     LISP_CDR(cell) = new_cdr;
     return cell;
 }
@@ -702,8 +677,10 @@ static int load_stdlib(Environment *env)
             return 0; /* Parse error */
         }
 
-        LispObject *result = lisp_eval(expr, env);
-        if (result != NULL && LISP_TYPE(result) == LISP_ERROR) {
+        /* The stdlib runs before any user frame exists: use the protected
+         * entry point, which establishes one. */
+        LispObject *result = NULL;
+        if (lisp_try_eval(expr, env, &result) != LISP_OK) {
             return 0; /* Eval error */
         }
     }
@@ -773,26 +750,6 @@ Environment *lisp_init(void)
     return env;
 }
 
-LispObject *lisp_eval_string(const char *code, Environment *env)
-{
-    if (env == NULL) {
-        env = global_env;
-    }
-
-    const char *input = code;
-    LispObject *expr = lisp_read(&input);
-
-    if (expr == NULL) {
-        return NIL;
-    }
-
-    if (LISP_TYPE(expr) == LISP_ERROR) {
-        return expr;
-    }
-
-    return lisp_eval(expr, env);
-}
-
 void lisp_cleanup(void)
 {
     /* GC handles cleanup automatically */
@@ -800,6 +757,29 @@ void lisp_cleanup(void)
         env_free(global_env);
         global_env = NULL;
     }
+}
+
+/* Evaluate every expression in BUFFER. A reader failure is raised; the
+ * first raising form aborts the load. */
+static LispObject *eval_all_forms(const char *buffer, Environment *env)
+{
+    const char *input = buffer;
+    LispObject *result = NIL;
+
+    while (*input) {
+        LispObject *expr = lisp_read(&input);
+        if (expr == NULL)
+            break;
+
+        /* The reader returns parse failures as values; here they are a
+         * failure of the load. */
+        if (LISP_TYPE(expr) == LISP_ERROR)
+            lisp_raise(expr);
+
+        result = lisp_eval(expr, env);
+    }
+
+    return result;
 }
 
 /* Load file */
@@ -812,7 +792,9 @@ LispObject *lisp_load_file(const char *filename, Environment *env)
     /* Use binary mode to avoid ftell/fread size mismatch with CRLF translation */
     FILE *file = file_open(path, "rb");
     if (file == NULL) {
-        return lisp_make_error("Cannot open file");
+        char message[4096];
+        snprintf(message, sizeof(message), "Cannot open file: %s", filename);
+        lisp_raise_error(message);
     }
 
     /* Read entire file */
@@ -825,36 +807,16 @@ LispObject *lisp_load_file(const char *filename, Environment *env)
     buffer[actual_read] = '\0';
     fclose(file);
 
-    /* Save and set *load-pathname* to the resolved path */
-    LispObject *saved_load_pathname = env_lookup(env, LISP_SYM_VAL(sym_star_load_pathname_star));
+    /* Save *load-pathname* and restore it on the normal path and on any
+     * signal that unwinds out of the file. */
+    LispObject *volatile saved_load_pathname = env_lookup(env, LISP_SYM_VAL(sym_star_load_pathname_star));
     if (saved_load_pathname == NULL)
         saved_load_pathname = NIL;
     env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), lisp_make_string(path));
 
-    /* Evaluate all expressions */
-    const char *input = buffer;
-    LispObject *result = NIL;
-
-    while (*input) {
-        LispObject *expr = lisp_read(&input);
-        if (expr == NULL)
-            break;
-
-        if (LISP_TYPE(expr) == LISP_ERROR) {
-            env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), saved_load_pathname);
-            return expr;
-        }
-
-        result = lisp_eval(expr, env);
-
-        if (LISP_TYPE(result) == LISP_ERROR) {
-            env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), saved_load_pathname);
-            return result;
-        }
-    }
-
-    /* Restore *load-pathname* */
-    env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), saved_load_pathname);
+    LispObject *result;
+    LISP_UNWIND_PROTECT(result, eval_all_forms(buffer, env),
+                        env_set(env, LISP_SYM_VAL(sym_star_load_pathname_star), saved_load_pathname));
 
     return result;
 }

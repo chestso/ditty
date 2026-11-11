@@ -2038,6 +2038,13 @@ Test string equality.
 
 Error creation, signaling, and introspection.
 
+Signaling and data are separate channels. `error`, `signal` and every runtime
+failure _raise_: control transfers to the innermost matching `condition-case`
+and nothing between the signal and the handler resumes. An error object,
+once caught, is ordinary data: binding it, returning it from a handler,
+putting it in a list, or passing it to `car`/`apply`/`eval` never re-signals.
+Use `(signal ERR)` to re-raise one.
+
 ### `error?`
 
 Test if value is an error object.
@@ -2230,16 +2237,25 @@ Returns error if argument is not an error object.
 
 ### `signal`
 
-Raise a typed error (Emacs Lisp-style exception).
+Raise an error (Emacs Lisp-style exception): control transfers to the
+innermost matching `condition-case`.
 
 #### Parameters
 
-- `error-type` - Symbol identifying the error type
+- `error-type` - Symbol identifying the error type, **or** an error object
 - `data` - Optional data payload (any Lisp value)
 
 #### Returns
 
-Does not return (raises error that must be caught with `condition-case`).
+Does not return (raises an error that must be caught with `condition-case`
+or reported by the top level).
+
+#### Forms
+
+- `(signal TYPE DATA)` — signal a new error of type `TYPE`.
+- `(signal ERROR)` — re-raise that exact error object: same type, message,
+  data and the stack captured where it was first raised. This is how a
+  handler re-signals an error it has inspected.
 
 #### Examples
 
@@ -2258,6 +2274,11 @@ Does not return (raises error that must be caught with `condition-case`).
   (division-by-zero "Caught division error")
   (error "Caught other error"))
 ; => "Caught division error"
+
+; Re-signaling a caught error object keeps its identity
+(condition-case outer
+    (condition-case inner (error "boom") (error (signal inner)))
+  (error (error-message outer)))   ; => "boom"
 ```
 
 #### Common Error Types
@@ -2283,6 +2304,9 @@ You can define custom error types using any symbol:
 #### Notes
 
 If `data` is a string, it's used as the error message. Otherwise, a message is constructed from the error type and data.
+
+The stack trace (`error-stack`) is captured when the error is first raised,
+not when it is constructed, so a re-signaled error keeps its original trace.
 
 #### See Also
 
@@ -5773,12 +5797,26 @@ Logical OR with short-circuit evaluation. Returns the first truthy value, or the
 
 ### `condition-case`
 
-Catch and handle errors by type (Emacs Lisp-style exception handling). Evaluates the body form; if an error is signaled, the handlers are checked in order and the first matching handler is executed.
+Catch a signal by type (Emacs Lisp-style exception handling). Evaluates the
+body form; if it signals, control transfers **here** — the rest of the body
+and every frame between the signal and this form is abandoned — and the first
+matching handler runs.
+
+Handlers are checked in order. An exact type match wins; `error` catches
+everything else. Type names are compared as symbols, so package-qualified
+types work. If nothing matches, the signal keeps unwinding outward.
+
+The handler runs in a child environment of the `condition-case`'s
+environment, with the error object bound to `var` there. `define` inside a
+handler is local to the handler; `set!` still reaches outer variables. The
+handler's last value is the value of the whole form. The `condition-case` is
+popped **before** the handler runs, so an error raised by a handler propagates
+outward instead of being caught again.
 
 #### Parameters
 
-- `var` - Symbol bound to the error object during handler execution (not evaluated)
-- `body` - Expression to evaluate (may signal an error)
+- `var` - Symbol bound to the error object during handler execution (not evaluated; `nil` to bind nothing)
+- `body` - Expression to evaluate (may signal an error); never in tail position
 - `handlers...` - Each handler is `(error-type body...)`; `error` catches all types
 
 #### Examples
@@ -5794,16 +5832,30 @@ Catch and handle errors by type (Emacs Lisp-style exception handling). Evaluates
   (error (error-message e)))
 ; => "test message"
 
-(condition-case e
-    (some-risky-operation)
-  (file-error "File problem")
-  (network-error "Network problem")
-  (error "Other error"))
+; Nothing after the signal runs, and a raising handler goes outward.
+(condition-case outer
+    (condition-case inner (error "boom") (error (error "again")))
+  (error 'outer))
+; => outer
+
+; The handler's value is the form's value, even when it is an error object.
+(condition-case e (error "boom") (error e))
+; => #<error error "boom">
 ```
 
 ### `unwind-protect`
 
-Guarantee cleanup code execution regardless of whether the body form succeeds or signals an error. Like `try-finally` in other languages.
+Guarantee cleanup code execution regardless of whether the body form succeeds
+or signals an error. Like `try-finally` in other languages.
+
+The body is evaluated (never in tail position), then the cleanups run. If a
+signal is unwinding outward when it reaches this form, the cleanups run
+innermost-first, once, in this form's environment, and the original error
+object is re-raised — nothing after the signal point in the body runs.
+
+A cleanup that signals replaces the pending error: the outer handler sees the
+cleanup's error and the original one is lost. A cleanup that signals and
+catches its own error does not disturb the pending one.
 
 #### Parameters
 
@@ -5817,10 +5869,12 @@ Guarantee cleanup code execution regardless of whether the body form succeeds or
     (read-line file)
   (close file))  ; Always closes, even on error
 
-(unwind-protect
-    (signal 'test-error "boom")
-  (define cleaned-up #t))
-cleaned-up  ; => #t (cleanup ran despite error)
+; The cleanup runs even though the body raises, and the error still
+; reaches the enclosing condition-case.
+(condition-case e
+    (unwind-protect (error "boom") (princ "cleanup"))
+  (error 'caught))
+; prints "cleanup", => caught
 ```
 
 ---
@@ -6958,8 +7012,10 @@ so it can be loaded with `require`:
   involved.
 - **Queries are events too.** Inside the loop, capability replies arrive as
   `reply` events. The blocking `terminal-query` exists only for plain scripts.
-- **Errors are values.** The loop returns the error object; it never prints an
-  error and never exits the process.
+- **Errors unwind to the loop.** An error raised by the handler, the event
+  reader, `terminal-wait` or `:on-start` unwinds the loop (running its
+  cleanups) to the loop's own `condition-case`, which returns the error
+  object. The loop never prints an error and never exits the process.
 
 #### Public symbols exported from the `terminal` package
 

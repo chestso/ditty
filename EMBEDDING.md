@@ -12,9 +12,13 @@ For the Lisp language itself, see [LANGUAGE_GUIDE.md](LANGUAGE_GUIDE.md) (concep
 int main() {
     Environment* env = lisp_init();
 
-    LispObject* result = lisp_eval_string("(+ 1 2 3)", env);
-    char* output = lisp_print(result);
-    printf("%s\n", output);  // Prints: 6
+    LispObject* result = NULL;
+    if (lisp_try_eval_string("(+ 1 2 3)", env, &result) == LISP_OK) {
+        char* output = lisp_print(result);
+        printf("%s\n", output);  // Prints: 6
+    } else {
+        fprintf(stderr, "%s\n", lisp_error_report(result));
+    }
 
     lisp_cleanup();
     return 0;
@@ -22,6 +26,20 @@ int main() {
 ```
 
 Memory is managed by Boehm GC. Call `lisp_cleanup()` once at program exit.
+
+> **Signals versus data.** Lisp signaling is a non-local exit (`longjmp` to the
+> innermost `condition-case`), not an error return value. Run Lisp from C
+> through the **protected** API — `lisp_try`, `lisp_try_eval`,
+> `lisp_try_apply`, `lisp_try_eval_string`, `lisp_try_load_file` — which
+> returns a `LispStatus` (`LISP_OK` / `LISP_SIGNALED`) plus an out-parameter.
+> On `LISP_OK` the out-parameter holds the value, which may itself be an error
+> object (that is data, not a failure). On `LISP_SIGNALED` it holds the
+> signaled error.
+>
+> `lisp_eval`, `lisp_apply`, `lisp_call_*` and `lisp_load_file` **raise** and
+> are only valid while an eval frame is active — from inside a builtin or a
+> `lisp_try_*` call. Calling them with no frame aborts with an internal-error
+> diagnostic.
 
 > **Embedder contract.** A `LispObject *` is **not** always a real pointer — it may be a tagged immediate value (small integer, char, `NIL`, `LISP_TRUE`). Never read `obj->type` or `obj->value.X` directly; always go through the `LISP_*` accessor macros (`LISP_TYPE`, `LISP_INT_VAL`, `LISP_CAR`, `LISP_CDR`, `LISP_LAMBDA_NAME`, ...). The macros are defined in `<ditty/lisp_value.h>` and decode the tag bits and follow boxed-out pointers transparently. See [Object representation & GC](#object-representation--gc) below.
 
@@ -61,12 +79,16 @@ myapp_LDADD = libs/ditty/src/libditty.a
 
 ### Core functions
 
-| Function                        | Description                                   |
-| ------------------------------- | --------------------------------------------- |
-| `lisp_init()`                   | Initialize interpreter, return environment    |
-| `lisp_eval_string(code, env)`   | Parse and evaluate first expression in string |
-| `lisp_load_file(filename, env)` | Load and evaluate a file (all expressions)    |
-| `lisp_cleanup()`                | Free global resources                         |
+| Function                                  | Description                                                |
+| ----------------------------------------- | ---------------------------------------------------------- |
+| `lisp_init()`                             | Initialize interpreter, return environment                 |
+| `lisp_try_eval_string(code, env, &out)`   | Protected: parse and evaluate first expression in string   |
+| `lisp_try_load_file(filename, env, &out)` | Protected: load and evaluate a file (all expressions)      |
+| `lisp_try_eval(expr, env, &out)`          | Protected: evaluate a parsed expression                    |
+| `lisp_try_apply(func, args, env, &out)`   | Protected: call a function with an evaluated argument list |
+| `lisp_try(thunk, data, &out)`             | Protected: run an arbitrary C thunk with a frame installed |
+| `lisp_load_file(filename, env)`           | Raising: load and evaluate a file                          |
+| `lisp_cleanup()`                          | Free global resources                                      |
 
 ### Parsing and evaluation
 
@@ -107,10 +129,7 @@ myapp_LDADD = libs/ditty/src/libditty.a
 | `lisp_make_macro(params, body, closure, name)`  | Create macro                                 |
 | `lisp_make_vector(capacity)`                    | Create vector                                |
 | `lisp_make_hash_table()`                        | Create hash table                            |
-| `lisp_make_error(message)`                      | Create error object (no stack trace)         |
-| `lisp_make_error_with_stack(msg, env)`          | Create error with stack trace                |
-| `lisp_make_typed_error(type, msg, data, env)`   | Typed error with stack trace                 |
-| `lisp_make_typed_error_simple(type, msg, env)`  | Typed error from string                      |
+| `lisp_make_typed_error(type, msg, data)`        | Pure error constructor (no raise, no trace)  |
 | `lisp_make_builtin(func, name)`                 | Create builtin function                      |
 | `lisp_make_string_port(str)`                    | Create input string port                     |
 | `lisp_make_output_string_port()`                | Create output string port                    |
@@ -119,13 +138,18 @@ myapp_LDADD = libs/ditty/src/libditty.a
 
 ### Error handling
 
-| Function                                            | Description                          |
-| --------------------------------------------------- | ------------------------------------ |
-| `lisp_make_error(msg)`                              | Create `'error` without stack trace  |
-| `lisp_make_error_with_stack(msg, env)`              | Create `'error` with stack trace     |
-| `lisp_make_typed_error(type, msg, data, env)`       | Typed error with stack trace         |
-| `lisp_make_typed_error_simple(type_name, msg, env)` | Typed error from C string            |
-| `lisp_attach_stack_trace(err, env)`                 | Attach stack trace to existing error |
+| Function                                 | Description                                                            |
+| ---------------------------------------- | ---------------------------------------------------------------------- |
+| `lisp_make_typed_error(type, msg, data)` | Build an error object. Does not signal or capture a trace              |
+| `lisp_raise(error)`                      | Signal an existing error object to the innermost frame (never returns) |
+| `lisp_raise_error(msg)`                  | Signal a new `'error` (never returns)                                  |
+| `lisp_raise_typed(type_name, msg)`       | Signal a new typed error from a C string (never returns)               |
+| `lisp_raise_typed_data(type, msg, data)` | Signal a new typed error with a data payload (never returns)           |
+| `lisp_error_report(error)`               | Multi-line diagnostic for a signaled error (`ERROR: [...] ...`)        |
+
+The stack trace is captured by `lisp_raise` at the signal point, so every
+error that is signaled carries the stack where it was raised. A returned
+`LISP_ERROR` object is data: printing it yields `#<error TYPE "MESSAGE">`.
 
 ### Semantic classification
 

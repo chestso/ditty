@@ -20,14 +20,14 @@
 /* ---- Argument validation macros ---- */
 #define CHECK_ARGS_1(name) \
     if (args == NIL)       \
-    return lisp_make_error(name " requires 1 argument")
+    return lisp_raise_error(name " requires 1 argument")
 #define CHECK_ARGS_2(name)                    \
     if (args == NIL || lisp_cdr(args) == NIL) \
-    return lisp_make_error(name " requires 2 arguments")
+    return lisp_raise_error(name " requires 2 arguments")
 #define CHECK_ARGS_3(name)                      \
     if (args == NIL || lisp_cdr(args) == NIL || \
         lisp_cdr(lisp_cdr(args)) == NIL)        \
-    return lisp_make_error(name " requires 3 arguments")
+    return lisp_raise_error(name " requires 3 arguments")
 
 /* ---- List builder macro ---- */
 #define LIST_APPEND(result, tail, item)                  \
@@ -71,7 +71,7 @@ static inline double get_numeric_value(LispObject *obj, int *is_integer)
 static inline LispObject *make_integral_result(double v)
 {
     if (!isfinite(v))
-        return lisp_make_error("result is not a finite number");
+        return lisp_raise_error("result is not a finite number");
     if (v >= -9.2e18 && v <= 9.2e18)
         return lisp_make_integer((long long)v);
     return lisp_make_number(v);

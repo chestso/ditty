@@ -36,8 +36,10 @@ so it can be loaded with `require`:
   involved.
 - **Queries are events too.** Inside the loop, capability replies arrive as
   `reply` events. The blocking `terminal-query` exists only for plain scripts.
-- **Errors are values.** The loop returns the error object; it never prints an
-  error and never exits the process.
+- **Errors unwind to the loop.** An error raised by the handler, the event
+  reader, `terminal-wait` or `:on-start` unwinds the loop (running its
+  cleanups) to the loop's own `condition-case`, which returns the error
+  object. The loop never prints an error and never exits the process.
 
 ### Public symbols exported from the `terminal` package
 

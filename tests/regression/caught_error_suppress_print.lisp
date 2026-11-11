@@ -1,6 +1,6 @@
-;; Test: caught errors should not auto-print
-;; Regression test for bug where condition-case caught errors still printed
-;; to stdout/stderr with ERROR: prefix instead of being silently handled
+;; Test: caught errors are values, not diagnostics
+;; A captured error object is ordinary data: it prints as #<error ...> like
+;; any other value, and only an uncaught signal produces the ERROR: report.
 (load "tests/test-helpers.lisp")
 
 ;; ---- Case 1: Caught error returns handler value, not error output ----
@@ -24,12 +24,11 @@
 (assert-equal 'caught-in-loop result3 "Caught error in tail call: handler runs")
 
 ;; ---- Case 4: Handler returns the error object itself ----
-;; The error object should NOT print - it's a caught error returned as value
+;; The error object prints as a value (see the shell test), and error? sees it
+;; as data.
 (define result4 (condition-case err (error 'test-error "message") (error err)))
 
 (assert-true (error? result4) "Handler returns error object: is error type")
-;; The caught flag should be set
-;; We can't directly test LISP_ERROR_CAUGHT from Lisp, but we verify behavior
 
 ;; ---- Case 5: Explicit print in handler still works ----
 (define printed-value nil)

@@ -63,10 +63,10 @@ static LispObject *builtin_current_directory(LispObject *args, Environment *env)
 #if defined(_WIN32) || defined(_WIN64)
     DWORD len = GetCurrentDirectoryA(sizeof(buf), buf);
     if (len == 0 || len >= sizeof(buf))
-        return lisp_make_error("current-directory: cannot determine current directory");
+        return lisp_raise_error("current-directory: cannot determine current directory");
 #else
     if (getcwd(buf, sizeof(buf)) == NULL)
-        return lisp_make_error("current-directory: cannot determine current directory");
+        return lisp_raise_error("current-directory: cannot determine current directory");
 #endif
 
     return lisp_make_string(buf);
@@ -83,7 +83,7 @@ static LispObject *builtin_expand_path(LispObject *args, Environment *env)
 
     LispObject *path_obj = lisp_car(args);
     if (LISP_TYPE(path_obj) != LISP_STRING) {
-        return lisp_make_error("expand-path requires a string argument");
+        return lisp_raise_error("expand-path requires a string argument");
     }
 
     const char *path = LISP_STR_VAL(path_obj);
@@ -98,7 +98,7 @@ static LispObject *builtin_expand_path(LispObject *args, Environment *env)
     LispObject *home_obj = builtin_home_directory(NIL, env);
     if (home_obj == NIL || LISP_TYPE(home_obj) != LISP_STRING) {
         /* No home directory - return error */
-        return lisp_make_error("expand-path: cannot determine home directory");
+        return lisp_raise_error("expand-path: cannot determine home directory");
     }
 
     const char *home = LISP_STR_VAL(home_obj);
@@ -138,11 +138,11 @@ static LispObject *builtin_getenv(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL)
-        return lisp_make_error("getenv requires 1 argument");
+        return lisp_raise_error("getenv requires 1 argument");
 
     LispObject *name = lisp_car(args);
     if (LISP_TYPE(name) != LISP_STRING)
-        return lisp_make_error("getenv requires a string argument");
+        return lisp_raise_error("getenv requires a string argument");
 
     const char *value = getenv(LISP_STR_VAL(name));
     if (!value)
@@ -161,11 +161,11 @@ static LispObject *builtin_data_directory(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL)
-        return lisp_make_error("data-directory requires 1 argument");
+        return lisp_raise_error("data-directory requires 1 argument");
 
     LispObject *app = lisp_car(args);
     if (LISP_TYPE(app) != LISP_STRING)
-        return lisp_make_error("data-directory requires a string argument");
+        return lisp_raise_error("data-directory requires a string argument");
 
     const char *app_name = LISP_STR_VAL(app);
     char path[PATH_MAX];
@@ -179,7 +179,7 @@ static LispObject *builtin_data_directory(LispObject *args, Environment *env)
         if (!dir)
             dir = getenv("APPDATA");
         if (!dir)
-            return lisp_make_error("data-directory: cannot determine data directory");
+            return lisp_raise_error("data-directory: cannot determine data directory");
         snprintf(path, sizeof(path), "%s\\%s", dir, app_name);
     }
 #else
@@ -189,7 +189,7 @@ static LispObject *builtin_data_directory(LispObject *args, Environment *env)
     } else {
         const char *home = getenv("HOME");
         if (!home)
-            return lisp_make_error("data-directory: cannot determine home directory");
+            return lisp_raise_error("data-directory: cannot determine home directory");
         snprintf(path, sizeof(path), "%s/.local/share/%s", home, app_name);
     }
 #endif
@@ -207,11 +207,11 @@ static LispObject *builtin_config_directory(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL)
-        return lisp_make_error("config-directory requires 1 argument");
+        return lisp_raise_error("config-directory requires 1 argument");
 
     LispObject *app = lisp_car(args);
     if (LISP_TYPE(app) != LISP_STRING)
-        return lisp_make_error("config-directory requires a string argument");
+        return lisp_raise_error("config-directory requires a string argument");
 
     const char *app_name = LISP_STR_VAL(app);
     char path[PATH_MAX];
@@ -223,7 +223,7 @@ static LispObject *builtin_config_directory(LispObject *args, Environment *env)
     } else {
         const char *dir = getenv("APPDATA");
         if (!dir)
-            return lisp_make_error("config-directory: cannot determine config directory");
+            return lisp_raise_error("config-directory: cannot determine config directory");
         snprintf(path, sizeof(path), "%s\\%s", dir, app_name);
     }
 #else
@@ -233,7 +233,7 @@ static LispObject *builtin_config_directory(LispObject *args, Environment *env)
     } else {
         const char *home = getenv("HOME");
         if (!home)
-            return lisp_make_error("config-directory: cannot determine home directory");
+            return lisp_raise_error("config-directory: cannot determine home directory");
         snprintf(path, sizeof(path), "%s/.config/%s", home, app_name);
     }
 #endif
@@ -249,11 +249,11 @@ static LispObject *builtin_file_exists_question(LispObject *args, Environment *e
 {
     (void)env;
     if (args == NIL)
-        return lisp_make_error("file-exists? requires 1 argument");
+        return lisp_raise_error("file-exists? requires 1 argument");
 
     LispObject *path = lisp_car(args);
     if (LISP_TYPE(path) != LISP_STRING)
-        return lisp_make_error("file-exists? requires a string argument");
+        return lisp_raise_error("file-exists? requires a string argument");
 
     return file_exists(LISP_STR_VAL(path)) ? LISP_TRUE : NIL;
 }
@@ -266,11 +266,11 @@ static LispObject *builtin_mkdir(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL)
-        return lisp_make_error("mkdir requires 1 argument");
+        return lisp_raise_error("mkdir requires 1 argument");
 
     LispObject *path = lisp_car(args);
     if (LISP_TYPE(path) != LISP_STRING)
-        return lisp_make_error("mkdir requires a string argument");
+        return lisp_raise_error("mkdir requires a string argument");
 
     if (file_exists(LISP_STR_VAL(path)))
         return LISP_TRUE;
@@ -279,7 +279,7 @@ static LispObject *builtin_mkdir(LispObject *args, Environment *env)
         char errbuf[256];
         snprintf(errbuf, sizeof(errbuf), "mkdir: %s: %s", LISP_STR_VAL(path),
                  strerror(errno));
-        return lisp_make_error(errbuf);
+        return lisp_raise_error(errbuf);
     }
 
     return LISP_TRUE;
@@ -293,11 +293,11 @@ static LispObject *builtin_delete_directory(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL)
-        return lisp_make_error("delete-directory requires at least 1 argument");
+        return lisp_raise_error("delete-directory requires at least 1 argument");
 
     LispObject *path = lisp_car(args);
     if (LISP_TYPE(path) != LISP_STRING)
-        return lisp_make_error("delete-directory requires a string path");
+        return lisp_raise_error("delete-directory requires a string path");
 
     int recursive = 0;
     if (g_recursive_kw == NULL)
@@ -317,7 +317,7 @@ static LispObject *builtin_delete_directory(LispObject *args, Environment *env)
         snprintf(errbuf, sizeof(errbuf),
                  "delete-directory: '%s' is not a directory",
                  LISP_STR_VAL(path));
-        return lisp_make_error(errbuf);
+        return lisp_raise_error(errbuf);
     }
 
     if (file_remove_directory(LISP_STR_VAL(path), recursive) != 0) {
@@ -325,7 +325,7 @@ static LispObject *builtin_delete_directory(LispObject *args, Environment *env)
         snprintf(errbuf, sizeof(errbuf),
                  "delete-directory: failed to delete '%s': %s",
                  LISP_STR_VAL(path), strerror(errno));
-        return lisp_make_error(errbuf);
+        return lisp_raise_error(errbuf);
     }
 
     return NIL;
@@ -338,7 +338,7 @@ static LispObject *builtin_file_is_directory_question(LispObject *args, Environm
 
     LispObject *path = lisp_car(args);
     if (LISP_TYPE(path) != LISP_STRING)
-        return lisp_make_error("file-is-directory? requires a string path");
+        return lisp_raise_error("file-is-directory? requires a string path");
 
     return file_is_directory(LISP_STR_VAL(path)) ? LISP_TRUE : NIL;
 }
@@ -391,7 +391,7 @@ static LispObject *builtin_temporary_file_directory(LispObject *args,
 
     char buf[4096];
     if (file_temp_directory(buf, sizeof(buf)) != 0)
-        return lisp_make_error("temporary-file-directory: cannot determine temp directory");
+        return lisp_raise_error("temporary-file-directory: cannot determine temp directory");
 
     return lisp_make_string(buf);
 }
@@ -405,11 +405,11 @@ static LispObject *builtin_make_temp_file(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL)
-        return lisp_make_error("make-temp-file requires at least 1 argument");
+        return lisp_raise_error("make-temp-file requires at least 1 argument");
 
     LispObject *prefix_obj = lisp_car(args);
     if (LISP_TYPE(prefix_obj) != LISP_STRING)
-        return lisp_make_error("make-temp-file requires a string prefix");
+        return lisp_raise_error("make-temp-file requires a string prefix");
 
     int make_dir = 0;
     if (g_directory_kw == NULL)
@@ -433,7 +433,7 @@ static LispObject *builtin_make_temp_file(LispObject *args, Environment *env)
         rc = file_make_temp_file(prefix, buf, sizeof(buf));
 
     if (rc != 0)
-        return lisp_make_error("make-temp-file: failed to create temp file");
+        return lisp_raise_error("make-temp-file: failed to create temp file");
 
     return lisp_make_string(buf);
 }
@@ -449,7 +449,7 @@ static LispObject *builtin_file_name_directory(LispObject *args, Environment *en
 
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_STRING) {
-        return lisp_make_error("file-name-directory: argument must be a string");
+        return lisp_raise_error("file-name-directory: argument must be a string");
     }
 
     const char *path = LISP_STR_VAL(arg);
@@ -483,7 +483,7 @@ static LispObject *builtin_file_name_nondirectory(LispObject *args, Environment 
 
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_STRING) {
-        return lisp_make_error("file-name-nondirectory: argument must be a string");
+        return lisp_raise_error("file-name-nondirectory: argument must be a string");
     }
 
     const char *path = LISP_STR_VAL(arg);

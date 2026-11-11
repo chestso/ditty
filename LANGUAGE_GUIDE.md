@@ -778,10 +778,16 @@ Examples:
 Ditty Lisp implements an Emacs Lisp-style condition system with typed errors, catch/handle, and guaranteed cleanup. The system provides:
 
 - **Typed errors**: Errors have symbol-based types (e.g., `'division-by-zero`, `'file-error`)
+- **Non-local exit**: a signal transfers control to the innermost matching
+  `condition-case`; nothing between the signal and the handler resumes
 - **Error catching**: `condition-case` catches and handles specific error types
 - **Guaranteed cleanup**: `unwind-protect` ensures cleanup code always runs
 - **Error introspection**: Full access to error type, message, data, and call stack
-- **Automatic propagation**: Uncaught errors propagate with call stack traces
+- **Automatic propagation**: Uncaught errors propagate outward with call stack traces
+
+An error object is data once it has been caught. Binding it, returning it
+from a handler, storing it in a list, or passing it to `car`/`apply`/`eval`
+does **not** re-signal it. To send one onward, use `(signal ERR)`.
 
 ### Signal and Error Creation
 
@@ -797,6 +803,12 @@ Ditty Lisp implements an Emacs Lisp-style condition system with typed errors, ca
 ; With data payload
 (signal 'file-error '("cannot open" "file.txt" 404))
 ; => ERROR: [file-error] ("cannot open" "file.txt" 404)
+
+; (signal ERR) re-raises a caught error object unchanged
+(condition-case outer
+    (condition-case inner (error "boom") (error (signal inner)))
+  (error (error-message outer)))
+; => "boom"
 ```
 
 **`error`** - Convenience function for generic errors:
@@ -819,6 +831,13 @@ Catch and handle specific error types:
   (division-by-zero "Caught division by zero"))
 ; => "Caught division by zero"
 
+; The signal skips the rest of the body — the value is the handler's, not
+; "more", and the loop stops at the failing iteration.
+(condition-case e
+    (progn (error "boom") 'more)
+  (error 'caught))
+; => caught
+
 ; Multiple handlers
 (condition-case e
     (some-risky-operation)
@@ -831,6 +850,12 @@ Catch and handle specific error types:
     (signal 'my-error "test message")
   (error (error-message err)))
 ; => "test message"
+
+; A handler may itself raise: the outer handler catches it
+(condition-case outer
+    (condition-case inner (error "boom") (error (error "again")))
+  (error 'outer))
+; => outer
 
 ; Handler with multiple expressions (implicit progn)
 (condition-case e
@@ -845,9 +870,16 @@ Catch and handle specific error types:
 **Handler matching:**
 
 - Handlers are checked in order
-- First matching handler executes
+- First matching handler executes; an exact type match wins over `'error`
 - `'error` symbol catches all error types
-- More specific handlers take precedence
+- Type names are compared as symbols, so package-qualified types work
+- If no handler matches, the signal keeps propagating outward
+
+**Handler environment:** the handler runs in a child environment of the
+`condition-case` with `VAR` bound to the error object. `define` inside a
+handler is local to it; `set!` still updates outer variables. The frame is
+popped before the handler runs, so an error raised by a handler reaches an
+outer handler instead of looping back into the same one.
 
 ### Unwind-Protect (Guaranteed Cleanup)
 
@@ -864,19 +896,30 @@ Guarantee cleanup code execution (like try-finally):
 
 ; Multiple cleanup forms
 (define cleanup-count 0)
-(unwind-protect
-    (signal 'test-error "boom")
-  (define cleanup-count (+ cleanup-count 1))
-  (define cleanup-count (+ cleanup-count 10)))
-cleanup-count  ; => 11 (cleanup ran despite error)
-
-; Returns body result even if error
 (condition-case e
     (unwind-protect
         (signal 'test-error "boom")
-      (define cleaned-up #t))
-  (error "caught"))
-cleaned-up  ; => #t
+      (set! cleanup-count (+ cleanup-count 1))
+      (set! cleanup-count (+ cleanup-count 10)))
+  (error nil))
+cleanup-count  ; => 11 (cleanup ran despite the error)
+
+; On the way out, cleanups run innermost-first and the original error is
+; re-raised afterwards.
+(define trail nil)
+(condition-case e
+    (unwind-protect
+        (unwind-protect (error "boom")
+          (set! trail (append trail '(inner))))
+      (set! trail (append trail '(outer))))
+  (error nil))
+trail  ; => (inner outer)
+
+; A cleanup that raises replaces the pending error
+(condition-case e
+    (unwind-protect (error "boom") (signal 'cleanup-error "failed"))
+  (error (error-type e)))
+; => cleanup-error
 ```
 
 ### Error Introspection
@@ -887,7 +930,7 @@ Caught errors can be inspected:
 (define my-err nil)
 (condition-case e
     (signal 'custom-error "test message")
-  (error (define my-err e)))
+  (error (set! my-err e)))
 
 (error? my-err)           ; => #t
 (error-type my-err)       ; => custom-error
@@ -939,7 +982,9 @@ Caught errors can be inspected:
 
 ### Error Propagation and Call Stacks
 
-Uncaught errors automatically propagate with call stack traces:
+Uncaught errors automatically propagate outward with call stack traces, and
+the top level reports them and exits non-zero. A captured error value prints
+as `#<error TYPE "MESSAGE">`, distinct from the report:
 
 ```lisp
 (define inner (lambda (x) (/ x 0)))

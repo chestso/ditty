@@ -44,10 +44,11 @@
 ;; Assert that expression throws an error
 ;; Usage: (assert-error expr "description")
 ;; Returns: nil on success (if error thrown), aborts test if expr succeeds
-;; NOTE: EXPR must be the direct body of the condition-case: progn discards
-;; errors from non-final forms, so wrapping EXPR in progn would miss errors
-;; raised inside user functions. The failure (error ...) is raised outside
-;; the condition-case so the handler cannot swallow it.
+;; The expression may have any shape — a signal unwinds to this
+;; condition-case from wherever it was raised, so a body consisting of
+;; several forms (or a call into user code) is fine. The failure
+;; (error ...) is raised outside the condition-case so the handler cannot
+;; swallow it.
 (defmacro assert-error (expr message)
   `(let ((outcome (condition-case err ,expr (error 'assert-error-raised))))
      (if (eq? outcome 'assert-error-raised)

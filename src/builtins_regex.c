@@ -13,14 +13,14 @@ static LispObject *resolve_pattern(LispObject *pattern_obj, const char *name,
     if (LISP_TYPE(pattern_obj) != LISP_STRING) {
         char buf[128];
         snprintf(buf, sizeof(buf), "%s: pattern must be a string or compiled regex", name);
-        return lisp_make_error(buf);
+        return lisp_raise_error(buf);
     }
     char *error_msg = NULL;
     *re_out = compile_regex_pattern(LISP_STR_VAL(pattern_obj), &error_msg);
     if (*re_out == NULL) {
         char buf[512];
         snprintf(buf, sizeof(buf), "%s: %s", name, error_msg ? error_msg : "invalid pattern");
-        return lisp_make_error(buf);
+        return lisp_raise_error(buf);
     }
     return NULL;
 }
@@ -37,14 +37,14 @@ static LispObject *regex_compile_args(LispObject *args, const char *name,
     if (args == NIL || lisp_cdr(args) == NIL) {
         char buf[128];
         snprintf(buf, sizeof(buf), "%s requires 2 arguments", name);
-        return lisp_make_error(buf);
+        return lisp_raise_error(buf);
     }
     *pattern_obj_out = lisp_car(args);
     *string_out = lisp_car(lisp_cdr(args));
     if (LISP_TYPE((*string_out)) != LISP_STRING) {
         char buf[128];
         snprintf(buf, sizeof(buf), "%s: subject must be a string", name);
-        return lisp_make_error(buf);
+        return lisp_raise_error(buf);
     }
     return resolve_pattern(*pattern_obj_out, name, re_out);
 }
@@ -172,7 +172,7 @@ static LispObject *builtin_regex_replace(LispObject *args, Environment *env)
     LispObject *replacement_obj = lisp_car(lisp_cdr(lisp_cdr(args)));
 
     if (LISP_TYPE(string_obj) != LISP_STRING || LISP_TYPE(replacement_obj) != LISP_STRING)
-        return lisp_make_error("regex-replace: subject and replacement must be strings");
+        return lisp_raise_error("regex-replace: subject and replacement must be strings");
 
     pcre2_code *re;
     LispObject *err = resolve_pattern(pattern_obj, "regex-replace", &re);
@@ -195,7 +195,7 @@ static LispObject *builtin_regex_replace(LispObject *args, Environment *env)
     if (rc < 0) {
         char error[256];
         snprintf(error, sizeof(error), "regex-replace: substitution failed (error code: %d)", rc);
-        return lisp_make_error(error);
+        return lisp_raise_error(error);
     }
 
     /* Ensure null termination */
@@ -267,7 +267,7 @@ static LispObject *builtin_regex_escape(LispObject *args, Environment *env)
     CHECK_ARGS_1("regex-escape");
     LispObject *string_obj = lisp_car(args);
     if (LISP_TYPE(string_obj) != LISP_STRING)
-        return lisp_make_error("regex-escape requires a string");
+        return lisp_raise_error("regex-escape requires a string");
 
     const char *str = LISP_STR_VAL(string_obj);
     size_t len = strlen(str);
@@ -297,7 +297,7 @@ static LispObject *builtin_regex_valid_question(LispObject *args, Environment *e
         return LISP_TRUE;
 
     if (LISP_TYPE(pattern_obj) != LISP_STRING)
-        return lisp_make_error("regex-valid? requires a string or compiled regex");
+        return lisp_raise_error("regex-valid? requires a string or compiled regex");
 
     char *error_msg = NULL;
     pcre2_code *re = compile_regex_pattern(LISP_STR_VAL(pattern_obj), &error_msg);
@@ -316,13 +316,13 @@ static LispObject *builtin_regex_compile(LispObject *args, Environment *env)
     CHECK_ARGS_1("regex-compile");
     LispObject *p = lisp_car(args);
     if (LISP_TYPE(p) != LISP_STRING)
-        return lisp_make_error("regex-compile requires a string");
+        return lisp_raise_error("regex-compile requires a string");
     char *error_msg = NULL;
     pcre2_code *re = compile_regex_pattern(LISP_STR_VAL(p), &error_msg);
     if (re == NULL) {
         char buf[512];
         snprintf(buf, sizeof(buf), "regex-compile: %s", error_msg ? error_msg : "invalid pattern");
-        return lisp_make_error(buf);
+        return lisp_raise_error(buf);
     }
     return lisp_make_regex(re);
 }

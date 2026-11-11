@@ -10,7 +10,7 @@ lib_LIBRARIES = libditty.a
 BUILT_SOURCES = docstrings.gen.h ditty_version.h
 CLEANFILES = docstrings.gen.h ditty_version.h
 nodist_libditty_a_SOURCES = docstrings.gen.h ditty_version.h
-EXTRA_DIST = builtins_internal.h
+EXTRA_DIST = builtins_internal.h condition_internal.h
 
 .PHONY: ditty_version_force
 ditty_version.h: ditty_version_force
@@ -60,6 +60,7 @@ libditty_a_SOURCES = \
     lisp.c \
     reader.c \
     eval.c \
+    condition.c \
     print.c \
     env.c \
     builtins.c \

@@ -11,7 +11,7 @@ static LispObject *builtin_function_params(LispObject *args, Environment *env)
     if (LISP_TYPE(arg) == LISP_MACRO) {
         return LISP_MACRO_PARAMS(arg) ? LISP_MACRO_PARAMS(arg) : NIL;
     }
-    return lisp_make_error("function-params requires a lambda or macro");
+    return lisp_raise_error("function-params requires a lambda or macro");
 }
 
 static LispObject *builtin_function_body(LispObject *args, Environment *env)
@@ -25,7 +25,7 @@ static LispObject *builtin_function_body(LispObject *args, Environment *env)
     if (LISP_TYPE(arg) == LISP_MACRO) {
         return LISP_MACRO_BODY(arg) ? LISP_MACRO_BODY(arg) : NIL;
     }
-    return lisp_make_error("function-body requires a lambda or macro");
+    return lisp_raise_error("function-body requires a lambda or macro");
 }
 
 static LispObject *builtin_function_name(LispObject *args, Environment *env)
@@ -42,7 +42,7 @@ static LispObject *builtin_function_name(LispObject *args, Environment *env)
     if (LISP_TYPE(arg) == LISP_BUILTIN) {
         return LISP_BUILTIN_NAME(arg) ? lisp_make_string(LISP_BUILTIN_NAME(arg)) : NIL;
     }
-    return lisp_make_error("function-name requires a lambda, macro, or builtin");
+    return lisp_raise_error("function-name requires a lambda, macro, or builtin");
 }
 
 static LispObject *builtin_documentation(LispObject *args, Environment *env)
@@ -50,13 +50,13 @@ static LispObject *builtin_documentation(LispObject *args, Environment *env)
     (void)env; /* Docstrings are on symbols, not looked up in env */
 
     if (args == NIL) {
-        return lisp_make_error("documentation requires at least 1 argument");
+        return lisp_raise_error("documentation requires at least 1 argument");
     }
 
     LispObject *symbol = lisp_car(args);
 
     if (LISP_TYPE(symbol) != LISP_SYMBOL) {
-        return lisp_make_error("documentation requires a symbol");
+        return lisp_raise_error("documentation requires a symbol");
     }
 
     /* Docstrings are stored on the symbol (set by REGISTER, define, or set-documentation!) */
@@ -74,7 +74,7 @@ static LispObject *builtin_bound_question(LispObject *args, Environment *env)
     LispObject *symbol = lisp_car(args);
 
     if (LISP_TYPE(symbol) != LISP_SYMBOL) {
-        return lisp_make_error("bound? requires a symbol");
+        return lisp_raise_error("bound? requires a symbol");
     }
 
     /* Check if the symbol is bound */
@@ -93,11 +93,11 @@ static LispObject *builtin_set_documentation_bang(LispObject *args, Environment 
     LispObject *docstring = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(symbol) != LISP_SYMBOL) {
-        return lisp_make_error("set-documentation! first argument must be a symbol");
+        return lisp_raise_error("set-documentation! first argument must be a symbol");
     }
 
     if (LISP_TYPE(docstring) != LISP_STRING) {
-        return lisp_make_error("set-documentation! second argument must be a string");
+        return lisp_raise_error("set-documentation! second argument must be a string");
     }
 
     /* Set the docstring directly on the interned symbol */
@@ -127,7 +127,7 @@ static LispObject *builtin_exit(LispObject *args, Environment *env)
         } else if (LISP_TYPE(arg) == LISP_NUMBER) {
             code = (int)LISP_NUM_VAL(arg);
         } else {
-            return lisp_make_error("exit: argument must be a number");
+            return lisp_raise_error("exit: argument must be a number");
         }
     }
     exit(code);

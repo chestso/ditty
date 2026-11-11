@@ -4,6 +4,7 @@
 #include <string.h>
 
 static void print_list(LispObject *obj, char **buffer, size_t *size, size_t *pos);
+static void print_object(LispObject *obj, char **buffer, size_t *size, size_t *pos);
 static void append_str(char **buffer, size_t *size, size_t *pos, const char *str);
 
 static void append_str(char **buffer, size_t *size, size_t *pos, const char *str)
@@ -61,6 +62,32 @@ static void append_escaped_str(char **buffer, size_t *size, size_t *pos, const c
             break;
         }
     }
+}
+
+/* An error object printed as data: #<error TYPE "MESSAGE">. The multi-line
+ * diagnostic is lisp_error_report(); only the CLI uses that, and only for a
+ * signaled error. Keeping the two apart is what lets a captured error value
+ * print as a value. */
+static void print_error_data(LispObject *obj, char **buffer, size_t *size, size_t *pos)
+{
+    append_str(buffer, size, pos, "#<error ");
+
+    if (LISP_ERROR_TYPE(obj) != NULL && LISP_TYPE(LISP_ERROR_TYPE(obj)) == LISP_SYMBOL) {
+        append_str(buffer, size, pos, LISP_SYM_VAL(LISP_ERROR_TYPE(obj))->name);
+    } else {
+        append_str(buffer, size, pos, "error");
+    }
+
+    append_str(buffer, size, pos, " \"");
+    append_escaped_str(buffer, size, pos, LISP_ERROR_MESSAGE(obj));
+    append_str(buffer, size, pos, "\"");
+
+    if (LISP_ERROR_DATA(obj) != NIL && LISP_ERROR_DATA(obj) != NULL) {
+        append_str(buffer, size, pos, " ");
+        print_object(LISP_ERROR_DATA(obj), buffer, size, pos);
+    }
+
+    append_str(buffer, size, pos, ">");
 }
 
 static void print_object(LispObject *obj, char **buffer, size_t *size, size_t *pos)
@@ -131,41 +158,8 @@ static void print_object(LispObject *obj, char **buffer, size_t *size, size_t *p
         break;
 
     case LISP_ERROR:
-    {
-        append_str(buffer, size, pos, "ERROR: [");
-
-        /* Print error type symbol */
-        if (LISP_ERROR_TYPE(obj) != NULL &&
-            LISP_TYPE(LISP_ERROR_TYPE(obj)) == LISP_SYMBOL) {
-            append_str(buffer, size, pos, LISP_SYM_VAL(LISP_ERROR_TYPE(obj))->name);
-        } else {
-            append_str(buffer, size, pos, "error");
-        }
-
-        append_str(buffer, size, pos, "] ");
-        append_str(buffer, size, pos, LISP_ERROR_MESSAGE(obj));
-
-        /* Print data if present */
-        if (LISP_ERROR_DATA(obj) != NIL && LISP_ERROR_DATA(obj) != NULL) {
-            append_str(buffer, size, pos, " (data: ");
-            print_object(LISP_ERROR_DATA(obj), buffer, size, pos);
-            append_str(buffer, size, pos, ")");
-        }
-
-        /* Print stack trace if available */
-        if (LISP_ERROR_STACK_TRACE(obj) != NIL && LISP_ERROR_STACK_TRACE(obj) != NULL) {
-            LispObject *stack = LISP_ERROR_STACK_TRACE(obj);
-            append_str(buffer, size, pos, "\nCall stack:");
-            int frame_num = 0;
-            while (stack != NIL && LISP_TYPE(stack) == LISP_CONS && frame_num < 20) {
-                append_str(buffer, size, pos, "\n  at ");
-                print_object(lisp_car(stack), buffer, size, pos);
-                stack = lisp_cdr(stack);
-                frame_num++;
-            }
-        }
+        print_error_data(obj, buffer, size, pos);
         break;
-    }
 
     case LISP_INTEGER:
         snprintf(temp, sizeof(temp), "%lld", LISP_INT_VAL(obj));
@@ -288,6 +282,53 @@ char *lisp_print(LispObject *obj)
     return buffer;
 }
 
+/* The diagnostic for a signaled error: type, message, optional data and the
+ * stack captured at the signal point. The CLI prints this (to stderr) when a
+ * lisp_try_* call returns LISP_SIGNALED; a caught error value goes through
+ * lisp_print() instead. */
+char *lisp_error_report(LispObject *error)
+{
+    size_t size = 256;
+    size_t pos = 0;
+    char *buffer = GC_malloc(size);
+    buffer[0] = '\0';
+
+    if (error == NULL || LISP_TYPE(error) != LISP_ERROR) {
+        append_str(&buffer, &size, &pos, "ERROR: ");
+        print_object(error, &buffer, &size, &pos);
+        return buffer;
+    }
+
+    append_str(&buffer, &size, &pos, "ERROR: [");
+    if (LISP_ERROR_TYPE(error) != NULL && LISP_TYPE(LISP_ERROR_TYPE(error)) == LISP_SYMBOL) {
+        append_str(&buffer, &size, &pos, LISP_SYM_VAL(LISP_ERROR_TYPE(error))->name);
+    } else {
+        append_str(&buffer, &size, &pos, "error");
+    }
+    append_str(&buffer, &size, &pos, "] ");
+    append_str(&buffer, &size, &pos, LISP_ERROR_MESSAGE(error));
+
+    if (LISP_ERROR_DATA(error) != NIL && LISP_ERROR_DATA(error) != NULL) {
+        append_str(&buffer, &size, &pos, " (data: ");
+        print_object(LISP_ERROR_DATA(error), &buffer, &size, &pos);
+        append_str(&buffer, &size, &pos, ")");
+    }
+
+    if (LISP_ERROR_STACK_TRACE(error) != NIL && LISP_ERROR_STACK_TRACE(error) != NULL) {
+        LispObject *stack = LISP_ERROR_STACK_TRACE(error);
+        append_str(&buffer, &size, &pos, "\nCall stack:");
+        int frame_num = 0;
+        while (stack != NIL && LISP_TYPE(stack) == LISP_CONS && frame_num < 20) {
+            append_str(&buffer, &size, &pos, "\n  at ");
+            print_object(lisp_car(stack), &buffer, &size, &pos);
+            stack = lisp_cdr(stack);
+            frame_num++;
+        }
+    }
+
+    return buffer;
+}
+
 /* Helper functions for princ (prints directly to stdout, strings without quotes) */
 static void princ_list(LispObject *obj);
 static void princ_object(LispObject *obj);
@@ -351,40 +392,8 @@ static void princ_object(LispObject *obj)
         break;
 
     case LISP_ERROR:
-    {
-        printf("ERROR: [");
-
-        /* Print error type symbol */
-        if (LISP_ERROR_TYPE(obj) != NULL &&
-            LISP_TYPE(LISP_ERROR_TYPE(obj)) == LISP_SYMBOL) {
-            printf("%s", LISP_SYM_VAL(LISP_ERROR_TYPE(obj))->name);
-        } else {
-            printf("error");
-        }
-
-        printf("] %s", LISP_ERROR_MESSAGE(obj));
-
-        /* Print data if present */
-        if (LISP_ERROR_DATA(obj) != NIL && LISP_ERROR_DATA(obj) != NULL) {
-            printf(" (data: ");
-            princ_object(LISP_ERROR_DATA(obj));
-            printf(")");
-        }
-
-        /* Print stack trace if available */
-        if (LISP_ERROR_STACK_TRACE(obj) != NIL && LISP_ERROR_STACK_TRACE(obj) != NULL) {
-            LispObject *stack = LISP_ERROR_STACK_TRACE(obj);
-            printf("\nCall stack:");
-            int frame_num = 0;
-            while (stack != NIL && LISP_TYPE(stack) == LISP_CONS && frame_num < 20) {
-                printf("\n  at ");
-                princ_object(lisp_car(stack));
-                stack = lisp_cdr(stack);
-                frame_num++;
-            }
-        }
+        printf("%s", lisp_print(obj));
         break;
-    }
 
     case LISP_INTEGER:
         printf("%lld", LISP_INT_VAL(obj));

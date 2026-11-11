@@ -247,14 +247,14 @@ static char *highlight_lisp(const char *text, size_t len, void *userdata)
     free(result);
 
 fallback:
-{
-    char *fallback = malloc(len + 1);
-    if (fallback) {
-        memcpy(fallback, text, len);
-        fallback[len] = '\0';
+    {
+        char *fallback = malloc(len + 1);
+        if (fallback) {
+            memcpy(fallback, text, len);
+            fallback[len] = '\0';
+        }
+        return fallback;
     }
-    return fallback;
-}
 }
 
 /* --- Completion --- */
@@ -545,12 +545,11 @@ static int handle_command(const char *input, Environment *env)
         }
 
         char *fname = GC_strdup(filename);
-        LispObject *result = lisp_load_file(fname, env);
+        LispObject *result = NULL;
 
-        if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
-            char *err_str = lisp_print(result);
-            print_raw_output(color_error, err_str, SGR_RESET);
-        } else if (!(LISP_TYPE(result) == LISP_ERROR && LISP_ERROR_CAUGHT(result))) {
+        if (lisp_try_load_file(fname, env, &result) == LISP_SIGNALED) {
+            print_raw_output(color_error, lisp_error_report(result), SGR_RESET);
+        } else {
             char *output = lisp_print(result);
             const char *clr = color_for_type(LISP_TYPE(result));
             print_raw_output(clr, output, SGR_RESET);
@@ -616,13 +615,13 @@ static void handle_line_submit(char *line)
      * prompt below the output. */
     tui_runtime_finish_inline(g_runtime);
 
-    LispObject *eval_result = lisp_eval(expr, g_env);
+    LispObject *eval_result = NULL;
 
-    /* Display result */
-    if (LISP_TYPE(eval_result) == LISP_ERROR && !LISP_ERROR_CAUGHT(eval_result)) {
-        char *err_str = lisp_print(eval_result);
-        print_raw_output(color_error, err_str, SGR_RESET);
-    } else if (!(LISP_TYPE(eval_result) == LISP_ERROR && LISP_ERROR_CAUGHT(eval_result))) {
+    /* Display result: a signaled error is a diagnostic, a returned error
+     * value is a value like any other. */
+    if (lisp_try_eval(expr, g_env, &eval_result) == LISP_SIGNALED) {
+        print_raw_output(color_error, lisp_error_report(eval_result), SGR_RESET);
+    } else {
         char *output = lisp_print(eval_result);
         const char *clr = color_for_type(LISP_TYPE(eval_result));
         print_raw_output(clr, output, SGR_RESET);
@@ -948,26 +947,20 @@ int main(int argc, char **argv)
                 break;
 
             if (LISP_TYPE(expr) == LISP_ERROR) {
-                char *err_str = lisp_print(expr);
-                fprintf(stderr, "%s\n", err_str);
+                fprintf(stderr, "%s\n", lisp_error_report(expr));
                 lisp_cleanup();
                 return 1;
             }
 
-            LispObject *result = lisp_eval(expr, env);
+            LispObject *result = NULL;
 
-            if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
-                char *err_str = lisp_print(result);
-                fprintf(stderr, "%s\n", err_str);
+            if (lisp_try_eval(expr, env, &result) == LISP_SIGNALED) {
+                fprintf(stderr, "%s\n", lisp_error_report(result));
                 lisp_cleanup();
                 return 1;
             }
 
-            /* Skip printing caught errors */
-            if (!(LISP_TYPE(result) == LISP_ERROR && LISP_ERROR_CAUGHT(result))) {
-                char *output = lisp_print(result);
-                printf("%s\n", output);
-            }
+            printf("%s\n", lisp_print(result));
         }
 
         lisp_cleanup();
@@ -1049,16 +1042,14 @@ int main(int argc, char **argv)
                     break;
 
                 if (LISP_TYPE(expr) == LISP_ERROR) {
-                    char *err_str = lisp_print(expr);
-                    fprintf(stderr, "%s: %s\n", argv[i], err_str);
+                    fprintf(stderr, "%s: %s\n", argv[i], lisp_error_report(expr));
                     return 1;
                 }
 
-                LispObject *result = lisp_eval(expr, env);
+                LispObject *result = NULL;
 
-                if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
-                    char *err_str = lisp_print(result);
-                    fprintf(stderr, "%s: %s\n", argv[i], err_str);
+                if (lisp_try_eval(expr, env, &result) == LISP_SIGNALED) {
+                    fprintf(stderr, "%s: %s\n", argv[i], lisp_error_report(result));
                     return 1;
                 }
             }
@@ -1155,14 +1146,12 @@ int main(int argc, char **argv)
         }
 
         /* Evaluate */
-        LispObject *result = lisp_eval(expr, env);
+        LispObject *result = NULL;
 
-        if (LISP_TYPE(result) == LISP_ERROR && !LISP_ERROR_CAUGHT(result)) {
-            char *err_str = lisp_print(result);
-            printf("%s\n", err_str);
-        } else if (!(LISP_TYPE(result) == LISP_ERROR && LISP_ERROR_CAUGHT(result))) {
-            char *output = lisp_print(result);
-            printf("%s\n", output);
+        if (lisp_try_eval(expr, env, &result) == LISP_SIGNALED) {
+            printf("%s\n", lisp_error_report(result));
+        } else {
+            printf("%s\n", lisp_print(result));
         }
 
         expr_len = 0;

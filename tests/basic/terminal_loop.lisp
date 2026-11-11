@@ -118,7 +118,7 @@
 (assert-equal 0 eof-calls "EOF delivers no event")
 
 ;; ---------------------------------------------------------------------------
-;; Errors are values.
+;; A handler error is caught by the loop's condition-case.
 ;; ---------------------------------------------------------------------------
 (define error-result
   (terminal-event-loop (lambda (ev) (error "handler exploded"))
@@ -127,7 +127,8 @@
     (cons :read-byte-fn (lambda () nil))
     (cons :available-fn (lambda () nil)))))
 
-(assert-true (error? error-result) "a handler error is returned, not raised")
+(assert-true (error? error-result)
+ "a handler error is caught by the loop's condition-case and returned as its value")
 
 ;; ... and the session depth is restored.
 (assert-equal 0 terminal:*terminal-raw-depth*

@@ -40,14 +40,14 @@ static LispObject *builtin_format(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL || lisp_cdr(args) == NIL) {
-        return lisp_make_error("format requires at least 2 arguments");
+        return lisp_raise_error("format requires at least 2 arguments");
     }
 
     LispObject *dest = lisp_car(args);
     LispObject *format_str_obj = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(format_str_obj) != LISP_STRING) {
-        return lisp_make_error("format requires a string as format argument");
+        return lisp_raise_error("format requires a string as format argument");
     }
 
     const char *format_str = LISP_STR_VAL(format_str_obj);
@@ -86,7 +86,7 @@ static LispObject *builtin_format(LispObject *args, Environment *env)
             } else if (directive == 'A' || directive == 'a') {
                 /* Aesthetic - princ style (no quotes) */
                 if (current_arg == NIL) {
-                    return lisp_make_error("format: not enough arguments for format directives");
+                    return lisp_raise_error("format: not enough arguments for format directives");
                 }
                 LispObject *arg = lisp_car(current_arg);
                 char *arg_str = lisp_print(arg);
@@ -109,7 +109,7 @@ static LispObject *builtin_format(LispObject *args, Environment *env)
             } else if (directive == 'S' || directive == 's') {
                 /* S-expression - prin1 style (with quotes) */
                 if (current_arg == NIL) {
-                    return lisp_make_error("format: not enough arguments for format directives");
+                    return lisp_raise_error("format: not enough arguments for format directives");
                 }
                 LispObject *arg = lisp_car(current_arg);
                 char *arg_str = lisp_print(arg);
@@ -160,7 +160,7 @@ static LispObject *builtin_format(LispObject *args, Environment *env)
         fflush(stdout);
         return NIL;
     } else {
-        return lisp_make_error("format: invalid destination (use nil for string or #t for stdout)");
+        return lisp_raise_error("format: invalid destination (use nil for string or #t for stdout)");
     }
 }
 

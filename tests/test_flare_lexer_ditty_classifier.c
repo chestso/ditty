@@ -116,7 +116,8 @@ static void test_classify_user_function(void)
     const char *def = "(define (my-func x) x)";
     LispObject *expr = lisp_read(&def);
     ASSERT_NOT_NULL(expr);
-    lisp_eval(expr, g_env);
+    LispObject *result = NULL;
+    ASSERT_EQ(lisp_try_eval(expr, g_env, &result), LISP_OK);
 
     ASSERT_EQ(ditty_classify_atom("my-func", 7, g_env), HL_NAME_FUNCTION);
     teardown();
