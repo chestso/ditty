@@ -1,34 +1,52 @@
 #include "builtins_internal.h"
 
-/* Arithmetic loop: validate + accumulate numeric args */
-#define ARITH_LOOP(accum, op, name)                                                \
-    while (args != NIL && args != NULL) {                                          \
-        LispObject *_a = lisp_car(args);                                           \
-        int _ai = 0;                                                               \
-        double _v = get_numeric_value(_a, &_ai);                                   \
-        if (!_ai && LISP_TYPE(_a) != LISP_NUMBER && LISP_TYPE(_a) != LISP_INTEGER) \
-            return lisp_make_error(name " requires numbers");                      \
-        if (!_ai)                                                                  \
-            all_integers = 0;                                                      \
-        accum op _v;                                                               \
-        args = lisp_cdr(args);                                                     \
-    }
-
-/* Return integer if all args were ints, else float */
-#define ARITH_RETURN(accum)                                     \
-    return all_integers ? lisp_make_integer((long long)(accum)) \
-                        : lisp_make_number(accum)
-
 static LispObject *builtin_add(LispObject *args, Environment *env)
 {
     (void)env;
-    if (args == NIL)
-        return lisp_make_integer(0);
-
+    LispObject *head = args;
+    long long integer_sum = 0;
+    double float_sum = 0.0;
     int all_integers = 1;
-    double sum = 0;
-    ARITH_LOOP(sum, +=, "+");
-    ARITH_RETURN(sum);
+    int overflow = 0;
+
+    while (args != NIL && args != NULL) {
+        LispObject *arg = lisp_car(args);
+        LispType type = LISP_TYPE(arg);
+        if (type == LISP_INTEGER) {
+            long long value = LISP_INT_VAL(arg);
+            float_sum += (double)value;
+            if (!overflow && __builtin_add_overflow(integer_sum, value, &integer_sum))
+                overflow = 1;
+        } else if (type == LISP_NUMBER) {
+            all_integers = 0;
+            float_sum += LISP_NUM_VAL(arg);
+        } else {
+            return lisp_make_error("+ requires numbers");
+        }
+        args = lisp_cdr(args);
+    }
+
+    if (all_integers && !overflow)
+        return lisp_make_integer(integer_sum);
+
+#ifdef __SIZEOF_INT128__
+    /* Retry exact integer arithmetic with 128 bits: intermediates may
+       overflow long long while the final result still fits. */
+    if (all_integers) {
+        __int128 wide_sum = 0;
+        int wide_overflow = 0;
+        for (args = head; args != NIL && args != NULL; args = lisp_cdr(args)) {
+            if (__builtin_add_overflow(wide_sum, (__int128)LISP_INT_VAL(lisp_car(args)), &wide_sum)) {
+                wide_overflow = 1;
+                break;
+            }
+        }
+        if (!wide_overflow && wide_sum >= LLONG_MIN && wide_sum <= LLONG_MAX)
+            return lisp_make_integer((long long)wide_sum);
+    }
+#endif
+
+    return lisp_make_number(float_sum);
 }
 
 static LispObject *builtin_subtract(LispObject *args, Environment *env)
@@ -37,32 +55,110 @@ static LispObject *builtin_subtract(LispObject *args, Environment *env)
     CHECK_ARGS_1("-");
 
     LispObject *first = lisp_car(args);
-    int first_is_integer = 0;
-    double result = get_numeric_value(first, &first_is_integer);
-    int all_integers = first_is_integer;
-    args = lisp_cdr(args);
+    LispType first_type = LISP_TYPE(first);
+    if (first_type != LISP_INTEGER && first_type != LISP_NUMBER)
+        return lisp_make_error("- requires numbers");
 
-    if (args == NIL)
-        return first_is_integer ? lisp_make_integer((long long)-result)
-                                : lisp_make_number(-result);
+    LispObject *rest = lisp_cdr(args);
 
-    ARITH_LOOP(result, -=, "-");
-    ARITH_RETURN(result);
+    if (rest == NIL) {
+        if (first_type == LISP_INTEGER) {
+            long long value = LISP_INT_VAL(first);
+            if (value == LLONG_MIN)
+                return lisp_make_number(-(double)value);
+            return lisp_make_integer(-value);
+        }
+        return lisp_make_number(-LISP_NUM_VAL(first));
+    }
+
+    long long integer_result = first_type == LISP_INTEGER ? LISP_INT_VAL(first) : 0;
+    double float_result = first_type == LISP_INTEGER ? (double)LISP_INT_VAL(first) : LISP_NUM_VAL(first);
+    int all_integers = first_type == LISP_INTEGER;
+    int overflow = 0;
+
+    for (args = rest; args != NIL && args != NULL; args = lisp_cdr(args)) {
+        LispObject *arg = lisp_car(args);
+        LispType type = LISP_TYPE(arg);
+        if (type == LISP_INTEGER) {
+            long long value = LISP_INT_VAL(arg);
+            float_result -= (double)value;
+            if (all_integers && !overflow && __builtin_sub_overflow(integer_result, value, &integer_result))
+                overflow = 1;
+        } else if (type == LISP_NUMBER) {
+            all_integers = 0;
+            float_result -= LISP_NUM_VAL(arg);
+        } else {
+            return lisp_make_error("- requires numbers");
+        }
+    }
+
+    if (all_integers && !overflow)
+        return lisp_make_integer(integer_result);
+
+#ifdef __SIZEOF_INT128__
+    if (all_integers) {
+        __int128 wide_result = LISP_INT_VAL(first);
+        int wide_overflow = 0;
+        for (args = rest; args != NIL && args != NULL; args = lisp_cdr(args)) {
+            if (__builtin_sub_overflow(wide_result, (__int128)LISP_INT_VAL(lisp_car(args)), &wide_result)) {
+                wide_overflow = 1;
+                break;
+            }
+        }
+        if (!wide_overflow && wide_result >= LLONG_MIN && wide_result <= LLONG_MAX)
+            return lisp_make_integer((long long)wide_result);
+    }
+#endif
+
+    return lisp_make_number(float_result);
 }
 
 static LispObject *builtin_multiply(LispObject *args, Environment *env)
 {
     (void)env;
-    if (args == NIL)
-        return lisp_make_integer(1);
-
+    LispObject *head = args;
+    long long integer_product = 1;
+    double float_product = 1.0;
     int all_integers = 1;
-    double product = 1;
-    ARITH_LOOP(product, *=, "*");
-    ARITH_RETURN(product);
+    int overflow = 0;
+
+    while (args != NIL && args != NULL) {
+        LispObject *arg = lisp_car(args);
+        LispType type = LISP_TYPE(arg);
+        if (type == LISP_INTEGER) {
+            long long value = LISP_INT_VAL(arg);
+            float_product *= (double)value;
+            if (!overflow && __builtin_mul_overflow(integer_product, value, &integer_product))
+                overflow = 1;
+        } else if (type == LISP_NUMBER) {
+            all_integers = 0;
+            float_product *= LISP_NUM_VAL(arg);
+        } else {
+            return lisp_make_error("* requires numbers");
+        }
+        args = lisp_cdr(args);
+    }
+
+    if (all_integers && !overflow)
+        return lisp_make_integer(integer_product);
+
+#ifdef __SIZEOF_INT128__
+    if (all_integers) {
+        __int128 wide_product = 1;
+        int wide_overflow = 0;
+        for (args = head; args != NIL && args != NULL; args = lisp_cdr(args)) {
+            if (__builtin_mul_overflow(wide_product, (__int128)LISP_INT_VAL(lisp_car(args)), &wide_product)) {
+                wide_overflow = 1;
+                break;
+            }
+        }
+        if (!wide_overflow && wide_product >= LLONG_MIN && wide_product <= LLONG_MAX)
+            return lisp_make_integer((long long)wide_product);
+    }
+#endif
+
+    return lisp_make_number(float_product);
 }
-#undef ARITH_LOOP
-#undef ARITH_RETURN
 
 static LispObject *builtin_divide(LispObject *args, Environment *env)
 {
@@ -294,18 +390,19 @@ static LispObject *builtin_even_question(LispObject *args, Environment *env)
     CHECK_ARGS_1("even?");
 
     LispObject *arg = lisp_car(args);
-    int arg_is_integer;
-    double arg_val = get_numeric_value(arg, &arg_is_integer);
+    LispType type = LISP_TYPE(arg);
 
-    if (LISP_TYPE(arg) != LISP_INTEGER && LISP_TYPE(arg) != LISP_NUMBER) {
-        return lisp_make_error("even? requires a number");
+    if (type == LISP_INTEGER)
+        return (LISP_INT_VAL(arg) & 1) == 0 ? LISP_TRUE : NIL;
+
+    if (type == LISP_NUMBER) {
+        double value = LISP_NUM_VAL(arg);
+        if (!isfinite(value))
+            return lisp_make_error("even?: argument must be finite");
+        return fmod(trunc(value), 2.0) == 0 ? LISP_TRUE : NIL;
     }
 
-    long long val = (long long)arg_val;
-    if ((val & 1) == 0) {
-        return lisp_make_boolean(1);
-    }
-    return lisp_make_boolean(0);
+    return lisp_make_error("even? requires a number");
 }
 
 static LispObject *builtin_odd_question(LispObject *args, Environment *env)
@@ -314,18 +411,19 @@ static LispObject *builtin_odd_question(LispObject *args, Environment *env)
     CHECK_ARGS_1("odd?");
 
     LispObject *arg = lisp_car(args);
-    int arg_is_integer;
-    double arg_val = get_numeric_value(arg, &arg_is_integer);
+    LispType type = LISP_TYPE(arg);
 
-    if (LISP_TYPE(arg) != LISP_INTEGER && LISP_TYPE(arg) != LISP_NUMBER) {
-        return lisp_make_error("odd? requires a number");
+    if (type == LISP_INTEGER)
+        return (LISP_INT_VAL(arg) & 1) != 0 ? LISP_TRUE : NIL;
+
+    if (type == LISP_NUMBER) {
+        double value = LISP_NUM_VAL(arg);
+        if (!isfinite(value))
+            return lisp_make_error("odd?: argument must be finite");
+        return fmod(trunc(value), 2.0) != 0 ? LISP_TRUE : NIL;
     }
 
-    long long val = (long long)arg_val;
-    if ((val & 1) == 1) {
-        return lisp_make_boolean(1);
-    }
-    return lisp_make_boolean(0);
+    return lisp_make_error("odd? requires a number");
 }
 
 static LispObject *builtin_max(LispObject *args, Environment *env)
@@ -334,31 +432,23 @@ static LispObject *builtin_max(LispObject *args, Environment *env)
     if (args == NIL)
         return lisp_make_error("max requires at least one argument");
 
-    int all_integers = 1;
-    LispObject *first = lisp_car(args);
-    int first_is_integer = 0;
-    double result = get_numeric_value(first, &first_is_integer);
-    if (!first_is_integer && LISP_TYPE(first) != LISP_NUMBER && LISP_TYPE(first) != LISP_INTEGER)
+    LispObject *best = lisp_car(args);
+    LispType best_type = LISP_TYPE(best);
+    if (best_type != LISP_INTEGER && best_type != LISP_NUMBER)
         return lisp_make_error("max requires numbers");
-    if (!first_is_integer)
-        all_integers = 0;
 
-    args = lisp_cdr(args);
-    while (args != NIL && args != NULL) {
+    for (args = lisp_cdr(args); args != NIL && args != NULL; args = lisp_cdr(args)) {
         LispObject *arg = lisp_car(args);
-        int arg_is_integer = 0;
-        double val = get_numeric_value(arg, &arg_is_integer);
-        if (!arg_is_integer && LISP_TYPE(arg) != LISP_NUMBER && LISP_TYPE(arg) != LISP_INTEGER)
+        LispType type = LISP_TYPE(arg);
+        if (type != LISP_INTEGER && type != LISP_NUMBER)
             return lisp_make_error("max requires numbers");
-        if (!arg_is_integer)
-            all_integers = 0;
-        if (val > result)
-            result = val;
-        args = lisp_cdr(args);
+
+        int unordered = 0;
+        if (number_compare(arg, best, &unordered) > 0)
+            best = arg;
     }
 
-    return all_integers ? lisp_make_integer((long long)result)
-                        : lisp_make_number(result);
+    return best;
 }
 
 static LispObject *builtin_min(LispObject *args, Environment *env)
@@ -367,31 +457,23 @@ static LispObject *builtin_min(LispObject *args, Environment *env)
     if (args == NIL)
         return lisp_make_error("min requires at least one argument");
 
-    int all_integers = 1;
-    LispObject *first = lisp_car(args);
-    int first_is_integer = 0;
-    double result = get_numeric_value(first, &first_is_integer);
-    if (!first_is_integer && LISP_TYPE(first) != LISP_NUMBER && LISP_TYPE(first) != LISP_INTEGER)
+    LispObject *best = lisp_car(args);
+    LispType best_type = LISP_TYPE(best);
+    if (best_type != LISP_INTEGER && best_type != LISP_NUMBER)
         return lisp_make_error("min requires numbers");
-    if (!first_is_integer)
-        all_integers = 0;
 
-    args = lisp_cdr(args);
-    while (args != NIL && args != NULL) {
+    for (args = lisp_cdr(args); args != NIL && args != NULL; args = lisp_cdr(args)) {
         LispObject *arg = lisp_car(args);
-        int arg_is_integer = 0;
-        double val = get_numeric_value(arg, &arg_is_integer);
-        if (!arg_is_integer && LISP_TYPE(arg) != LISP_NUMBER && LISP_TYPE(arg) != LISP_INTEGER)
+        LispType type = LISP_TYPE(arg);
+        if (type != LISP_INTEGER && type != LISP_NUMBER)
             return lisp_make_error("min requires numbers");
-        if (!arg_is_integer)
-            all_integers = 0;
-        if (val < result)
-            result = val;
-        args = lisp_cdr(args);
+
+        int unordered = 0;
+        if (number_compare(arg, best, &unordered) < 0)
+            best = arg;
     }
 
-    return all_integers ? lisp_make_integer((long long)result)
-                        : lisp_make_number(result);
+    return best;
 }
 
 /* ---- Bitwise Operations ---- */
@@ -472,10 +554,40 @@ static LispObject *builtin_ash(LispObject *args, Environment *env)
     long long value = LISP_INT_VAL(value_obj);
     long long count = LISP_INT_VAL(count_obj);
 
-    if (count >= 0)
-        return lisp_make_integer(value << count);
-    else
-        return lisp_make_integer(value >> (-count));
+    if (count < 0) {
+        /* Arithmetic right shift; by 63 or more only the sign survives */
+        if (count <= -63)
+            return lisp_make_integer(value < 0 ? -1 : 0);
+        return lisp_make_integer(value >> (unsigned int)(-count));
+    }
+
+    if (value == 0)
+        return lisp_make_integer(0);
+
+    /* Exact left shift while the result still fits in long long */
+#ifdef __SIZEOF_INT128__
+    if (count < 127) {
+        __int128 wide;
+        if (!__builtin_mul_overflow((__int128)value, (__int128)1 << count, &wide) &&
+            wide >= LLONG_MIN && wide <= LLONG_MAX)
+            return lisp_make_integer((long long)wide);
+    }
+#else
+    if (count < 63) {
+        long long shifted;
+        if (!__builtin_mul_overflow(value, 1LL << count, &shifted))
+            return lisp_make_integer(shifted);
+    }
+#endif
+
+    /* Beyond the integer range: fall back to a float */
+    if (count > 1024)
+        return lisp_make_error("ash: result is not a finite number");
+
+    double result = ldexp((double)value, (int)count);
+    if (!isfinite(result))
+        return lisp_make_error("ash: result is not a finite number");
+    return lisp_make_number(result);
 }
 
 static LispObject *builtin_logcount(LispObject *args, Environment *env)

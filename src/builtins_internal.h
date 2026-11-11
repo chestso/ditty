@@ -77,6 +77,60 @@ static inline LispObject *make_integral_result(double v)
     return lisp_make_number(v);
 }
 
+/* Compare a long long with a double exactly. Sets *unordered when D is NaN. */
+static inline int compare_int_double(long long i, double d, int *unordered)
+{
+    if (isnan(d)) {
+        *unordered = 1;
+        return 0;
+    }
+    if (d >= 9223372036854775808.0) /* 2^63 */
+        return -1;
+    if (d < -9223372036854775808.0)
+        return 1;
+
+    long long truncated = (long long)d; /* in range, so the cast is exact */
+    if (i < truncated)
+        return -1;
+    if (i > truncated)
+        return 1;
+
+    /* Same integral part: the fractional part decides */
+    double integral = (double)truncated;
+    if (d == integral)
+        return 0;
+    return d > integral ? -1 : 1;
+}
+
+/* Compare two numbers exactly. Sets *unordered when either operand is NaN.
+   Returns -1, 0, or 1. Only valid for LISP_INTEGER/LISP_NUMBER operands. */
+static inline int number_compare(LispObject *a, LispObject *b, int *unordered)
+{
+    *unordered = 0;
+    int a_is_integer = LISP_TYPE(a) == LISP_INTEGER;
+    int b_is_integer = LISP_TYPE(b) == LISP_INTEGER;
+
+    if (a_is_integer && b_is_integer) {
+        long long av = LISP_INT_VAL(a);
+        long long bv = LISP_INT_VAL(b);
+        return (av > bv) - (av < bv);
+    }
+
+    if (!a_is_integer && !b_is_integer) {
+        double av = LISP_NUM_VAL(a);
+        double bv = LISP_NUM_VAL(b);
+        if (isnan(av) || isnan(bv)) {
+            *unordered = 1;
+            return 0;
+        }
+        return (av > bv) - (av < bv);
+    }
+
+    if (a_is_integer)
+        return compare_int_double(LISP_INT_VAL(a), LISP_NUM_VAL(b), unordered);
+    return -compare_int_double(LISP_INT_VAL(b), LISP_NUM_VAL(a), unordered);
+}
+
 /* Cross-file dependency: defined in builtins_lists.c, used by builtins_comparison.c */
 int objects_equal_recursive(LispObject *a, LispObject *b);
 

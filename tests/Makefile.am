@@ -222,6 +222,7 @@ TESTS = \
     regression/colon_symbol.lisp \
     regression/cond_case_multi_expr.lisp \
     regression/condition_case_tail_call.lisp \
+    regression/integer_precision.lisp \
     regression/list_ref_type_check.lisp \
     regression/multiline_parsing.lisp \
     regression/nested-unknown-hash-syntax.lisp \
@@ -314,6 +315,7 @@ EXTRA_DIST = \
     regression/colon_symbol.lisp \
     regression/cond_case_multi_expr.lisp \
     regression/condition_case_tail_call.lisp \
+    regression/integer_precision.lisp \
     regression/list_ref_type_check.lisp \
     regression/multiline_parsing.lisp \
     regression/nested-unknown-hash-syntax.lisp \
