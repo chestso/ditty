@@ -140,3 +140,40 @@
 ;; Test that #t from different sources is the same object
 (assert-true (eq? (if #t #t nil) #t) "eq? with #t from if expression")
 (assert-true (eq? (and #t #t) #t) "eq? with #t from and expression")
+
+;; Numeric comparisons are exact above 2^53
+(assert-false (= 9007199254740993 9007199254740992)
+ "= compares large integers exactly")
+
+(assert-true (< 9007199254740992 9007199254740993)
+ "< orders large integers exactly")
+(assert-true (> 9007199254740993 9007199254740992.0)
+ "> compares mixed integers and floats exactly")
+
+(assert-false (= 9007199254740993 9007199254740992.0)
+ "= compares mixed integers and floats exactly")
+
+(assert-true (< 9007199254740993 9007199254740994.0)
+ "< orders mixed integers and floats exactly")
+(assert-true (= 9007199254740992 9007199254740992.0)
+ "= succeeds when the float represents the integer exactly")
+
+;; All five numeric comparisons check every adjacent pair
+(assert-true (< 1 2 3 4) "chained <")
+
+(assert-false (< 1 2 0) "chained < rejects the last pair")
+(assert-false (> 3 2 5) "chained > rejects the last pair")
+
+(assert-true (<= 1 2 2 3) "chained <=")
+
+(assert-false (<= 1 2 1) "chained <= rejects the last pair")
+
+(assert-true (>= 10 5 5 2) "chained >=")
+
+(assert-false (>= 3 2 4) "chained >= rejects the last pair")
+
+(assert-true (= 5 5 5) "chained =")
+
+(assert-false (= 5 5 3) "chained = rejects the last pair")
+
+(assert-error (= 5) "= needs two arguments")

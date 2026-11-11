@@ -1,26 +1,100 @@
 #include "builtins_internal.h"
 
-/* Number comparisons */
-#define DEFINE_NUM_CMP(cname, opname, op)                              \
-    static LispObject *cname(LispObject *args, Environment *env)       \
-    {                                                                  \
-        (void)env;                                                     \
-        CHECK_ARGS_2(opname);                                          \
-        LispObject *a = lisp_car(args), *b = lisp_car(lisp_cdr(args)); \
-        int ai, bi;                                                    \
-        double av = get_numeric_value(a, &ai),                         \
-               bv = get_numeric_value(b, &bi);                         \
-        if ((!ai && LISP_TYPE(a) != LISP_NUMBER) ||                    \
-            (!bi && LISP_TYPE(b) != LISP_NUMBER))                      \
-            return lisp_make_error(opname " requires numbers");        \
-        return (av op bv) ? LISP_TRUE : NIL;                           \
+#include <stdio.h>
+
+/* Number comparisons. All five predicates take two or more arguments and
+   check every adjacent pair, comparing exactly (see number_compare). */
+
+enum numeric_compare_mode
+{
+    NUMERIC_EQ,
+    NUMERIC_LT,
+    NUMERIC_GT,
+    NUMERIC_LE,
+    NUMERIC_GE
+};
+
+static int numeric_compare_accepts(enum numeric_compare_mode mode, int cmp)
+{
+    switch (mode) {
+    case NUMERIC_EQ:
+        return cmp == 0;
+    case NUMERIC_LT:
+        return cmp < 0;
+    case NUMERIC_GT:
+        return cmp > 0;
+    case NUMERIC_LE:
+        return cmp <= 0;
+    case NUMERIC_GE:
+        return cmp >= 0;
     }
-DEFINE_NUM_CMP(builtin_gt, ">", >)
-DEFINE_NUM_CMP(builtin_lt, "<", <)
-DEFINE_NUM_CMP(builtin_eq, "=", ==)
-DEFINE_NUM_CMP(builtin_gte, ">=", >=)
-DEFINE_NUM_CMP(builtin_lte, "<=", <=)
-#undef DEFINE_NUM_CMP
+    return 0;
+}
+
+static LispObject *numeric_compare_chain(LispObject *args, const char *name, enum numeric_compare_mode mode)
+{
+    char message[64];
+
+    if (args == NIL || lisp_cdr(args) == NIL) {
+        snprintf(message, sizeof(message), "%s requires 2 arguments", name);
+        return lisp_make_error(message);
+    }
+
+    LispObject *previous = lisp_car(args);
+    LispType previous_type = LISP_TYPE(previous);
+    if (previous_type != LISP_INTEGER && previous_type != LISP_NUMBER) {
+        snprintf(message, sizeof(message), "%s requires numbers", name);
+        return lisp_make_error(message);
+    }
+
+    for (args = lisp_cdr(args); args != NIL && args != NULL; args = lisp_cdr(args)) {
+        LispObject *current = lisp_car(args);
+        LispType current_type = LISP_TYPE(current);
+        if (current_type != LISP_INTEGER && current_type != LISP_NUMBER) {
+            snprintf(message, sizeof(message), "%s requires numbers", name);
+            return lisp_make_error(message);
+        }
+
+        int unordered = 0;
+        int cmp = number_compare(previous, current, &unordered);
+        if (unordered || !numeric_compare_accepts(mode, cmp))
+            return NIL;
+
+        previous = current;
+    }
+
+    return LISP_TRUE;
+}
+
+static LispObject *builtin_gt(LispObject *args, Environment *env)
+{
+    (void)env;
+    return numeric_compare_chain(args, ">", NUMERIC_GT);
+}
+
+static LispObject *builtin_lt(LispObject *args, Environment *env)
+{
+    (void)env;
+    return numeric_compare_chain(args, "<", NUMERIC_LT);
+}
+
+static LispObject *builtin_eq(LispObject *args, Environment *env)
+{
+    (void)env;
+    return numeric_compare_chain(args, "=", NUMERIC_EQ);
+}
+
+static LispObject *builtin_gte(LispObject *args, Environment *env)
+{
+    (void)env;
+    return numeric_compare_chain(args, ">=", NUMERIC_GE);
+}
+
+static LispObject *builtin_lte(LispObject *args, Environment *env)
+{
+    (void)env;
+    return numeric_compare_chain(args, "<=", NUMERIC_LE);
+}
 
 /* Boolean operations */
 static LispObject *builtin_not(LispObject *args, Environment *env)

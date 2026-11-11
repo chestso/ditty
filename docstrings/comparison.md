@@ -2,6 +2,13 @@
 
 Comparison and equality predicates.
 
+All five numeric comparisons are variadic and check every adjacent pair:
+`(< 1 2 3)` means `1 < 2` and `2 < 3`. Integer operands are compared exactly
+as 64-bit integers, and mixed integer/float comparisons are exact as well (the
+integer is not rounded to a float first). NaN never satisfies any comparison.
+
+The arithmetic predicates accept two or more numbers.
+
 ## `>`
 
 Test if numbers are in strictly decreasing order.
@@ -63,6 +70,7 @@ Test if numbers are all equal.
 (= 5 5 5)            ; => #t
 (= 5.0 5)            ; => #t (cross-type comparison)
 (= 5 3)              ; => #f
+(= 5 5 3)            ; => #f (every pair must be equal)
 ```
 
 ## `>=`
