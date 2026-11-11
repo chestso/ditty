@@ -92,7 +92,7 @@ PKG_CHECK_MODULES([PCRE2], [libpcre2-8], [],
 # >= 0.9.0: the REPL drives the post-reset textinput surface (TuiTextInputGeometry,
 # TuiTextInputConfig.wrap, opaque model), routes TUI_MSG_WINDOW_SIZE to it, and
 # reads the history ring back through tui_textinput_history_count/_entry (0.9.0).
-PKG_CHECK_MODULES([BOBA], [boba >= 0.9.0],
+PKG_CHECK_MODULES([BOBA], [boba >= 0.11.0],
     [have_boba=yes],
     [have_boba=no])
 AM_CONDITIONAL([HAVE_BOBA], [test "x$have_boba" = "xyes"])
