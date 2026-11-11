@@ -180,6 +180,27 @@ static LispObject *builtin_terminal_size(LispObject *args, Environment *env)
     return NIL;
 }
 
+/* terminal-pixel-size: return the text area size in pixels as (width . height). */
+static LispObject *builtin_terminal_pixel_size(LispObject *args, Environment *env)
+{
+    (void)args;
+    (void)env;
+
+#ifdef _WIN32
+    /* Windows consoles expose no portable pixel dimensions */
+    return NIL;
+#else
+    struct winsize ws;
+    int ok = ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0;
+    if (!ok)
+        ok = ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == 0;
+
+    if (ok && ws.ws_xpixel > 0 && ws.ws_ypixel > 0)
+        return lisp_make_cons(lisp_make_integer(ws.ws_xpixel), lisp_make_integer(ws.ws_ypixel));
+    return NIL;
+#endif
+}
+
 /* terminal-input-available-p: return #t if stdin has data ready to read. */
 static LispObject *builtin_terminal_input_available_p(LispObject *args, Environment *env)
 {
@@ -315,6 +336,7 @@ void register_tui_builtins(Environment *env)
     REGISTER("set-terminal-raw", builtin_set_terminal_raw);
     REGISTER("restore-terminal", builtin_restore_terminal);
     REGISTER("terminal-size", builtin_terminal_size);
+    REGISTER("terminal-pixel-size", builtin_terminal_pixel_size);
     REGISTER("terminal-input-available-p", builtin_terminal_input_available_p);
     REGISTER("terminal-resized-p", builtin_terminal_resized_p);
     REGISTER("read-byte", builtin_read_byte);

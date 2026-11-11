@@ -1,5 +1,5 @@
-;; Regression test for parser hang on unknown #\ syntax
-;; Previously, encountering unknown syntax like #\space would cause:
+;; Regression test for parser hang on unknown # syntax
+;; Previously, encountering unknown syntax like #q would cause:
 ;;   1. Silent REPL exit (no error propagation)
 ;;   2. Infinite loops in nested contexts (input pointer not advancing)
 ;; Fixed in commit dc19a66 with:
@@ -10,7 +10,7 @@
 
 (define tmpdir (temporary-file-directory))
 
-;; Helper function to test that parsing code with unknown #\ syntax fails cleanly
+;; Helper function to test that parsing code with unknown # syntax fails cleanly
 ;; We must use a temp file approach because parse errors occur during reading,
 ;; before evaluation, so they can't be caught directly by assert-error
 (defun test-parse-error (code-str description)
@@ -22,28 +22,28 @@
     (delete-file temp-file)))
 
 ;; Top level should fail cleanly
-(test-parse-error "#\\space" "Top level unknown hash syntax")
+(test-parse-error "#q" "Top level unknown hash syntax")
 ;; Nested in let body should fail cleanly (not hang)
-(test-parse-error "(let ((x #\\space)) x)" "Let body with unknown syntax")
+(test-parse-error "(let ((x #q)) x)" "Let body with unknown syntax")
 ;; Nested in let binding value should fail cleanly
-(test-parse-error "(let ((x 1) (y #\\space)) y)"
+(test-parse-error "(let ((x 1) (y #q)) y)"
  "Let binding with unknown syntax")
 ;; Nested in do loop test should fail cleanly (not hang)
 (test-parse-error
- "(do ((i 10 (- i 1))) ((let ((ch #\\space)) (= i 0))) (display i))"
+ "(do ((i 10 (- i 1))) ((let ((ch #q)) (= i 0))) (display i))"
  "Do loop with unknown syntax")
 ;; Deep nesting (5 levels) should fail cleanly - the original bug case
 (test-parse-error
- "(defun test-func () (do ((i 10 (- i 1))) ((let ((ch #\\space)) (= i 0))) (display i)))"
+ "(defun test-func () (do ((i 10 (- i 1))) ((let ((ch #q)) (= i 0))) (display i)))"
  "Deep nesting with unknown syntax")
 ;; Nested in function call arguments
-(test-parse-error "(+ 1 #\\space 3)" "Function arguments with unknown syntax")
+(test-parse-error "(+ 1 #q 3)" "Function arguments with unknown syntax")
 ;; Nested in if condition
-(test-parse-error "(if #\\space 1 2)" "If condition with unknown syntax")
+(test-parse-error "(if #q 1 2)" "If condition with unknown syntax")
 ;; Nested in cond clause
-(test-parse-error "(cond (#\\space 1) (else 2))"
+(test-parse-error "(cond (#q 1) (else 2))"
  "Cond clause with unknown syntax")
 ;; Nested in vector
-(test-parse-error "[1 2 #\\space 4]" "Vector with unknown syntax")
+(test-parse-error "[1 2 #q 4]" "Vector with unknown syntax")
 ;; Nested in quoted form (errors during read, before quote is processed)
-(test-parse-error "'(foo #\\space bar)" "Quoted form with unknown syntax")
+(test-parse-error "'(foo #q bar)" "Quoted form with unknown syntax")

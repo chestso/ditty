@@ -130,6 +130,10 @@
   '(;; --- Arithmetic (src/builtins_arithmetic.c) ---
     "+" "-" "*" "/" "quotient" "remainder" "floor" "modulo"
     "even?" "odd?" "max" "min"
+    ;; --- Math (src/builtins_math.c) ---
+    "abs" "sqrt" "sin" "cos" "tan" "asin" "acos" "atan" "atan2"
+    "exp" "log" "expt" "float" "truncate" "ceiling" "round"
+    "random" "random-seed"
     ;; --- Bitwise operations (src/builtins_arithmetic.c) ---
     "logand" "logior" "logxor" "lognot" "ash" "logcount"
     ;; --- Comparison (src/builtins_comparison.c) ---
@@ -144,7 +148,7 @@
     "char-upcase" "char-downcase"
     "char-alphabetic?" "char-numeric?" "char-whitespace?"
     ;; --- Strings (src/builtins_strings.c) ---
-    "make-string" "utf8-display-width"
+    "base64-encode" "make-string" "utf8-display-width"
     "concat" "number->string" "string->number" "split" "join"
     "string<?" "string>?" "string<=?" "string>=?"
     "string-contains?" "string-index" "string-match?"
@@ -194,7 +198,7 @@
     "profile-report" "profile-reset"
     ;; --- TUI (src/builtins_tui.c) ---
     "sleep" "set-terminal-raw" "restore-terminal" "terminal-size"
-    "terminal-input-available-p" "terminal-resized-p"
+    "terminal-pixel-size" "terminal-input-available-p" "terminal-resized-p"
     "read-byte" "read-byte-timeout"
     ;; --- Errors (src/builtins_errors.c) ---
     "error?" "error-type" "error-message" "error-stack" "error-data"

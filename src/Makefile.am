@@ -64,6 +64,7 @@ libditty_a_SOURCES = \
     env.c \
     builtins.c \
     builtins_arithmetic.c \
+    builtins_math.c \
     builtins_comparison.c \
     builtins_strings.c \
     builtins_characters.c \

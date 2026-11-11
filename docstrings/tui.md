@@ -125,6 +125,33 @@ determined.
 (cdr (terminal-size))          ; number of columns
 ```
 
+## `terminal-pixel-size`
+
+Return the size of the terminal text area in pixels as `(width . height)`.
+
+### Parameters
+
+None.
+
+### Returns
+
+A cons pair `(width . height)` on success, or `nil` if the size cannot be
+determined. This is the pixel size of the whole text area, not of one
+character cell: divide by the `terminal-size` columns and rows to get the cell
+size. Many terminals do not report pixel dimensions (the values are 0), so
+callers must handle `nil`.
+
+### Examples
+
+```lisp
+;; Size of one character cell in pixels
+(define px (terminal-pixel-size))
+(when px
+  (let ((size (terminal-size)))
+    (list (floor (/ (car px) (cdr size)))     ; cell width
+          (floor (/ (cdr px) (car size))))))  ; cell height
+```
+
 ## `terminal-input-available-p`
 
 Return `#t` if stdin has input ready to read without blocking.

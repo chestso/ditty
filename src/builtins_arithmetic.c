@@ -102,6 +102,30 @@ static LispObject *builtin_divide(LispObject *args, Environment *env)
     return lisp_make_number(result); /* Always return float */
 }
 
+static int arg_count(LispObject *args)
+{
+    int count = 0;
+    while (args != NIL && args != NULL) {
+        count++;
+        args = lisp_cdr(args);
+    }
+    return count;
+}
+
+static int is_number_object(LispObject *obj)
+{
+    LispType type = LISP_TYPE(obj);
+    return type == LISP_INTEGER || type == LISP_NUMBER;
+}
+
+/* Numeric value of a NUMBER or INTEGER object, as a double */
+static double numeric_double(LispObject *obj)
+{
+    if (LISP_TYPE(obj) == LISP_INTEGER)
+        return (double)LISP_INT_VAL(obj);
+    return LISP_NUM_VAL(obj);
+}
+
 static LispObject *builtin_quotient(LispObject *args, Environment *env)
 {
     (void)env;
@@ -110,25 +134,30 @@ static LispObject *builtin_quotient(LispObject *args, Environment *env)
     LispObject *first = lisp_car(args);
     LispObject *second = lisp_car(lisp_cdr(args));
 
-    if (LISP_TYPE(first) != LISP_INTEGER && LISP_TYPE(first) != LISP_NUMBER) {
+    if (!is_number_object(first) || !is_number_object(second))
         return lisp_make_error("quotient requires numbers");
-    }
-    if (LISP_TYPE(second) != LISP_INTEGER && LISP_TYPE(second) != LISP_NUMBER) {
-        return lisp_make_error("quotient requires numbers");
+
+    if (LISP_TYPE(first) == LISP_INTEGER && LISP_TYPE(second) == LISP_INTEGER) {
+        long long first_val = LISP_INT_VAL(first);
+        long long second_val = LISP_INT_VAL(second);
+
+        if (second_val == 0)
+            return lisp_make_error("Division by zero");
+        /* LLONG_MIN / -1 is undefined behavior */
+        if (second_val == -1)
+            return make_integral_result(-(double)first_val);
+        return lisp_make_integer(first_val / second_val);
     }
 
-    int first_is_integer;
-    int second_is_integer;
-    double first_val = get_numeric_value(first, &first_is_integer);
-    double second_val = get_numeric_value(second, &second_is_integer);
-
-    if (second_val == 0) {
+    double first_val = numeric_double(first);
+    double second_val = numeric_double(second);
+    if (second_val == 0)
         return lisp_make_error("Division by zero");
-    }
 
-    /* Truncate to integer */
-    long long result = (long long)(first_val / second_val);
-    return lisp_make_integer(result);
+    double result = trunc(first_val / second_val);
+    if (!isfinite(result))
+        return lisp_make_error("quotient: result is not a finite number");
+    return make_integral_result(result);
 }
 
 static LispObject *builtin_remainder(LispObject *args, Environment *env)
@@ -139,58 +168,83 @@ static LispObject *builtin_remainder(LispObject *args, Environment *env)
     LispObject *first = lisp_car(args);
     LispObject *second = lisp_car(lisp_cdr(args));
 
-    if (LISP_TYPE(first) != LISP_INTEGER && LISP_TYPE(first) != LISP_NUMBER) {
+    if (!is_number_object(first) || !is_number_object(second))
         return lisp_make_error("remainder requires numbers");
-    }
-    if (LISP_TYPE(second) != LISP_INTEGER && LISP_TYPE(second) != LISP_NUMBER) {
-        return lisp_make_error("remainder requires numbers");
+
+    if (LISP_TYPE(first) == LISP_INTEGER && LISP_TYPE(second) == LISP_INTEGER) {
+        long long first_val = LISP_INT_VAL(first);
+        long long second_val = LISP_INT_VAL(second);
+
+        if (second_val == 0)
+            return lisp_make_error("Division by zero");
+        /* LLONG_MIN % -1 is undefined behavior; the remainder is 0 */
+        if (second_val == -1)
+            return lisp_make_integer(0);
+        return lisp_make_integer(first_val % second_val);
     }
 
-    int first_is_integer;
-    int second_is_integer;
-    double first_val = get_numeric_value(first, &first_is_integer);
-    double second_val = get_numeric_value(second, &second_is_integer);
-
-    if (second_val == 0) {
+    double first_val = numeric_double(first);
+    double second_val = numeric_double(second);
+    if (second_val == 0)
         return lisp_make_error("Division by zero");
-    }
 
-    long long result = (long long)first_val % (long long)second_val;
-    return lisp_make_integer(result);
+    double result = fmod(first_val, second_val);
+    if (!isfinite(result))
+        return lisp_make_error("remainder: result is not a finite number");
+    return lisp_make_number(result);
 }
 
 static LispObject *builtin_floor(LispObject *args, Environment *env)
 {
     (void)env;
-    CHECK_ARGS_2("floor");
+    int count = arg_count(args);
+    if (count != 1 && count != 2)
+        return lisp_make_error("floor requires 1 or 2 arguments");
 
     LispObject *first = lisp_car(args);
+    if (!is_number_object(first))
+        return lisp_make_error("floor requires numbers");
+
+    if (count == 1) {
+        if (LISP_TYPE(first) == LISP_INTEGER)
+            return first;
+
+        double result = floor(LISP_NUM_VAL(first));
+        if (!isfinite(result))
+            return lisp_make_error("floor: result is not a finite number");
+        return make_integral_result(result);
+    }
+
     LispObject *second = lisp_car(lisp_cdr(args));
-
-    if (LISP_TYPE(first) != LISP_INTEGER && LISP_TYPE(first) != LISP_NUMBER) {
+    if (!is_number_object(second))
         return lisp_make_error("floor requires numbers");
-    }
-    if (LISP_TYPE(second) != LISP_INTEGER && LISP_TYPE(second) != LISP_NUMBER) {
-        return lisp_make_error("floor requires numbers");
+
+    if (LISP_TYPE(first) == LISP_INTEGER && LISP_TYPE(second) == LISP_INTEGER) {
+        long long first_val = LISP_INT_VAL(first);
+        long long second_val = LISP_INT_VAL(second);
+
+        if (second_val == 0)
+            return lisp_make_error("Division by zero");
+        /* LLONG_MIN / -1 is undefined behavior */
+        if (second_val == -1)
+            return make_integral_result(-(double)first_val);
+
+        long long result = first_val / second_val;
+        /* Round toward negative infinity if signs differ and there's a remainder */
+        if ((first_val < 0) != (second_val < 0) && first_val % second_val != 0)
+            result--;
+        return lisp_make_integer(result);
     }
 
-    int first_is_integer;
-    int second_is_integer;
-    long long first_val = (long long)get_numeric_value(first, &first_is_integer);
-    long long second_val = (long long)get_numeric_value(second, &second_is_integer);
-
-    if (second_val == 0) {
+    double first_val = numeric_double(first);
+    double second_val = numeric_double(second);
+    if (second_val == 0)
         return lisp_make_error("Division by zero");
-    }
 
-    long long result = first_val / second_val;
-
-    // Round toward negative infinity if signs differ and there's a remainder
-    if ((first_val < 0) != (second_val < 0) && first_val % second_val != 0) {
-        result--;
-    }
-
-    return lisp_make_integer(result);
+    double result = floor(first_val / second_val);
+    if (!isfinite(result))
+        return lisp_make_error("floor: result is not a finite number");
+    return make_integral_result(result);
 }
 
 static LispObject *builtin_modulo(LispObject *args, Environment *env)
@@ -201,30 +255,37 @@ static LispObject *builtin_modulo(LispObject *args, Environment *env)
     LispObject *first = lisp_car(args);
     LispObject *second = lisp_car(lisp_cdr(args));
 
-    if (LISP_TYPE(first) != LISP_INTEGER && LISP_TYPE(first) != LISP_NUMBER) {
+    if (!is_number_object(first) || !is_number_object(second))
         return lisp_make_error("modulo requires numbers");
-    }
-    if (LISP_TYPE(second) != LISP_INTEGER && LISP_TYPE(second) != LISP_NUMBER) {
-        return lisp_make_error("modulo requires numbers");
+
+    if (LISP_TYPE(first) == LISP_INTEGER && LISP_TYPE(second) == LISP_INTEGER) {
+        long long first_val = LISP_INT_VAL(first);
+        long long second_val = LISP_INT_VAL(second);
+
+        if (second_val == 0)
+            return lisp_make_error("Division by zero");
+        /* LLONG_MIN % -1 is undefined behavior; the remainder is 0 */
+        if (second_val == -1)
+            return lisp_make_integer(0);
+
+        long long result = first_val % second_val;
+        /* Ensure result has same sign as divisor */
+        if ((result > 0 && second_val < 0) || (result < 0 && second_val > 0))
+            result += second_val;
+        return lisp_make_integer(result);
     }
 
-    int first_is_integer;
-    int second_is_integer;
-    long long first_val = (long long)get_numeric_value(first, &first_is_integer);
-    long long second_val = (long long)get_numeric_value(second, &second_is_integer);
-
-    if (second_val == 0) {
+    double first_val = numeric_double(first);
+    double second_val = numeric_double(second);
+    if (second_val == 0)
         return lisp_make_error("Division by zero");
-    }
 
-    long long result = first_val % second_val;
-
-    // Ensure result has same sign as divisor
-    if ((result > 0 && second_val < 0) || (result < 0 && second_val > 0)) {
+    double result = fmod(first_val, second_val);
+    if (result != 0 && ((result < 0) != (second_val < 0)))
         result += second_val;
-    }
-
-    return lisp_make_integer(result);
+    if (!isfinite(result))
+        return lisp_make_error("modulo: result is not a finite number");
+    return lisp_make_number(result);
 }
 
 static LispObject *builtin_even_question(LispObject *args, Environment *env)

@@ -75,6 +75,7 @@ static LispObject *create_ditty_version_alist(void)
 void register_builtins(Environment *env)
 {
     register_arithmetic_builtins(env);
+    register_math_builtins(env);
     register_comparison_builtins(env);
     register_strings_builtins(env);
     register_characters_builtins(env);

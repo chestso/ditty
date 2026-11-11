@@ -69,3 +69,28 @@
 
 ;; String comparisons
 (assert-true (string<? "abc" "def") "string<? compares strings")
+
+;; base64-encode (RFC 4648 test vectors)
+(assert-equal "" (base64-encode "") "base64-encode empty string")
+(assert-equal "Zg==" (base64-encode "f") "base64-encode one byte")
+(assert-equal "Zm8=" (base64-encode "fo") "base64-encode two bytes")
+(assert-equal "Zm9v" (base64-encode "foo") "base64-encode three bytes")
+(assert-equal "Zm9vYg==" (base64-encode "foob") "base64-encode four bytes")
+(assert-equal "Zm9vYmE=" (base64-encode "fooba") "base64-encode five bytes")
+(assert-equal "Zm9vYmFy" (base64-encode "foobar") "base64-encode six bytes")
+(assert-equal "AP+A" (base64-encode (list 0 255 128)) "base64-encode byte list")
+
+(define base64-bytes (make-vector 3 0))
+
+(vector-set! base64-bytes 0 0)
+(vector-set! base64-bytes 1 255)
+(vector-set! base64-bytes 2 128)
+
+(assert-equal "AP+A" (base64-encode base64-bytes) "base64-encode vector")
+(assert-equal (base64-encode (list 0 255 128)) (base64-encode base64-bytes)
+ "base64-encode vector matches list")
+
+(assert-error (base64-encode (list 256)) "base64-encode byte above 255")
+(assert-error (base64-encode (list -1)) "base64-encode negative byte")
+(assert-error (base64-encode (list "a")) "base64-encode non-integer element")
+(assert-error (base64-encode 42) "base64-encode non-string argument")

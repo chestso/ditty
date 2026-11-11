@@ -25,5 +25,5 @@
 (assert-equal (f4 1) (list 1 2 nil) "rest empty")
 (assert-equal (f4 1 3 4 5) (list 1 3 (list 4 5)) "rest collected")
 
-;; Error: non-list default pair
-(assert-error (lambda (x &optional y z) x) "unparenthesized optional params")
+;; Error: default pair must be a symbol or (symbol default)
+(assert-error (lambda (x &optional 5) x) "non-symbol optional param")

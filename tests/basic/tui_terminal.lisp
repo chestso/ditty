@@ -14,6 +14,17 @@
 (when size (assert-true (> (car size) 0) "terminal rows should be positive")
   (assert-true (> (cdr size) 0) "terminal columns should be positive"))
 
+;; Pixel size is optional: many terminals report 0, which gives nil.
+(define pixels (terminal-pixel-size))
+
+(assert-true
+ (or (null? pixels)
+     (and (pair? pixels) (integer? (car pixels)) (integer? (cdr pixels))))
+ "terminal-pixel-size should return nil or a pair of integers")
+
+(when pixels (assert-true (> (car pixels) 0) "pixel width should be positive")
+  (assert-true (> (cdr pixels) 0) "pixel height should be positive"))
+
 ;; Input should not be available in a test runner without a real stdin.
 ;; In ditty's boolean model #f is NIL, and boolean? only matches #t.
 ;; terminal-input-available-p returns #t or NIL, so the result is

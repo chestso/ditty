@@ -829,6 +829,92 @@ static LispObject *builtin_utf8_display_width(LispObject *args, Environment *env
     return lisp_make_integer(width);
 }
 
+/* base64-encode: encode bytes from a list, vector, or string as base64. */
+static LispObject *builtin_base64_encode(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("base64-encode");
+
+    static const char alphabet[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    LispObject *input = lisp_car(args);
+    LispType type = LISP_TYPE(input);
+
+    const unsigned char *data = NULL;
+    size_t length = 0;
+
+    if (type == LISP_STRING) {
+        data = (const unsigned char *)LISP_STR_VAL(input);
+        length = strlen((const char *)data);
+    } else if (type == LISP_VECTOR) {
+        size_t count = (size_t)LISP_VECTOR_SIZE(input);
+        unsigned char *bytes = GC_malloc(count == 0 ? 1 : count);
+        LispObject **items = LISP_VECTOR_ITEMS(input);
+        for (size_t i = 0; i < count; i++) {
+            LispObject *item = items[i];
+            if (LISP_TYPE(item) != LISP_INTEGER)
+                return lisp_make_error("base64-encode: elements must be integers");
+            long long value = LISP_INT_VAL(item);
+            if (value < 0 || value > 255)
+                return lisp_make_error("base64-encode: elements must be between 0 and 255");
+            bytes[i] = (unsigned char)value;
+        }
+
+        data = bytes;
+        length = count;
+    } else if (type == LISP_CONS || input == NIL) {
+        size_t count = 0;
+        LispObject *rest = input;
+        while (rest != NIL && rest != NULL) {
+            count++;
+            rest = lisp_cdr(rest);
+        }
+
+        unsigned char *bytes = GC_malloc(count == 0 ? 1 : count);
+        size_t index = 0;
+        rest = input;
+        while (rest != NIL && rest != NULL) {
+            LispObject *item = lisp_car(rest);
+            if (LISP_TYPE(item) != LISP_INTEGER)
+                return lisp_make_error("base64-encode: elements must be integers");
+            long long value = LISP_INT_VAL(item);
+            if (value < 0 || value > 255)
+                return lisp_make_error("base64-encode: elements must be between 0 and 255");
+            bytes[index++] = (unsigned char)value;
+            rest = lisp_cdr(rest);
+        }
+
+        data = bytes;
+        length = count;
+    } else {
+        return lisp_make_error("base64-encode requires a string, list, or vector");
+    }
+
+    size_t out_length = 4 * ((length + 2) / 3);
+    char *out = malloc(out_length + 1);
+    if (out == NULL)
+        return lisp_make_error("base64-encode: out of memory");
+
+    size_t pos = 0;
+    for (size_t i = 0; i < length; i += 3) {
+        size_t remaining = length - i;
+        uint32_t a = data[i];
+        uint32_t b = remaining > 1 ? data[i + 1] : 0;
+        uint32_t c = remaining > 2 ? data[i + 2] : 0;
+
+        out[pos++] = alphabet[a >> 2];
+        out[pos++] = alphabet[((a & 0x03) << 4) | (b >> 4)];
+        out[pos++] = remaining > 1 ? alphabet[((b & 0x0f) << 2) | (c >> 6)] : '=';
+        out[pos++] = remaining > 2 ? alphabet[c & 0x3f] : '=';
+    }
+    out[pos] = '\0';
+
+    LispObject *result = lisp_make_string(out);
+    free(out);
+    return result;
+}
+
 void register_strings_builtins(Environment *env)
 {
     REGISTER("concat", builtin_concat);
@@ -853,4 +939,5 @@ void register_strings_builtins(Environment *env)
     REGISTER("string-trim", builtin_string_trim);
     REGISTER("make-string", builtin_make_string);
     REGISTER("utf8-display-width", builtin_utf8_display_width);
+    REGISTER("base64-encode", builtin_base64_encode);
 }

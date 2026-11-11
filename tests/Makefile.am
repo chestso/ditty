@@ -163,6 +163,7 @@ endif
 TESTS = \
     basic/alists.lisp \
     basic/apply.lisp \
+    basic/assert_error.lisp \
     basic/and_or_list.lisp \
     basic/bitwise.lisp \
     basic/characters.lisp \
@@ -177,6 +178,7 @@ TESTS = \
     basic/length.lisp \
     basic/list_reverse.lisp \
     basic/make_string.lisp \
+    basic/math.lisp \
     basic/named_let.lisp \
     basic/number_literals.lisp \
     basic/optional_defaults.lisp \
@@ -253,6 +255,7 @@ EXTRA_DIST = \
     test-helpers.lisp \
     basic/alists.lisp \
     basic/apply.lisp \
+    basic/assert_error.lisp \
     basic/and_or_list.lisp \
     basic/bitwise.lisp \
     basic/characters.lisp \
@@ -267,6 +270,7 @@ EXTRA_DIST = \
     basic/length.lisp \
     basic/list_reverse.lisp \
     basic/make_string.lisp \
+    basic/math.lisp \
     basic/named_let.lisp \
     basic/number_literals.lisp \
     basic/optional_defaults.lisp \

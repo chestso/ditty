@@ -26,6 +26,24 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `lognot`
   - `ash`
   - `logcount`
+  - `abs`
+  - `sqrt`
+  - `sin`
+  - `cos`
+  - `tan`
+  - `asin`
+  - `acos`
+  - `atan`
+  - `atan2`
+  - `exp`
+  - `log`
+  - `expt`
+  - `float`
+  - `truncate`
+  - `ceiling`
+  - `round`
+  - `random`
+  - `random-seed`
 - [Characters](#characters)
   - `char?`
   - `char-code`
@@ -228,6 +246,7 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `string>?`
   - `string<=?`
   - `string>=?`
+  - `base64-encode`
 - [Symbols](#symbols)
   - `symbol->string`
   - `string->symbol`
@@ -243,6 +262,7 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `set-terminal-raw`
   - `restore-terminal`
   - `terminal-size`
+  - `terminal-pixel-size`
   - `terminal-input-available-p`
   - `terminal-resized-p`
   - `read-byte`
@@ -388,7 +408,7 @@ For integer division, use `quotient` instead.
 
 ### `quotient`
 
-Integer division - divide and truncate to integer.
+Divide and truncate toward zero.
 
 Use this instead of `/` when you need an integer result.
 
@@ -399,7 +419,9 @@ Use this instead of `/` when you need an integer result.
 
 #### Returns
 
-Integer result of division, truncated toward zero.
+Integer result of division, truncated toward zero. If either argument is a
+float, the division is computed in floating point and then truncated. A
+quotient too large for the integer range is returned as a float.
 
 #### Examples
 
@@ -407,17 +429,28 @@ Integer result of division, truncated toward zero.
 (quotient 10 3)      ; => 3
 (quotient 17 5)      ; => 3
 (quotient -17 5)     ; => -3
+(quotient 7 2.0)     ; => 3
+(quotient 7.5 2)     ; => 3 (float operands, integer result)
 (quotient 10.8 3.2)  ; => 3
 ```
 
+#### Errors
+
+Returns an error on division by zero, or if an argument is not a number.
+
+#### Notes
+
+Float operands are no longer truncated first: `(quotient 7.5 2)` used to be
+computed as `7 / 2` and now truncates the real quotient `3.75`.
+
 #### See Also
 
-- `remainder` - Get the remainder of integer division
+- `remainder` - Remainder of division (sign follows dividend)
 - `/` - Regular division (returns float)
 
 ### `remainder`
 
-Integer remainder (modulo operation).
+Remainder of division. The result has the same sign as the dividend.
 
 #### Parameters
 
@@ -426,7 +459,8 @@ Integer remainder (modulo operation).
 
 #### Returns
 
-Integer remainder after division. The result has the same sign as the dividend.
+Remainder after division, with the sign of the dividend. Integer arguments
+return an integer; if either argument is a float, the result is a float.
 
 #### Examples
 
@@ -435,7 +469,18 @@ Integer remainder after division. The result has the same sign as the dividend.
 (remainder 10 3)     ; => 1
 (remainder 20 5)     ; => 0
 (remainder -17 5)    ; => -2
+(remainder 7.5 2)    ; => 1.5 (float)
+(remainder -7.5 2)   ; => -1.5 (float)
 ```
+
+#### Errors
+
+Returns an error on division by zero, or if an argument is not a number.
+
+#### Notes
+
+Float operands are no longer truncated first: `(remainder 7.5 2)` used to
+return `1` and now returns `1.5`.
 
 #### See Also
 
@@ -446,16 +491,18 @@ Integer remainder after division. The result has the same sign as the dividend.
 
 ### `floor`
 
-Floor division - divide and round toward negative infinity.
+Floor - round down, or divide and round toward negative infinity.
 
 #### Parameters
 
-- `dividend` - The number to be divided (integer or float)
-- `divisor` - The number to divide by (integer or float)
+- `number` - With one argument, rounds that number down to an integer
+- `dividend divisor` - With two arguments, divides and rounds the quotient toward negative infinity
 
 #### Returns
 
-Integer result of division, rounded toward negative infinity.
+Integer result, rounded toward negative infinity. With two arguments, a float
+quotient is computed first, then rounded. A value too large for the integer
+range is returned as a float.
 
 #### Examples
 
@@ -464,13 +511,30 @@ Integer result of division, rounded toward negative infinity.
 (floor -7 3)     ; => -3
 (floor 7 -3)     ; => -3
 (floor -7 -3)    ; => 2
+(floor 7.5)      ; => 7 (one argument)
+(floor -7.5)     ; => -8
+(floor 7.5 2)    ; => 3
+(floor -7.5 2)   ; => -4
+(floor 6.9 2.5)  ; => 2
+(floor 7 2.0)    ; => 3
 ```
+
+#### Errors
+
+Returns an error on division by zero, if the number of arguments is not one or
+two, or if an argument is not a number.
+
+#### Notes
+
+Two-argument float operands are no longer truncated first: `(floor 6.9 2.5)`
+used to be computed as `6 / 2` and now floors the real quotient `2.76`.
 
 #### See Also
 
 - `modulo` - Modulo operation (result has same sign as divisor)
 - `quotient` - Integer division (truncates toward zero)
-- `remainder` - Integer remainder (sign follows dividend)
+- `remainder` - Remainder of division (sign follows dividend)
+- `ceiling` - Round up
 - `/` - Regular division (returns float)
 
 ### `modulo`
@@ -484,7 +548,8 @@ Modulo operation - returns the remainder of division with the sign of the diviso
 
 #### Returns
 
-Integer remainder after division. The result has the same sign as the divisor.
+Remainder after division, with the sign of the divisor. Integer arguments
+return an integer; if either argument is a float, the result is a float.
 
 #### Examples
 
@@ -493,13 +558,26 @@ Integer remainder after division. The result has the same sign as the divisor.
 (modulo -7 3)    ; => 2
 (modulo 7 -3)    ; => -2
 (modulo -7 -3)   ; => -1
+(modulo 7.5 2)   ; => 1.5 (float)
+(modulo -7.5 2)  ; => 0.5 (float)
+(modulo 7 2.5)   ; => 2 (float)
+(modulo 6.0 2)   ; => 0 (float)
 ```
+
+#### Errors
+
+Returns an error on division by zero, or if an argument is not a number.
+
+#### Notes
+
+Float operands are no longer truncated first: `(modulo -7.5 2)` used to return
+`1` and now returns `0.5`.
 
 #### See Also
 
 - `floor` - Floor division (rounds toward negative infinity)
 - `quotient` - Integer division (truncates toward zero)
-- `remainder` - Integer remainder (sign follows dividend)
+- `remainder` - Remainder of division (sign follows dividend)
 - `/` - Regular division (returns float)
 
 ### `even?`
@@ -808,6 +886,547 @@ Returns error if the argument is not an integer.
 #### See Also
 
 - `logand` - Bitwise AND
+
+### `abs`
+
+Absolute value of a number.
+
+#### Parameters
+
+- `number` - An integer or float
+
+#### Returns
+
+The absolute value. Integer input returns an integer; float input returns a float.
+
+#### Examples
+
+```lisp
+(abs -3)     ; => 3
+(abs 3)      ; => 3
+(abs -2.5)   ; => 2.5 (float)
+(abs 0)      ; => 0
+```
+
+#### Errors
+
+Returns an error if the argument is not a number.
+
+#### See Also
+
+- `float` - Convert a number to a float
+
+### `sqrt`
+
+Square root.
+
+#### Parameters
+
+- `number` - A non-negative number
+
+#### Returns
+
+The square root as a float, even for perfect squares.
+
+#### Examples
+
+```lisp
+(sqrt 16)   ; => 4 (float)
+(sqrt 2)    ; => 1.4142135623730951
+(sqrt 0)    ; => 0
+```
+
+#### Errors
+
+Returns an error if the argument is negative or not a number.
+
+#### See Also
+
+- `expt` - Raise a number to a power
+
+### `sin`
+
+Sine of an angle in radians.
+
+#### Parameters
+
+- `number` - An angle in radians
+
+#### Returns
+
+The sine as a float.
+
+#### Examples
+
+```lisp
+(sin 0)                   ; => 0
+(sin 1.5707963267948966)  ; => 1
+```
+
+#### Errors
+
+Returns an error if the argument is not a number or the result is not finite.
+
+#### See Also
+
+- `cos` - Cosine
+- `tan` - Tangent
+
+### `cos`
+
+Cosine of an angle in radians.
+
+#### Parameters
+
+- `number` - An angle in radians
+
+#### Returns
+
+The cosine as a float.
+
+#### Examples
+
+```lisp
+(cos 0)                   ; => 1
+(cos 3.141592653589793)   ; => -1
+```
+
+#### Errors
+
+Returns an error if the argument is not a number or the result is not finite.
+
+#### See Also
+
+- `sin` - Sine
+- `tan` - Tangent
+
+### `tan`
+
+Tangent of an angle in radians.
+
+#### Parameters
+
+- `number` - An angle in radians
+
+#### Returns
+
+The tangent as a float.
+
+#### Examples
+
+```lisp
+(tan 0)                   ; => 0
+(tan 0.7853981633974483)  ; => 1
+```
+
+#### Errors
+
+Returns an error if the argument is not a number or the result is not finite.
+
+#### See Also
+
+- `sin` - Sine
+- `cos` - Cosine
+
+### `asin`
+
+Arcsine, in radians.
+
+#### Parameters
+
+- `number` - A number between -1 and 1 inclusive
+
+#### Returns
+
+The angle in radians as a float, in the range [-pi/2, pi/2].
+
+#### Examples
+
+```lisp
+(asin 1)   ; => 1.5707963267948966
+(asin 0)   ; => 0
+```
+
+#### Errors
+
+Returns an error if the argument is outside [-1, 1] or not a number.
+
+#### See Also
+
+- `acos` - Arccosine
+- `sin` - Sine
+
+### `acos`
+
+Arccosine, in radians.
+
+#### Parameters
+
+- `number` - A number between -1 and 1 inclusive
+
+#### Returns
+
+The angle in radians as a float, in the range [0, pi].
+
+#### Examples
+
+```lisp
+(acos 1)    ; => 0
+(acos -1)   ; => 3.141592653589793
+```
+
+#### Errors
+
+Returns an error if the argument is outside [-1, 1] or not a number.
+
+#### See Also
+
+- `asin` - Arcsine
+- `cos` - Cosine
+
+### `atan`
+
+Arctangent, in radians.
+
+#### Parameters
+
+- `number` - With one argument, the tangent value
+- `y x` - With two arguments, the arctangent of `y / x` using the signs of both arguments (the `atan2` form)
+
+#### Returns
+
+The angle in radians as a float. The one-argument form is in the range
+[-pi/2, pi/2]; the two-argument form is in the range [-pi, pi].
+
+#### Examples
+
+```lisp
+(atan 1)      ; => 0.7853981633974483
+(atan 1 1)    ; => 0.7853981633974483
+(atan 1 -1)   ; => 2.356194490192345
+```
+
+#### Errors
+
+Returns an error if the number of arguments is not one or two, or if an
+argument is not a number.
+
+#### See Also
+
+- `atan2` - Two-argument arctangent
+- `tan` - Tangent
+
+### `atan2`
+
+Two-argument arctangent.
+
+#### Parameters
+
+- `y` - The ordinate
+- `x` - The abscissa
+
+#### Returns
+
+The angle in radians of the point (`x`, `y`) as a float, in the range
+[-pi, pi]. Same as `(atan y x)`.
+
+#### Examples
+
+```lisp
+(atan2 1 1)     ; => 0.7853981633974483
+(atan2 -1 -1)   ; => -2.356194490192345
+(atan2 0 -1)    ; => 3.141592653589793
+```
+
+#### Errors
+
+Returns an error if either argument is not a number.
+
+#### See Also
+
+- `atan` - Arctangent
+
+### `exp`
+
+Exponential function, e raised to a power.
+
+#### Parameters
+
+- `number` - The exponent
+
+#### Returns
+
+e**number as a float.
+
+#### Examples
+
+```lisp
+(exp 0)   ; => 1
+(exp 1)   ; => 2.718281828459045
+```
+
+#### Errors
+
+Returns an error if the argument is not a number or the result is not finite.
+
+#### See Also
+
+- `log` - Natural logarithm
+- `expt` - Raise a number to a power
+
+### `log`
+
+Natural logarithm.
+
+#### Parameters
+
+- `number` - A positive number
+
+#### Returns
+
+The natural logarithm (base e) as a float.
+
+#### Examples
+
+```lisp
+(log 1)                   ; => 0
+(log 2.718281828459045)   ; => 1
+```
+
+#### Errors
+
+Returns an error if the argument is not positive or not a number.
+
+#### See Also
+
+- `exp` - Exponential function
+- `expt` - Raise a number to a power
+
+### `expt`
+
+Raise a number to a power.
+
+#### Parameters
+
+- `base` - The base (integer or float)
+- `exponent` - The exponent (integer or float)
+
+#### Returns
+
+`base` raised to `exponent`. When both arguments are integers and the exponent
+is non-negative, the result is computed exactly and is an integer unless it
+overflows, in which case a float is returned. All other cases use floating
+point and return a float.
+
+#### Examples
+
+```lisp
+(expt 2 10)    ; => 1024 (integer)
+(expt 2 0)     ; => 1
+(expt 0 0)     ; => 1
+(expt -2 3)    ; => -8
+(expt 2 -1)    ; => 0.5 (float)
+(expt 2.0 3)   ; => 8 (float)
+(expt 4 0.5)   ; => 2 (float)
+(expt 3 39)    ; => 4052555153018976267 (exact integer)
+```
+
+#### Errors
+
+Returns an error on division by zero (`(expt 0 -1)`), if an argument is not a
+number, or if the result is not finite.
+
+#### See Also
+
+- `exp` - e raised to a power
+- `sqrt` - Square root
+
+### `float`
+
+Convert a number to a float.
+
+#### Parameters
+
+- `number` - An integer or float
+
+#### Returns
+
+The value as a float.
+
+#### Examples
+
+```lisp
+(float 3)     ; => 3 (float)
+(float 2.5)   ; => 2.5
+```
+
+#### Errors
+
+Returns an error if the argument is not a number.
+
+#### See Also
+
+- `abs` - Absolute value
+
+### `truncate`
+
+Round a number toward zero.
+
+#### Parameters
+
+- `number` - An integer or float
+
+#### Returns
+
+The number rounded toward zero, as an integer. A value too large for the
+integer range is returned as a float.
+
+#### Examples
+
+```lisp
+(truncate 1.9)    ; => 1
+(truncate -1.9)   ; => -1
+(truncate 3)      ; => 3
+```
+
+#### Errors
+
+Returns an error if the argument is not a number.
+
+#### See Also
+
+- `floor` - Round down
+- `ceiling` - Round up
+- `round` - Round to nearest
+
+### `ceiling`
+
+Round a number up toward positive infinity.
+
+#### Parameters
+
+- `number` - An integer or float
+
+#### Returns
+
+The number rounded up, as an integer. A value too large for the integer range
+is returned as a float.
+
+#### Examples
+
+```lisp
+(ceiling 1.2)    ; => 2
+(ceiling -1.2)   ; => -1
+(ceiling 3)      ; => 3
+```
+
+#### Errors
+
+Returns an error if the argument is not a number.
+
+#### See Also
+
+- `floor` - Round down
+- `truncate` - Round toward zero
+- `round` - Round to nearest
+
+### `round`
+
+Round a number to the nearest integer, with ties going to even.
+
+#### Parameters
+
+- `number` - An integer or float
+
+#### Returns
+
+The nearest integer. Exact halves round to the nearest even integer. A value
+too large for the integer range is returned as a float.
+
+#### Examples
+
+```lisp
+(round 2.5)    ; => 2
+(round 3.5)    ; => 4
+(round -2.5)   ; => -2
+(round 1.4)    ; => 1
+(round 1.6)    ; => 2
+(round 5)      ; => 5
+```
+
+#### Errors
+
+Returns an error if the argument is not a number.
+
+#### See Also
+
+- `floor` - Round down
+- `ceiling` - Round up
+- `truncate` - Round toward zero
+
+### `random`
+
+Uniform pseudo-random number.
+
+#### Parameters
+
+- `number` - A positive integer bound, or a positive float bound
+
+#### Returns
+
+With a positive integer `n`, a uniformly distributed integer in `[0, n)`.
+With a positive float `x`, a uniformly distributed float in `[0, x)`.
+
+#### Examples
+
+```lisp
+(random 10)   ; => an integer from 0 to 9
+(random 1.0)  ; => a float from 0 up to (but not including) 1
+(random 1)    ; => 0
+```
+
+#### Errors
+
+Returns an error if the argument is not a number or not positive.
+
+#### Notes
+
+The generator is seeded from the clock on first use. Use `random-seed` to
+reproduce a sequence.
+
+#### See Also
+
+- `random-seed` - Reseed the generator
+
+### `random-seed`
+
+Reseed the pseudo-random number generator.
+
+#### Parameters
+
+- `seed` - An integer seed
+
+#### Returns
+
+`nil`.
+
+#### Examples
+
+```lisp
+(random-seed 42)
+(define a (random 1000))
+(random-seed 42)
+(define b (random 1000))
+(= a b)   ; => #t (the same seed reproduces the sequence)
+```
+
+#### Errors
+
+Returns an error if the seed is not an integer.
+
+#### See Also
+
+- `random` - Uniform pseudo-random number
 
 ---
 
@@ -6004,6 +6623,40 @@ Test if strings are in non-increasing lexicographic order (greater than or equal
 (string>=? "ant" "zebra")       ; => nil
 ```
 
+### `base64-encode`
+
+Encode binary data as a base64 string (RFC 4648).
+
+#### Parameters
+
+- `data` - A list or vector of integers between 0 and 255, or a string (its UTF-8 bytes)
+
+#### Returns
+
+A string with the standard base64 alphabet (`A`-`Z`, `a`-`z`, `0`-`9`, `+`,
+`/`) and `=` padding, without line breaks.
+
+#### Examples
+
+```lisp
+(base64-encode "f")            ; => "Zg=="
+(base64-encode "fo")           ; => "Zm8="
+(base64-encode "foo")          ; => "Zm9v"
+(base64-encode "foobar")       ; => "Zm9vYmFy"
+(base64-encode (list 0 255 128))  ; => "AP+A"
+```
+
+#### Errors
+
+Returns an error if an element is not an integer, is outside 0-255, or the
+argument is not a string, list, or vector.
+
+#### Notes
+
+Ditty strings are NUL-terminated C strings, so binary data cannot be stored in
+one (an embedded NUL would truncate it). Pass bytes as a list or vector; the
+base64 output is plain ASCII, so returning a string is safe.
+
 ### Standard Library Aliases
 
 The following aliases are defined in the standard library for naming consistency with other Scheme implementations. They are not separate builtins — they resolve to the same function via `defalias`.
@@ -6348,6 +7001,33 @@ determined.
 (terminal-size)              ; => (24 . 80)
 (car (terminal-size))          ; number of rows
 (cdr (terminal-size))          ; number of columns
+```
+
+### `terminal-pixel-size`
+
+Return the size of the terminal text area in pixels as `(width . height)`.
+
+#### Parameters
+
+None.
+
+#### Returns
+
+A cons pair `(width . height)` on success, or `nil` if the size cannot be
+determined. This is the pixel size of the whole text area, not of one
+character cell: divide by the `terminal-size` columns and rows to get the cell
+size. Many terminals do not report pixel dimensions (the values are 0), so
+callers must handle `nil`.
+
+#### Examples
+
+```lisp
+;; Size of one character cell in pixels
+(define px (terminal-pixel-size))
+(when px
+  (let ((size (terminal-size)))
+    (list (floor (/ (car px) (cdr size)))     ; cell width
+          (floor (/ (cdr px) (car size))))))  ; cell height
 ```
 
 ### `terminal-input-available-p`

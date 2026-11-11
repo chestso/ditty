@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -65,11 +66,23 @@ static inline double get_numeric_value(LispObject *obj, int *is_integer)
     return 0.0;
 }
 
+/* Convert a double to an integer Lisp object, staying a float when the value
+   is too large for long long. Never cast a double outside long long range. */
+static inline LispObject *make_integral_result(double v)
+{
+    if (!isfinite(v))
+        return lisp_make_error("result is not a finite number");
+    if (v >= -9.2e18 && v <= 9.2e18)
+        return lisp_make_integer((long long)v);
+    return lisp_make_number(v);
+}
+
 /* Cross-file dependency: defined in builtins_lists.c, used by builtins_comparison.c */
 int objects_equal_recursive(LispObject *a, LispObject *b);
 
 /* Per-topic registration functions */
 void register_arithmetic_builtins(Environment *env);
+void register_math_builtins(Environment *env);
 void register_comparison_builtins(Environment *env);
 void register_strings_builtins(Environment *env);
 void register_characters_builtins(Environment *env);

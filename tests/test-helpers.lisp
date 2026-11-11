@@ -1,6 +1,7 @@
 ;; Test Assertion Macros for telnet-lisp Test Suite
 ;; Provides assertion macros for test files: assert-equal, assert-true, assert-false,
-;; assert-error, and assert-nil. All macros abort tests via (error ...) on failure.
+;; assert-error, and assert-nil, plus the approx= float comparison helper.
+;; All macros abort tests via (error ...) on failure.
 ;; Assert that actual equals expected (handles numbers and structural equality)
 ;; Usage: (assert-equal expected actual "description")
 ;; Returns: nil on success, aborts test with error on failure
@@ -43,13 +44,21 @@
 ;; Assert that expression throws an error
 ;; Usage: (assert-error expr "description")
 ;; Returns: nil on success (if error thrown), aborts test if expr succeeds
+;; NOTE: EXPR must be the direct body of the condition-case: progn discards
+;; errors from non-final forms, so wrapping EXPR in progn would miss errors
+;; raised inside user functions. The failure (error ...) is raised outside
+;; the condition-case so the handler cannot swallow it.
 (defmacro assert-error (expr message)
-  `(condition-case err
-     (progn ,expr
+  `(let ((outcome (condition-case err ,expr (error 'assert-error-raised))))
+     (if (eq? outcome 'assert-error-raised)
+       nil
        (error
         (format nil "Assertion failed: ~A (expected error but succeeded)"
-         ,message)))
-     (error nil))) ; Success: error was thrown
+         ,message)))))
+
+;; True when A and B differ by less than 1e-9 (for float results)
+;; Usage: (assert-true (approx= expected actual) "description")
+(defun approx= (a b) (< (abs (- a b)) 0.000000001))
 
 ;; Assert that expression evaluates to nil explicitly
 ;; Usage: (assert-nil expr "description")

@@ -289,6 +289,11 @@ LABEL identifies the builtin for the test name."
 (ditty--deftest-builtin divide     "(/ 1 2)"              2)
 (ditty--deftest-builtin quotient   "(quotient 7 2)"       2)
 (ditty--deftest-builtin even?      "(even? 2)"            2)
+(ditty--deftest-builtin sqrt       "(sqrt 4)"             2)
+(ditty--deftest-builtin abs        "(abs -3)"             2)
+(ditty--deftest-builtin sin        "(sin 0)"              2)
+(ditty--deftest-builtin random     "(random 1)"           2)
+(ditty--deftest-builtin round      "(round 2.5)"          2)
 ;; Comparison
 (ditty--deftest-builtin equals     "(= 1 1)"              2)
 (ditty--deftest-builtin eq?        "(eq? 'a 'a)"          2)
@@ -314,6 +319,7 @@ LABEL identifies the builtin for the test name."
 (ditty--deftest-builtin string-trim "(string-trim s)"     2)
 (ditty--deftest-builtin string-match? "(string-match? r s)" 2)
 (ditty--deftest-builtin number->string "(number->string 1)" 2)
+(ditty--deftest-builtin base64-encode "(base64-encode \"foo\")" 2)
 ;; Symbols
 (ditty--deftest-builtin symbol->string "(symbol->string 'a)" 2)
 ;; Lists

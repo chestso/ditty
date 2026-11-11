@@ -565,6 +565,40 @@ Test if strings are in non-increasing lexicographic order (greater than or equal
 (string>=? "ant" "zebra")       ; => nil
 ```
 
+## `base64-encode`
+
+Encode binary data as a base64 string (RFC 4648).
+
+### Parameters
+
+- `data` - A list or vector of integers between 0 and 255, or a string (its UTF-8 bytes)
+
+### Returns
+
+A string with the standard base64 alphabet (`A`-`Z`, `a`-`z`, `0`-`9`, `+`,
+`/`) and `=` padding, without line breaks.
+
+### Examples
+
+```lisp
+(base64-encode "f")            ; => "Zg=="
+(base64-encode "fo")           ; => "Zm8="
+(base64-encode "foo")          ; => "Zm9v"
+(base64-encode "foobar")       ; => "Zm9vYmFy"
+(base64-encode (list 0 255 128))  ; => "AP+A"
+```
+
+### Errors
+
+Returns an error if an element is not an integer, is outside 0-255, or the
+argument is not a string, list, or vector.
+
+### Notes
+
+Ditty strings are NUL-terminated C strings, so binary data cannot be stored in
+one (an embedded NUL would truncate it). Pass bytes as a list or vector; the
+base64 output is plain ASCII, so returning a string is safe.
+
 ## Standard Library Aliases
 
 The following aliases are defined in the standard library for naming consistency with other Scheme implementations. They are not separate builtins — they resolve to the same function via `defalias`.
