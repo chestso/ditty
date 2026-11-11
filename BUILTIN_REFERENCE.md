@@ -328,6 +328,12 @@ Add numbers together.
 Sum of all numbers. Returns `0` if no arguments provided.
 If all arguments are integers, returns integer; otherwise returns float.
 
+#### Notes
+
+Integer arithmetic is exact as long as the result fits in a signed 64-bit
+integer, including intermediate results that cancel out. If the result
+overflows, it is computed as a float.
+
 #### Examples
 
 ```lisp
@@ -351,6 +357,12 @@ Subtract numbers or negate a single number.
 
 Result of subtraction. Returns integer if all arguments are integers; otherwise returns float.
 
+#### Notes
+
+Integer arithmetic is exact as long as the result fits in a signed 64-bit
+integer, including intermediate results that cancel out. If the result
+overflows, it is computed as a float.
+
 #### Examples
 
 ```lisp
@@ -372,6 +384,12 @@ Multiply numbers together.
 
 Product of all numbers. Returns `1` if no arguments provided.
 If all arguments are integers, returns integer; otherwise returns float.
+
+#### Notes
+
+Integer arithmetic is exact as long as the result fits in a signed 64-bit
+integer, including intermediate results that later become zero. If the result
+overflows, it is computed as a float.
 
 #### Examples
 
@@ -604,7 +622,9 @@ Test if number is even.
 
 #### Notes
 
-Converts floats to integers by truncation before testing.
+Integer arguments are tested exactly across the full 64-bit range. Float
+arguments are truncated to an integer before testing; a non-finite float is
+an error.
 
 #### See Also
 
@@ -636,7 +656,9 @@ Test if number is odd.
 
 #### Notes
 
-Converts floats to integers by truncation before testing.
+Integer arguments are tested exactly across the full 64-bit range. Float
+arguments are truncated to an integer before testing; a non-finite float is
+an error.
 
 #### See Also
 
@@ -654,7 +676,8 @@ Return the largest of the given numbers.
 
 #### Returns
 
-The maximum value. Returns integer if all arguments are integers; otherwise returns float.
+The maximum argument. The result type follows the winning argument: an
+integer if the largest value is an integer, a float if it is a float.
 
 #### Examples
 
@@ -662,6 +685,7 @@ The maximum value. Returns integer if all arguments are integers; otherwise retu
 (max 1 3 2)      ; => 3 (integer)
 (max -5 -2 -10)  ; => -2 (integer)
 (max 1 2.5 2)    ; => 2.5 (float)
+(max 3 2.5)      ; => 3 (integer)
 (max 42)         ; => 42 (single argument)
 ```
 
@@ -684,14 +708,16 @@ Return the smallest of the given numbers.
 
 #### Returns
 
-The minimum value. Returns integer if all arguments are integers; otherwise returns float.
+The minimum argument. The result type follows the winning argument: an
+integer if the smallest value is an integer, a float if it is a float.
 
 #### Examples
 
 ```lisp
 (min 1 3 2)      ; => 1 (integer)
 (min -5 -2 -10)  ; => -10 (integer)
-(min 1 2.5 2)    ; => 1.0 (float)
+(min 1 2.5 2)    ; => 1 (integer)
+(min 2.5 3)      ; => 2.5 (float)
 (min 42)         ; => 42 (single argument)
 ```
 
@@ -836,7 +862,12 @@ Arithmetic shift - shift bits left or right.
 
 #### Returns
 
-The integer shifted by `count` bits. Left shift multiplies by 2^count. Right shift divides by 2^count with sign extension (arithmetic shift).
+The value shifted by `count` bits. Left shift multiplies by 2^count. Right
+shift divides by 2^count with sign extension (arithmetic shift).
+
+The result is an exact integer while it fits in a signed 64-bit integer; a
+larger left shift returns a float, and a shift too large for a float is an
+error. Shifting right by 63 or more bits returns `0` or `-1` (the sign).
 
 #### Examples
 
@@ -851,7 +882,8 @@ The integer shifted by `count` bits. Left shift multiplies by 2^count. Right shi
 
 #### Errors
 
-Returns error if either argument is not an integer.
+Returns error if either argument is not an integer, or if a left shift
+overflows the floating-point range.
 
 #### See Also
 
@@ -1771,6 +1803,13 @@ Test if a character is whitespace.
 
 Comparison and equality predicates.
 
+All five numeric comparisons are variadic and check every adjacent pair:
+`(< 1 2 3)` means `1 < 2` and `2 < 3`. Integer operands are compared exactly
+as 64-bit integers, and mixed integer/float comparisons are exact as well (the
+integer is not rounded to a float first). NaN never satisfies any comparison.
+
+The arithmetic predicates accept two or more numbers.
+
 ### `>`
 
 Test if numbers are in strictly decreasing order.
@@ -1832,6 +1871,7 @@ Test if numbers are all equal.
 (= 5 5 5)            ; => #t
 (= 5.0 5)            ; => #t (cross-type comparison)
 (= 5 3)              ; => #f
+(= 5 5 3)            ; => #f (every pair must be equal)
 ```
 
 ### `>=`
@@ -4192,7 +4232,8 @@ The element at the specified index.
 
 #### Errors
 
-Returns error if index is out of bounds.
+Returns error if the index is negative, out of bounds, or a non-finite
+number.
 
 ### `reverse`
 
