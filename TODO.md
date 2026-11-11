@@ -18,7 +18,7 @@ error. See `src/eval.c` (`eval_unwind_protect`) and `src/condition.c`.
 
 ### condition-case resumes at the failing call, not at the handler
 
-**Status:** FIXED — signaling is a non-local exit.
+**Status:** FIXED in `eae2a6a` — signaling is a non-local exit.
 
 `condition-case` installs an `EvalFrame`; `lisp_raise()` longjmps to it, the
 frame is popped, the handler is matched, and the handler body runs in a child
