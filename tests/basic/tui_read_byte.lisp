@@ -2,7 +2,7 @@
 
 ;; read-byte and read-byte-timeout are hard to test against a real stdin in a
 ;; test runner, so we only test their existence and error behavior here. The
-;; actual blocking behavior is covered by the tui-events parser unit tests.
+;; actual blocking behavior is covered by the terminal_events parser unit tests.
 
 ;; Functions exist and are callable
 (assert-true (callable? read-byte) "read-byte should be callable")

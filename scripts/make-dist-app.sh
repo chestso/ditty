@@ -17,7 +17,7 @@
 #           *.dylib        — all runtime dylib dependencies
 #         Resources/
 #           share/ditty/lisp/lisp-fmt.lisp
-#           share/ditty/lisp/tui-events.lisp
+#           share/ditty/lisp/terminal.lisp
 #           share/emacs/site-lisp/ditty-mode.el
 #           share/icons/hicolor/scalable/apps/ditty.svg
 #           ditty.icns
@@ -148,9 +148,9 @@ if [ -f "$SRC_DIR/lisp/lisp-fmt.lisp" ]; then
 	cp "$SRC_DIR/lisp/lisp-fmt.lisp" \
 		"$APP_DIR/Contents/Resources/share/ditty/lisp/lisp-fmt.lisp"
 fi
-if [ -f "$SRC_DIR/lisp/tui-events.lisp" ]; then
-	cp "$SRC_DIR/lisp/tui-events.lisp" \
-		"$APP_DIR/Contents/Resources/share/ditty/lisp/tui-events.lisp"
+if [ -f "$SRC_DIR/lisp/terminal.lisp" ]; then
+	cp "$SRC_DIR/lisp/terminal.lisp" \
+		"$APP_DIR/Contents/Resources/share/ditty/lisp/terminal.lisp"
 fi
 if [ -f "$SRC_DIR/emacs/ditty-mode.el" ]; then
 	cp "$SRC_DIR/emacs/ditty-mode.el" \
@@ -215,7 +215,7 @@ echo "APPL????" >"$APP_DIR/Contents/PkgInfo"
 
 # --- Launcher wrapper ------------------------------------------------------
 # The executable in Contents/MacOS/ditty is a wrapper script that sets
-# DITTY_LISP_PATH so the REPL finds lisp-fmt.lisp/tui-events.lisp, then
+# DITTY_LISP_PATH so the REPL finds lisp-fmt.lisp/terminal.lisp, then
 # launches the real binary.
 cat >"$APP_DIR/Contents/MacOS/ditty" <<WRAPPER
 #!/bin/bash

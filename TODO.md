@@ -22,3 +22,21 @@
 - `tests/regression/unwind_protect_tail_call.lisp` - 8 test cases
 
 **Related:** See `ditty-bug-condition-case-tail-call.md` for the similar `condition-case` fix.
+
+## Terminal input
+
+### Decode UTF-8 in the event parser
+
+**Status:** OPEN - `terminal-read-event` decodes input one byte at a time.
+
+- Assemble UTF-8 continuation bytes into a single key whose name is the
+  character, instead of reporting several one-byte "characters".
+- Make the byte count of a key explicit in the event.
+
+### Byte-accurate input on Windows
+
+**Status:** OPEN - `read-byte` uses `_getch`, which truncates wide characters.
+
+- Replace `_getch` with a `ReadFile` on the console handle (console input code
+  page set to UTF-8) so `read-byte` behaves like POSIX.
+- Handle redirected stdin, which `read-byte` currently ignores.

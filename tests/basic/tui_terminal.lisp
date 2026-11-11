@@ -52,3 +52,23 @@
  "terminal-resized-p should be false initially")
 (assert-false (terminal-resized-p)
  "terminal-resized-p should stay false without a resize")
+
+;; terminal-tty-p reports whether stdin and stdout are both terminals.  In
+;; ditty's boolean model #f is NIL, so accept #t or nil.
+(assert-true
+ (or (boolean? (terminal-tty-p)) (null? (terminal-tty-p)))
+ "terminal-tty-p should return #t or nil")
+
+;; terminal-wait must never block with a zero timeout, and must report one of
+;; its three documented symbols whatever stdin happens to be.
+(define waited (terminal-wait 0))
+
+(assert-true
+ (or (eq? waited 'timeout) (eq? waited 'input) (eq? waited 'resize))
+ "terminal-wait 0 should return timeout, input, or resize")
+
+;; Invalid timeouts are errors.
+(assert-error (terminal-wait -1)
+ "terminal-wait should reject a negative timeout")
+(assert-error (terminal-wait "x")
+ "terminal-wait should reject a non-integer timeout")

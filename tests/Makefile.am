@@ -197,7 +197,10 @@ TESTS = \
     basic/tui_sleep.lisp \
     basic/tui_terminal.lisp \
     basic/tui_read_byte.lisp \
-    basic/tui_events.lisp \
+    basic/terminal_events.lisp \
+    basic/terminal_loop.lisp \
+    basic/terminal_modes.lisp \
+    basic/terminal_query.lisp \
     advanced/collection_iteration.lisp \
     advanced/cond_case.lisp \
     advanced/condition-system.lisp \
@@ -290,7 +293,10 @@ EXTRA_DIST = \
     basic/tui_sleep.lisp \
     basic/tui_terminal.lisp \
     basic/tui_read_byte.lisp \
-    basic/tui_events.lisp \
+    basic/terminal_events.lisp \
+    basic/terminal_loop.lisp \
+    basic/terminal_modes.lisp \
+    basic/terminal_query.lisp \
     advanced/collection_iteration.lisp \
     advanced/cond_case.lisp \
     advanced/condition-system.lisp \

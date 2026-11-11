@@ -258,11 +258,14 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `profile-report`
   - `profile-reset`
 - [TUI](#tui)
+  - `terminal`
   - `sleep`
   - `set-terminal-raw`
   - `restore-terminal`
   - `terminal-size`
   - `terminal-pixel-size`
+  - `terminal-tty-p`
+  - `terminal-wait`
   - `terminal-input-available-p`
   - `terminal-resized-p`
   - `read-byte`
@@ -6920,40 +6923,134 @@ Clears accumulated profiling data without stopping the profiler.
 ## TUI
 
 Terminal user interface primitives. These functions provide the minimal
-OS-level support needed for interactive terminal applications. Higher-level
-features (keyboard decoding, mouse parsing, focus events, bracketed paste,
-clipboard integration) are implemented in the `tui-events.lisp` library by
-parsing the raw byte sequences produced by these primitives.
+OS-level support needed for interactive terminal applications: raw mode, byte
+input, size, resize notification, and a blocking wait that an event loop can
+build on. The higher-level features (keyboard decoding, mouse and focus events,
+bracketed paste, clipboard integration, capability probes, and the event loop
+itself) are implemented in the `terminal.lisp` library by parsing the raw byte
+sequences produced by these primitives.
 
-### tui-events library
+### `terminal` library
 
-The `tui-events.lisp` library is a proper Ditty module. It lives in its own
-`tui-events` package, exports a public API, and registers itself via
-`provide` so it can be loaded with `require`:
+The `terminal.lisp` library is a proper Ditty module. It lives in its own
+`terminal` package, exports a public API, and registers itself via `provide`
+so it can be loaded with `require`:
 
 ```lisp
-(require 'tui-events)
-(use-package 'tui-events)
+(require 'terminal)
+(use-package 'terminal)
 
-(set-terminal-raw)
-(let loop ((ev (tui-read-event read-byte)))
-  (when ev
-    (princ (format nil "~A~%" (tui-key-name ev)))
-    (loop (tui-read-event read-byte))))
-(restore-terminal)
+(terminal-event-loop
+  (lambda (ev)
+    (cond ((terminal-key-event? ev) (princ (terminal-key-name ev)))
+          ((eq? (cdr (assoc 'type ev)) 'resize) (redraw))))
+  '((:mouse . #t) (:tick-ms 100)))
 ```
 
-Public symbols exported from the `tui-events` package:
+#### Design rules
 
-- `tui-read-event`, `tui-read-escape-sequence`
-- `tui-key-event?`, `tui-key-name`
-- `tui-enable-mouse`, `tui-disable-mouse`, `tui-mouse-event?`
-- `tui-enable-focus-events`, `tui-disable-focus-events`, `tui-focus-event?`
-- `tui-enable-bracketed-paste`, `tui-disable-bracketed-paste`, `tui-paste-start?`, `tui-paste-end?`
-- `tui-set-clipboard`, `tui-request-clipboard`
+- **No blocking waits, no polling.** The loop blocks in exactly one place,
+  `terminal-wait`, which wakes on input, resize, or the next timer deadline.
+  It never calls `sleep` and never spins on `terminal-input-available-p`.
+- **Escape is not guessed with a timeout.** A lone Escape is detected because
+  no continuation byte is already available, and the kitty keyboard protocol
+  (flag 1, "disambiguate") makes Escape arrive as `ESC [ 27 u`. No timer is
+  involved.
+- **Queries are events too.** Inside the loop, capability replies arrive as
+  `reply` events. The blocking `terminal-query` exists only for plain scripts.
+- **Errors are values.** The loop returns the error object; it never prints an
+  error and never exits the process.
 
-Internal helpers are not exported and can only be accessed via the
-`tui-events:` package prefix (for example, `tui-events:tui-last`).
+#### Public symbols exported from the `terminal` package
+
+- `terminal-read-event`, `terminal-read-escape-sequence`
+- `terminal-key-event?`, `terminal-key-name`, `terminal-key-byte`,
+  `terminal-key-mods`
+- `terminal-reply-event?`, `terminal-parse-csi-reply`
+- `terminal-mouse-event?`, `terminal-focus-event?`
+- `terminal-paste-start?`, `terminal-paste-end?`
+- `terminal-enable-mouse`, `terminal-disable-mouse`
+- `terminal-enable-focus-events`, `terminal-disable-focus-events`
+- `terminal-enable-bracketed-paste`, `terminal-disable-bracketed-paste`
+- `terminal-set-clipboard`, `terminal-request-clipboard`
+- `terminal-enter-alt-screen`, `terminal-exit-alt-screen`,
+  `terminal-hide-cursor`, `terminal-show-cursor`
+- `terminal-push-keyboard-flags`, `terminal-pop-keyboard-flags`,
+  `terminal-query-keyboard-flags`
+- `terminal-call-with-raw`, `terminal-event-loop`
+- `terminal-env-capabilities`, `terminal-capabilities-from-replies`,
+  `terminal-capabilities`, `terminal-query`
+
+Internal helpers are not exported and can only be accessed via the `terminal:`
+package prefix (for example, `terminal:terminal-last`).
+
+#### Event shapes
+
+Every event is an alist. The `type` field decides the shape:
+
+| Type           | Fields                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `key`          | `key` (name string), `mods` (bitmask), `event` (`press`/`repeat`/`release`), optional `byte` |
+| `mouse`        | `button`, `x`, `y`, `release`                                                                |
+| `focus`        | `focus` (`in`/`out`)                                                                         |
+| `paste-start`  | -                                                                                            |
+| `paste-end`    | -                                                                                            |
+| `reply`        | `prefix` (`"?"`, `">"`, `"<"`, `"="`, or `""`), `params` (list), `final`                     |
+| `tick`         | -                                                                                            |
+| `resize`       | `rows`, `cols`                                                                               |
+| `capabilities` | `caps` (the alist from `terminal-capabilities-from-replies`)                                 |
+| `unknown`      | `data` (the raw byte list)                                                                   |
+
+Key events always carry `mods` and `event`; legacy bytes report `0` and
+`press`. Names decode the common cases: printable input is the character
+itself, control bytes are `C-x`, and named keys are `up`, `down`, `left`,
+`right`, `home`, `end`, `pageup`, `pagedown`, `insert`, `delete`, `f1`…`f12`,
+`return`, `newline`, `tab`, `backspace`, `escape`.
+
+Under the kitty keyboard protocol, modified keys get a prefix so that a
+modified key never looks like typed text: `CSI 97;5u` is `C-a`,
+`CSI 120;3u` is `M-x`, and `CSI 97;7u` is `C-M-a`. The prefix order is ctrl,
+alt, super; Shift is visible only in `mods`. `CSI 1;5A` and `CSI 3;2~` (legacy
+functional keys with modifiers) keep their plain names and set `mods`.
+
+CSI replies (bodies starting with `?`, `>`, or `=`, or ending in `t`) are
+never keys: `ESC [ ? 64 ; 1 ; 4 c` arrives as a `reply` event with prefix
+`"?"`, params `(64 1 4)`, and final `"c"`.
+
+#### The loop contract
+
+`(terminal-event-loop HANDLER [OPTS])` calls `HANDLER` with one event per call
+and returns `nil` after a clean stop or stdin EOF, or the error object.
+
+`OPTS` is an alist:
+
+- Session modes (`:mouse`, `:focus`, `:paste`, `:alt-screen`,
+  `:hide-cursor`), all off by default, applied through
+  `terminal-call-with-raw`.
+- `:tick-ms` delivers `((type . tick))` at that interval.
+- `:on-start` is a thunk called once after setup, before the first wait.
+- `:probe` (default `#t`) sends the capability probe at start.
+- `:keyboard` (default `#t`) pushes kitty keyboard flags 1 once the probe
+  shows support, and pops them during cleanup.
+- `:wait-fn`, `:read-byte-fn`, `:available-fn`, `:tty-p` are test/embedding
+  seams that default to the builtins.
+
+When the probe is enabled, the handler receives exactly one `capabilities`
+event (built from the environment alone when stdin is not a terminal),
+after the probe's replies are folded, and `reply` events after that arrive
+raw. Return the symbol `stop` from the handler to end the loop.
+
+`terminal-call-with-raw` tracks nesting with its own depth counter, so only
+the outermost session calls `set-terminal-raw`/`restore-terminal`. Code that
+calls `set-terminal-raw` directly bypasses the counter.
+
+#### Legacy Escape limit
+
+A legacy (non-kitty) escape sequence is assumed to arrive in one `write`, so a
+lone Escape is recognised by the absence of an immediately available
+continuation byte, without a timer. A sequence split across two writes reads as
+`escape` followed by text. Terminals write a sequence in one `write`, and the
+kitty keyboard protocol removes the issue wherever it is supported.
 
 ### `sleep`
 
@@ -7071,6 +7168,69 @@ callers must handle `nil`.
           (floor (/ (cdr px) (car size))))))  ; cell height
 ```
 
+### `terminal-tty-p`
+
+Return `#t` if both standard input and standard output are terminals.
+
+#### Parameters
+
+None.
+
+#### Returns
+
+`#t` when stdin and stdout are both terminals, `nil` otherwise (for example
+when either stream is redirected to a file or a pipe). Use this to decide
+whether terminal queries make sense: writing an escape sequence when stdout is
+a file would corrupt it.
+
+#### Examples
+
+```lisp
+(when (terminal-tty-p)
+  (princ "\033[?u"))          ; only ask a real terminal
+```
+
+### `terminal-wait`
+
+Block until input arrives, the terminal is resized, or a timeout expires.
+
+This is the single blocking point of an event loop: it never polls and never
+sleeps, so the process uses no CPU while idle and reacts to input immediately.
+It does not read any byte itself; after it returns `input`, call `read-byte`.
+
+#### Parameters
+
+- `timeout-ms` - Optional non-negative integer maximum wait in milliseconds.
+  Omitted or `nil` waits forever.
+
+#### Returns
+
+One of the symbols:
+
+- `resize` - the terminal was resized (pending resize flag cleared)
+- `input` - stdin is readable; this includes end-of-file, which the following
+  `read-byte` reports as `nil`
+- `timeout` - the timeout expired with nothing to report
+
+#### Examples
+
+```lisp
+;; Event loop skeleton: no sleeping, no polling.
+(set-terminal-raw)
+(let loop ()
+  (let ((why (terminal-wait)))
+    (cond ((eq? why 'resize) (redraw))
+          ((eq? why 'input)
+           (let ((b (read-byte)))
+             (when b (handle-byte b))))
+          (#t nil))
+    (loop)))
+```
+
+#### Errors
+
+Returns an error if the argument is neither a non-negative integer nor `nil`.
+
 ### `terminal-input-available-p`
 
 Return `#t` if stdin has input ready to read without blocking.
@@ -7081,7 +7241,9 @@ None.
 
 #### Returns
 
-`#t` if input is available, `nil` otherwise.
+`#t` if input is available, `nil` otherwise. Prefer `terminal-wait` in an
+event loop: this function is a zero-timeout poll. On Windows, only keys that
+can produce input count.
 
 #### Examples
 
@@ -7105,7 +7267,8 @@ None.
 
 #### Returns
 
-`#t` if the terminal was resized since the last call, `nil` otherwise.
+`#t` if the terminal was resized since the last call, `nil` otherwise. On
+Windows, only real input and resize records count.
 
 #### Examples
 
@@ -7161,6 +7324,21 @@ reached.
 #### Errors
 
 Returns an error if the timeout is not a non-negative integer.
+
+### Known limitations
+
+- Keyboard input is decoded byte by byte: a multi-byte UTF-8 character arrives
+  as several wrong one-byte "characters". Windows `read-byte` also truncates
+  wide characters (`_getch` result `& 0xFF`).
+- The Windows terminal code (`terminal-wait`, `terminal-tty-p`, the console
+  input helper) has not been tested on Windows.
+- On Windows, when stdin is not a console, `terminal-wait` returns `input`
+  immediately, and `read-byte` still reads the console, not the redirected
+  stdin.
+- Legacy (non-kitty) Escape detection assumes a sequence arrives in one
+  `write`; a split sequence reads as `escape` plus text.
+- The capability probe only handles CSI replies; kitty graphics (APC) and
+  XTVERSION (DCS) replies are ignored.
 
 ---
 
