@@ -26,3 +26,12 @@
 (condition-case err (list-ref 'nil 0) (error #t)) ; => #t
 ; Test 8: list-ref with index out of bounds
 (condition-case err (list-ref '(a b c) 10) (error #t)) ; => #t
+
+; Test 9: non-finite or out-of-range float indices error instead of
+; performing an undefined float-to-integer cast
+(load "tests/test-helpers.lisp")
+
+(assert-error (list-ref (list 1 2 3) 1000000000000000000000000000000.0)
+ "list-ref huge float index")
+(assert-error (list-ref (list 1 2 3) 9007199254740993)
+ "list-ref huge integer index")

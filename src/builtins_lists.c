@@ -157,14 +157,22 @@ static LispObject *builtin_list_ref(LispObject *args, Environment *env)
     LispObject *lst = lisp_car(args);
     LispObject *index_obj = lisp_car(lisp_cdr(args));
 
-    int index_is_integer;
-    double index_val = get_numeric_value(index_obj, &index_is_integer);
+    LispType index_type = LISP_TYPE(index_obj);
+    long long index;
 
-    if (LISP_TYPE(index_obj) != LISP_INTEGER && LISP_TYPE(index_obj) != LISP_NUMBER) {
+    if (index_type == LISP_INTEGER) {
+        index = LISP_INT_VAL(index_obj);
+    } else if (index_type == LISP_NUMBER) {
+        double index_val = LISP_NUM_VAL(index_obj);
+        /* Reject NaN, infinities and values outside the long long range
+           before casting (the cast itself would be undefined behavior) */
+        if (!isfinite(index_val) || index_val > 9.2e18 || index_val < -9.2e18)
+            return lisp_make_error("list-ref index out of bounds");
+        index = (long long)index_val;
+    } else {
         return lisp_make_error("list-ref index must be a number");
     }
 
-    long long index = (long long)index_val;
     if (index < 0) {
         return lisp_make_error("list-ref index must be non-negative");
     }

@@ -477,7 +477,8 @@ The element at the specified index.
 
 ### Errors
 
-Returns error if index is out of bounds.
+Returns error if the index is negative, out of bounds, or a non-finite
+number.
 
 ## `reverse`
 
