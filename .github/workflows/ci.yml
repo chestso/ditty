@@ -77,6 +77,15 @@ jobs:
           make check
           make install
 
+      # The version is stamped from `git describe` when make runs
+      # (build-aux/git-version.sh), and a release tag is pushed moments after
+      # the master commit that started this run — so the checkout above can
+      # predate the tag and the artifact would be named 0.7.4.N-<sha> instead
+      # of X.Y.Z.  Re-fetch the tags right before configuring, so a release
+      # never needs a re-run to be stamped correctly.
+      - name: Refresh tags
+        run: git fetch --tags --force origin
+
       - name: Build ditty
         run: |
           ./autogen.sh
@@ -150,6 +159,12 @@ jobs:
           make check
           make install
 
+      # Same reason as the Windows job: the tag for this commit may have been
+      # pushed after the checkout above ran, and the version comes from
+      # `git describe` at build time.
+      - name: Refresh tags
+        run: git fetch --tags --force origin
+
       - name: Build ditty
         run: |
           ./autogen.sh
@@ -191,6 +206,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y autoconf automake libtool pkg-config \
             libgc-dev libpcre2-dev
+
+      # Keeps the version stamped in the test log's header current even when
+      # the tag lands after checkout (see the Windows job).
+      - name: Refresh tags
+        run: git fetch --tags --force origin
 
       - name: Build ditty (default ASan+UBSan)
         run: |
