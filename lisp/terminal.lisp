@@ -684,10 +684,16 @@
 ;; ---------------------------------------------------------------------------
 ;; Capabilities
 ;; ---------------------------------------------------------------------------
-(defconst *terminal-probe* "\033[?u\033[16t\033[14t\033[c"
-  "Capability probe: kitty keyboard flags, cell size, pixel size, then the
-   Device Attributes sentinel.  Every terminal answers DA1 and replies arrive
-   in query order, so DA1 marks the end of the answers.")
+(defconst *terminal-probe-queries* "\033[?u\033[16t\033[14t"
+  "The capability queries without the sentinel: kitty keyboard flags, cell
+   size and pixel size.  `terminal-query` appends the sentinel itself, so it
+   takes these.")
+
+(defconst *terminal-probe* (concat *terminal-probe-queries* "\033[c")
+  "Capability probe: `*terminal-probe-queries*` followed by the Device
+   Attributes sentinel.  Every terminal answers DA1 and replies arrive in
+   query order, so DA1 marks the end of the answers.  The event loop writes
+   this whole string; `terminal-query` callers pass the queries alone.")
 
 (defun terminal-env-capabilities (&optional getenv-fn)
   "Return graphics capabilities inferred from the environment as an alist
@@ -830,7 +836,8 @@
   (let ((query (terminal-opt-value opts :query #t)))
     (if (or (null? query) (not (terminal-tty-p)))
       (terminal-capabilities-from-replies nil)
-      (terminal-capabilities-from-replies (terminal-query *terminal-probe*)))))
+      (terminal-capabilities-from-replies
+       (terminal-query *terminal-probe-queries*)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Event loop

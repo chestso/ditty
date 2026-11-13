@@ -161,6 +161,20 @@
 (assert-equal "query" (cdr (assoc 'source event-caps))
  "reply events count as a query")
 
+;; `terminal-query` appends the DA1 sentinel itself, so what
+;; `terminal-capabilities` hands it must not already end in one: a second DA1
+;; makes the terminal send a second reply that nobody reads.
+(assert-false
+ (string-contains? terminal:*terminal-probe-queries* "\033[c")
+ "the probe queries carry no DA1 sentinel")
+
+(assert-equal (concat terminal:*terminal-probe-queries* "\033[c")
+ terminal:*terminal-probe*
+ "the event-loop probe is the queries plus one DA1 sentinel")
+(assert-equal (- (length terminal:*terminal-probe*) 3)
+ (string-index terminal:*terminal-probe* "\033[c")
+ "the event-loop probe has its only DA1 sentinel at the end")
+
 ;; Every capability alist contains all seven keys.
 (assert-equal 7 (length da1-caps) "the capabilities alist has seven keys")
 
