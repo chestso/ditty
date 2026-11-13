@@ -76,7 +76,7 @@ Every event is an alist. The `type` field decides the shape:
 | `focus`        | `focus` (`in`/`out`)                                                                                    |
 | `paste-start`  | -                                                                                                       |
 | `paste-end`    | -                                                                                                       |
-| `reply`        | `prefix` (`"?"`, `">"`, `"<"`, `"="`, or `""`), `params` (list), `final`                                |
+| `reply`        | `prefix` (`"?"`, `">"`, `"<"`, `"="`, or `""`), `params` (list), `final`, optional `intermediates`      |
 | `tick`         | -                                                                                                       |
 | `resize`       | `rows`, `cols`                                                                                          |
 | `capabilities` | `caps` (the alist from `terminal-capabilities-from-replies`)                                            |
@@ -97,6 +97,13 @@ functional keys with modifiers) keep their plain names and set `mods`.
 CSI replies (bodies starting with `?`, `>`, or `=`, or ending in `t`) are
 never keys: `ESC [ ? 64 ; 1 ; 4 c` arrives as a `reply` event with prefix
 `"?"`, params `(64 1 4)`, and final `"c"`.
+
+Intermediate bytes (0x20-0x2F) between the parameters and the final byte are
+reported in the optional `intermediates` string and never leak into the
+parameters: the DECRQM reply `ESC [ ? 2026 ; 2 $ y` has params `(2026 2)`,
+final `"y"`, and `intermediates` `"$"`. `terminal-parse-csi-reply` returns the
+same as an optional fourth element, `("?" (2026 2) "y" "$")`; replies without
+intermediates stay three-element triples.
 
 ### Text input and UTF-8
 

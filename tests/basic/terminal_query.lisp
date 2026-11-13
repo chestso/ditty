@@ -26,6 +26,23 @@
  (terminal-parse-csi-reply '(91 59 116))
  "empty parameter fields are zero")
 
+;; Intermediate bytes (0x20-0x2F) follow the parameters and are reported
+;; separately instead of corrupting the last parameter.
+(assert-equal '("?" (2026 2) "y" "$")
+ (terminal-parse-csi-reply '(91 63 50 48 50 54 59 50 36 121))
+ "DECRQM reply keeps its status and reports the $ intermediate")
+(assert-equal '("?" (2026 0) "y" "$")
+ (terminal-parse-csi-reply '(91 63 50 48 50 54 59 48 36 121))
+ "DECRQM status 0 is a real status")
+(assert-equal '("" (1) "q" " ")
+ (terminal-parse-csi-reply '(91 49 32 113))
+ "a space intermediate is reported")
+(assert-equal '("" () "p" "$")
+ (terminal-parse-csi-reply '(91 36 112))
+ "intermediates without parameters leave the parameter list empty")
+(assert-equal 3 (length (terminal-parse-csi-reply '(91 63 49 117)))
+ "a reply without intermediates stays a triple")
+
 (assert-nil (terminal-parse-csi-reply '())
  "an empty byte list is not a CSI reply")
 (assert-nil (terminal-parse-csi-reply '(79 65))

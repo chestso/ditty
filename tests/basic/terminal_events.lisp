@@ -266,6 +266,24 @@
 (assert-equal "u" (cdr (assoc 'final keyboard-reply)) "keyboard reply final")
 (assert-equal '(1) (cdr (assoc 'params keyboard-reply)) "keyboard reply params")
 
+(assert-false (assoc 'intermediates da1)
+ "a reply without intermediate bytes has no intermediates field")
+
+;; DECRQM reply ESC [ ? 2026 ; 2 $ y: the $ is an intermediate byte, not part
+;; of the second parameter.
+(define decrqm-reply
+  (terminal-read-event
+   (make-fake-reader '(27 91 63 50 48 50 54 59 50 36 121))))
+
+(assert-true (terminal-reply-event? decrqm-reply) "DECRQM reply is a reply")
+
+(assert-equal "?" (cdr (assoc 'prefix decrqm-reply)) "DECRQM prefix")
+(assert-equal '(2026 2) (cdr (assoc 'params decrqm-reply))
+ "DECRQM params keep the mode status")
+(assert-equal "y" (cdr (assoc 'final decrqm-reply)) "DECRQM final")
+(assert-equal "$" (cdr (assoc 'intermediates decrqm-reply))
+ "DECRQM intermediates")
+
 (define size-reply
   (terminal-read-event (make-fake-reader '(27 91 54 59 50 48 59 49 48 116))))
 

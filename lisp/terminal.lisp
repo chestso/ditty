@@ -241,13 +241,28 @@
       (let ((value (string->number head)))
         (if value value 0)))))
 
+(defun terminal-split-csi-params (bytes)
+  "Split the CSI body BYTES (prefix already removed) into a pair
+   (PARAMETER-BYTES . INTERMEDIATE-BYTES).  Parameter bytes are 0x30-0x3F and
+   intermediate bytes 0x20-0x2F, and the intermediates follow the parameters,
+   so the split falls at the first byte below 0x30."
+  (let loop ((rest bytes)
+             (acc nil))
+    (if (or (null? rest) (< (car rest) 48))
+      (cons (reverse acc) rest)
+      (loop (cdr rest) (cons (car rest) acc)))))
+
 (defun terminal-parse-csi-reply (seq)
   "Parse a CSI unit list SEQ (which starts with 91, '[') into a triple
-   (PREFIX PARAMS FINAL).
+   (PREFIX PARAMS FINAL), or a quadruple (PREFIX PARAMS FINAL INTERMEDIATES)
+   when the sequence carries intermediate bytes.
 
    PREFIX is \"?\", \">\", \"<\", \"=\" or \"\".  PARAMS is a list of
    integers: an empty field is 0 and sub-parameters after ':' are dropped.
-   FINAL is a one-character string.  Returns nil for non-CSI input."
+   FINAL is a one-character string.  INTERMEDIATES is a string of the bytes
+   between the parameters and the final, such as \"$\" in the DECRQM reply
+   ESC [ ? 2026 ; 2 $ y, and is absent from the result when there are none.
+   Returns nil for non-CSI input."
   (if (or (null? seq) (not (= (car seq) 91)) (null? (cdr seq)))
     nil
     (let* ((final (terminal-last seq))
@@ -260,11 +275,18 @@
               ((equal? first-byte 60) "<")
               ((equal? first-byte 61) "=")
               (#t "")))
-           (param-bytes (if (equal? prefix "") body (cdr body)))
-           (param-string (terminal-integer-list->string param-bytes)))
-      (list prefix
-       (map terminal-parse-csi-field (split param-string ";"))
-       (char->string (code-char final))))))
+           (parts
+            (terminal-split-csi-params
+             (if (equal? prefix "") body (cdr body))))
+           (param-string (terminal-integer-list->string (car parts)))
+           (intermediates (terminal-integer-list->string (cdr parts)))
+           (triple
+            (list prefix
+             (map terminal-parse-csi-field (split param-string ";"))
+             (char->string (code-char final)))))
+      (if (equal? intermediates "")
+        triple
+        (append triple (list intermediates))))))
 
 (defun terminal-csi-reply-seq? (seq)
   "Return #t if the CSI unit list SEQ carries a terminal reply, not a key."
@@ -661,10 +683,14 @@
            ((and (not (null? seq)) (= (car seq) 91) (> (length seq) 1)
                  (terminal-csi-reply-seq? seq))
             (let ((reply (terminal-parse-csi-reply seq)))
-              (list (cons 'type 'reply)
-               (cons 'prefix (car reply))
-               (cons 'params (cadr reply))
-               (cons 'final (caddr reply)))))
+              (append
+               (list (cons 'type 'reply)
+                (cons 'prefix (car reply))
+                (cons 'params (cadr reply))
+                (cons 'final (caddr reply)))
+               (if (> (length reply) 3)
+                 (list (cons 'intermediates (cadddr reply)))
+                 nil))))
            ((terminal-focus-sequence? seq) (terminal-parse-focus-sequence seq))
            (#t (terminal-parse-keyboard-sequence seq)))))
       ((= b 13) (terminal-make-key-event "return" nil 0 'press)) ; CR -> return
@@ -715,13 +741,17 @@
      (cons 'iterm2-images (if (equal? term-program "iTerm.app") #t #f)))))
 
 (defun terminal-normalise-reply (reply)
-  "Return REPLY as a (PREFIX PARAMS FINAL) triple, or nil."
+  "Return REPLY as a (PREFIX PARAMS FINAL) triple, with a fourth INTERMEDIATES
+   element when it has one, or nil."
   (cond
     ((null? reply) nil)
     ((and (pair? reply) (pair? (car reply)))
-     (list (alist-get 'prefix reply) (alist-get 'params reply)
-      (alist-get 'final reply)))
-    ((and (list? reply) (= (length reply) 3)) reply)
+     (let ((intermediates (alist-get 'intermediates reply)))
+       (append
+        (list (alist-get 'prefix reply) (alist-get 'params reply)
+         (alist-get 'final reply))
+        (if (null? intermediates) nil (list intermediates)))))
+    ((and (list? reply) (or (= (length reply) 3) (= (length reply) 4))) reply)
     (#t nil)))
 
 (defun terminal-normalise-replies (replies)
