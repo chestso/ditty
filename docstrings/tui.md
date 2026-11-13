@@ -43,9 +43,10 @@ so it can be loaded with `require`:
 
 ### Public symbols exported from the `terminal` package
 
-- `terminal-read-event`, `terminal-read-escape-sequence`
-- `terminal-key-event?`, `terminal-key-name`, `terminal-key-byte`,
-  `terminal-key-mods`
+- `terminal-read-event`, `terminal-read-escape-sequence`,
+  `terminal-make-decoder`
+- `terminal-key-event?`, `terminal-key-name`, `terminal-key-code`,
+  `terminal-key-text`, `terminal-key-mods`
 - `terminal-reply-event?`, `terminal-parse-csi-reply`
 - `terminal-mouse-event?`, `terminal-focus-event?`
 - `terminal-paste-start?`, `terminal-paste-end?`
@@ -68,20 +69,20 @@ package prefix (for example, `terminal:terminal-last`).
 
 Every event is an alist. The `type` field decides the shape:
 
-| Type           | Fields                                                                                       |
-| -------------- | -------------------------------------------------------------------------------------------- |
-| `key`          | `key` (name string), `mods` (bitmask), `event` (`press`/`repeat`/`release`), optional `byte` |
-| `mouse`        | `button`, `x`, `y`, `release`                                                                |
-| `focus`        | `focus` (`in`/`out`)                                                                         |
-| `paste-start`  | -                                                                                            |
-| `paste-end`    | -                                                                                            |
-| `reply`        | `prefix` (`"?"`, `">"`, `"<"`, `"="`, or `""`), `params` (list), `final`                     |
-| `tick`         | -                                                                                            |
-| `resize`       | `rows`, `cols`                                                                               |
-| `capabilities` | `caps` (the alist from `terminal-capabilities-from-replies`)                                 |
-| `unknown`      | `data` (the raw byte list)                                                                   |
+| Type           | Fields                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| `key`          | `key` (name string), `mods` (bitmask), `event` (`press`/`repeat`/`release`), optional `code` and `text` |
+| `mouse`        | `button`, `x`, `y`, `release`                                                                           |
+| `focus`        | `focus` (`in`/`out`)                                                                                    |
+| `paste-start`  | -                                                                                                       |
+| `paste-end`    | -                                                                                                       |
+| `reply`        | `prefix` (`"?"`, `">"`, `"<"`, `"="`, or `""`), `params` (list), `final`                                |
+| `tick`         | -                                                                                                       |
+| `resize`       | `rows`, `cols`                                                                                          |
+| `capabilities` | `caps` (the alist from `terminal-capabilities-from-replies`)                                            |
+| `unknown`      | `data` (the raw list of code points)                                                                    |
 
-Key events always carry `mods` and `event`; legacy bytes report `0` and
+Key events always carry `mods` and `event`; legacy input reports `0` and
 `press`. Names decode the common cases: printable input is the character
 itself, control bytes are `C-x`, and named keys are `up`, `down`, `left`,
 `right`, `home`, `end`, `pageup`, `pagedown`, `insert`, `delete`, `f1`…`f12`,
@@ -96,6 +97,45 @@ functional keys with modifiers) keep their plain names and set `mods`.
 CSI replies (bodies starting with `?`, `>`, or `=`, or ending in `t`) are
 never keys: `ESC [ ? 64 ; 1 ; 4 c` arrives as a `reply` event with prefix
 `"?"`, params `(64 1 4)`, and final `"c"`.
+
+### Text input and UTF-8
+
+Keyboard input is UTF-8 text, so the parser works on Unicode scalar values:
+an incremental decoder sits under the existing ESC/CSI/SS3/OSC grammar and
+turns the byte stream into code points before any sequence logic sees it.
+Every sequence byte is below 0x80, so the grammar itself is unchanged, and
+OSC payloads (titles, clipboard replies) carry real characters rather than
+Latin-1 lookalikes.
+
+Decoding is split-safe: `terminal-make-decoder` returns a mutable decoder,
+and `(terminal-read-event READ-BYTE [DECODER])` keeps its state when the byte
+source runs dry in the middle of a character. The event loop owns one decoder
+for its lifetime. Omitting the decoder uses a fresh one, which is right for
+finite input: a truncated character simply yields no event. Nothing flushes a
+partial character on a timer; at EOF it is discarded.
+
+Malformed input never corrupts a string and never swallows the byte that
+exposed the problem. The decoder implements Unicode Table 3-7 with the
+maximal-subpart rule: overlong encodings, surrogates, values above U+10FFFF
+and stray continuation bytes become U+FFFD, and the exposing byte is examined
+again as if the decoder were idle. `E2 82 41` is therefore U+FFFD followed by
+`A`, even when the stream is split between `82` and `41`.
+
+A key event carries two optional fields:
+
+- `code` is the Unicode scalar value for character keys (`ä` is 228, `C-a`
+  is 1, kitty `CSI 228 u` is 228). Named keys have no `code`.
+- `text` is the string that is safe to insert. It is present exactly for
+  plain printable input: no ctrl/alt/super modifier, code 32 or above, not
+  DEL, and not a C1 control. U+FFFD from malformed input is text (a visible
+  replacement character); C1 controls (U+0080-U+009F) are named `c1-<n>` and
+  are never text. The kitty `CSI u` path never sets `text` (flag 1 does not
+  request associated text, and a modified key must not look like typed
+  input), and it validates `code` as a scalar value, naming anything else
+  `key-<code>`.
+
+Grapheme clusters are deliberately not joined: `e` followed by U+0301 is two
+key events, and text widgets own cluster-aware editing.
 
 ### The loop contract
 
@@ -361,6 +401,13 @@ Windows, only real input and resize records count.
 
 Read a single byte from standard input.
 
+The byte is the UTF-8 encoding of typed input, not a character: a non-ASCII
+key arrives as several bytes. The `terminal` library's decoder reassembles
+them (see "Text input and UTF-8"); use `read-byte` directly only when raw
+bytes are what you want. On Windows the read is byte-exact for any typed
+character (UTF-8 is built from the console's UTF-16 key records) and honours
+redirected stdin.
+
 ### Parameters
 
 None.
@@ -391,6 +438,10 @@ milliseconds.
 An integer in the range 0-255, or `nil` if the timeout expires or EOF is
 reached.
 
+On Windows, a redirected stdin is read with `ReadFile` and is not subject to
+the timeout: the call blocks until a byte or EOF. Timeouts for redirected
+stdin are not supported.
+
 ### Examples
 
 ```lisp
@@ -407,14 +458,11 @@ Returns an error if the timeout is not a non-negative integer.
 
 ## Known limitations
 
-- Keyboard input is decoded byte by byte: a multi-byte UTF-8 character arrives
-  as several wrong one-byte "characters". Windows `read-byte` also truncates
-  wide characters (`_getch` result `& 0xFF`).
 - The Windows terminal code (`terminal-wait`, `terminal-tty-p`, the console
   input helper) has not been tested on Windows.
 - On Windows, when stdin is not a console, `terminal-wait` returns `input`
-  immediately, and `read-byte` still reads the console, not the redirected
-  stdin.
+  immediately; `read-byte` itself reads the redirected stream correctly, one
+  byte at a time.
 - Legacy (non-kitty) Escape detection assumes a sequence arrives in one
   `write`; a split sequence reads as `escape` plus text.
 - The capability probe only handles CSI replies; kitty graphics (APC) and

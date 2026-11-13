@@ -7,6 +7,9 @@
 ;; mouse events, focus events, bracketed paste, terminal reply parsing
 ;; (capability probes), and clipboard integration via OSC 52.
 ;;
+;; Input is decoded from UTF-8 into Unicode scalar values before parsing, so a
+;; key event is one code point even when its bytes were split across reads.
+;;
 ;; The event loop blocks in exactly one place (`terminal-wait`) and never
 ;; sleeps or polls: idle CPU is zero and input latency is not quantised by a
 ;; poll interval. An error raised by user code unwinds the loop (running its
