@@ -365,5 +365,6 @@ EXTRA_DIST = \
     fixtures/app_lib/app-helper.lisp \
     fixtures/extra_lib/extra-lib.lisp \
     fixtures/terminal_keys.lisp \
+    fixtures/terminal_session.lisp \
     fixtures/terminal_write.lisp \
     fixtures/terminal_write_large.lisp

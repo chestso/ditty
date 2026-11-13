@@ -17,6 +17,7 @@
     terminal-disable-bracketed-paste terminal-set-clipboard
     terminal-request-clipboard terminal-enter-alt-screen
     terminal-exit-alt-screen terminal-hide-cursor terminal-show-cursor
+    terminal-enable-autowrap terminal-disable-autowrap
     terminal-push-keyboard-flags terminal-pop-keyboard-flags
     terminal-query-keyboard-flags terminal-call-with-raw terminal-event-loop
     terminal-make-decoder terminal-env-capabilities
@@ -24,8 +25,8 @@
 
 (define actual-exports (package-exports 'terminal))
 
-(assert-equal 35 (length expected-exports)
- "expected terminal export list has 35 names")
+(assert-equal 37 (length expected-exports)
+ "expected terminal export list has 37 names")
 (assert-equal (length expected-exports) (length actual-exports)
  "terminal exports correct number of symbols")
 

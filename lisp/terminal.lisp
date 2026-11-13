@@ -33,6 +33,7 @@
 ;;   terminal-set-clipboard, terminal-request-clipboard,
 ;;   terminal-enter-alt-screen, terminal-exit-alt-screen,
 ;;   terminal-hide-cursor, terminal-show-cursor,
+;;   terminal-enable-autowrap, terminal-disable-autowrap,
 ;;   terminal-push-keyboard-flags, terminal-pop-keyboard-flags,
 ;;   terminal-query-keyboard-flags,
 ;;   terminal-call-with-raw, terminal-event-loop,
@@ -66,6 +67,8 @@
  'terminal-exit-alt-screen
  'terminal-hide-cursor
  'terminal-show-cursor
+ 'terminal-enable-autowrap
+ 'terminal-disable-autowrap
  'terminal-push-keyboard-flags
  'terminal-pop-keyboard-flags
  'terminal-query-keyboard-flags
@@ -600,6 +603,15 @@
   "Show the cursor."
   (princ "\033[?25h"))
 
+(defun terminal-disable-autowrap ()
+  "Stop the cursor wrapping to the next line at the right margin: text written
+   past the last column is clipped instead of wrapping."
+  (princ "\033[?7l"))
+
+(defun terminal-enable-autowrap ()
+  "Restore wrapping at the right margin (the usual terminal default)."
+  (princ "\033[?7h"))
+
 (defun terminal-push-keyboard-flags (flags)
   "Push kitty keyboard protocol FLAGS onto the terminal's stack."
   (princ (format nil "\033[>~Au" flags)))
@@ -619,9 +631,11 @@
 
 (defun terminal-call-with-raw (thunk &optional opts)
   "Call THUNK with the terminal in raw mode, enabling the modes requested in
-   the OPTS alist (:mouse, :focus, :paste, :alt-screen, :hide-cursor; all
-   default off).  Cleanup runs on normal return and on error, in reverse
-   order, and only the outermost call restores the terminal state.
+   the OPTS alist (:mouse, :focus, :paste, :alt-screen, :hide-cursor,
+   :no-wrap; all default off).  :no-wrap turns autowrap off, so a line
+   longer than the screen is clipped instead of spilling onto the next row.
+   Cleanup runs on normal return and on error, in reverse order, and only
+   the outermost call restores the terminal state.
 
    Raw-mode nesting is tracked here, so code that calls `set-terminal-raw`
    directly bypasses the counter."
@@ -630,6 +644,7 @@
          (paste (terminal-opt-value opts :paste nil))
          (alt (terminal-opt-value opts :alt-screen nil))
          (hide (terminal-opt-value opts :hide-cursor nil))
+         (no-wrap (terminal-opt-value opts :no-wrap nil))
          (outer (= *terminal-raw-depth* 0)))
     (when outer (set-terminal-raw))
     (set! *terminal-raw-depth* (+ *terminal-raw-depth* 1))
@@ -638,7 +653,9 @@
     (when paste (terminal-enable-bracketed-paste))
     (when alt (terminal-enter-alt-screen))
     (when hide (terminal-hide-cursor))
-    (unwind-protect (thunk) (when hide (terminal-show-cursor))
+    (when no-wrap (terminal-disable-autowrap))
+    (unwind-protect (thunk) (when no-wrap (terminal-enable-autowrap))
+      (when hide (terminal-show-cursor))
       (when alt (terminal-exit-alt-screen))
       (when paste (terminal-disable-bracketed-paste))
       (when focus (terminal-disable-focus-events))
@@ -893,7 +910,7 @@
   "Run an event loop, calling HANDLER with one event per call.
 
    OPTS keys: the session keys of `terminal-call-with-raw` (:mouse, :focus,
-   :paste, :alt-screen, :hide-cursor), plus:
+   :paste, :alt-screen, :hide-cursor, :no-wrap), plus:
 
    :tick-ms     integer; deliver a ((type . tick)) event that often
    :on-start    thunk called once after setup, before the first wait

@@ -2,6 +2,8 @@
 # Test: terminal output reaches the descriptor complete and in order.
 # - terminal-write is byte-exact, ordered against princ, and survives a
 #   reader that starts late (the write has to wait for the pipe to drain).
+# - terminal-call-with-raw emits its mode sequences in the right order, with
+#   :no-wrap innermost: set last on entry, restored first on exit.
 
 set -e
 
@@ -54,5 +56,23 @@ if [ "$count" != "1000000" ]; then
     exit 1
 fi
 echo "PASS: terminal-write with a late reader"
+
+# --- sessions: order of the mode sequences ---------------------------------
+"$DITTY_BIN" "$FIXTURES/terminal_session.lisp" > "$TMP/session.out"
+{
+    # alt screen and hidden cursor, then :no-wrap last; undone in reverse
+    printf '\033[?1049h\033[?25l\033[?7lA\033[?7h\033[?25h\033[?1049l'
+    printf '\033[?7lB\033[?7h'
+    printf 'C'
+    # an error inside the thunk still restores everything, then the handler runs
+    printf '\033[?25l\033[?7lD\033[?7h\033[?25hE'
+} > "$TMP/session.expected"
+
+if ! cmp -s "$TMP/session.out" "$TMP/session.expected"; then
+    echo "FAIL: session escape sequences differ from the expected order"
+    cmp "$TMP/session.out" "$TMP/session.expected" || true
+    exit 1
+fi
+echo "PASS: session mode order"
 
 echo "PASS: terminal_output_pipe"

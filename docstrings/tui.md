@@ -56,6 +56,7 @@ so it can be loaded with `require`:
 - `terminal-set-clipboard`, `terminal-request-clipboard`
 - `terminal-enter-alt-screen`, `terminal-exit-alt-screen`,
   `terminal-hide-cursor`, `terminal-show-cursor`
+- `terminal-enable-autowrap`, `terminal-disable-autowrap`
 - `terminal-push-keyboard-flags`, `terminal-pop-keyboard-flags`,
   `terminal-query-keyboard-flags`
 - `terminal-call-with-raw`, `terminal-event-loop`
@@ -152,8 +153,10 @@ and returns `nil` after a clean stop or stdin EOF, or the error object.
 `OPTS` is an alist:
 
 - Session modes (`:mouse`, `:focus`, `:paste`, `:alt-screen`,
-  `:hide-cursor`), all off by default, applied through
-  `terminal-call-with-raw`.
+  `:hide-cursor`, `:no-wrap`), all off by default, applied through
+  `terminal-call-with-raw`. `:no-wrap` turns autowrap off, so a line longer
+  than the screen is clipped instead of spilling onto the next row; it is set
+  last on entry and restored first on exit.
 - `:tick-ms` delivers `((type . tick))` at that interval.
 - `:on-start` is a thunk called once after setup, before the first wait.
 - `:on-idle` is a thunk called each time the loop is about to block: once

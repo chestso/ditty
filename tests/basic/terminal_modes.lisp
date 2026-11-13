@@ -28,6 +28,10 @@
  "enable bracketed paste writes ESC[?2004h")
 (assert-equal "\033[?2004l" (terminal-disable-bracketed-paste)
  "disable bracketed paste writes ESC[?2004l")
+(assert-equal "\033[?7l" (terminal-disable-autowrap)
+ "disable autowrap writes ESC[?7l")
+(assert-equal "\033[?7h" (terminal-enable-autowrap)
+ "enable autowrap writes ESC[?7h")
 (assert-equal "\033[>1u" (terminal-push-keyboard-flags 1)
  "push keyboard flags writes ESC[>1u")
 (assert-equal "\033[<u" (terminal-pop-keyboard-flags)
@@ -85,3 +89,23 @@
  "sessions with mode options return the thunk value")
 (assert-equal 0 terminal:*terminal-raw-depth*
  "depth is zero after sessions with mode options")
+
+;; :no-wrap is a session mode like the others: the thunk's value comes back,
+;; the depth is restored, and an error inside still unwinds. The order of the
+;; escape sequences is checked byte for byte by
+;; regression/terminal_output_pipe.sh.
+(assert-equal 9 (terminal-call-with-raw (lambda () 9) '((:no-wrap . #t)))
+ "a :no-wrap session returns the thunk value")
+(assert-equal 0 terminal:*terminal-raw-depth*
+ "depth is zero after a :no-wrap session")
+
+(define no-wrap-failure
+  (condition-case err
+    (terminal-call-with-raw (lambda () (error "boom")) '((:no-wrap . #t)))
+    (error err)))
+
+(assert-true (error? no-wrap-failure)
+ "an error inside a :no-wrap session is propagated")
+
+(assert-equal 0 terminal:*terminal-raw-depth*
+ "depth is restored after an error in a :no-wrap session")
