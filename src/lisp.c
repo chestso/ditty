@@ -572,6 +572,11 @@ LispObject *lisp_cadddr(LispObject *obj)
     return lisp_car(lisp_cdr(lisp_cddr(obj)));
 }
 
+LispObject *lisp_cdddr(LispObject *obj)
+{
+    return lisp_cdr(lisp_cddr(obj));
+}
+
 /* Simple API */
 static Environment *global_env = NULL;
 

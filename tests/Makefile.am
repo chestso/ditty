@@ -189,6 +189,7 @@ TESTS = \
     basic/integers.lisp \
     basic/keywords.lisp \
     basic/length.lisp \
+    basic/list_cxr.lisp \
     basic/list_reverse.lisp \
     basic/make_string.lisp \
     basic/math.lisp \
@@ -291,6 +292,7 @@ EXTRA_DIST = \
     basic/integers.lisp \
     basic/keywords.lisp \
     basic/length.lisp \
+    basic/list_cxr.lisp \
     basic/list_reverse.lisp \
     basic/make_string.lisp \
     basic/math.lisp \

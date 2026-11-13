@@ -49,6 +49,7 @@ DEFINE_CXR(builtin_cdar, "cdar", lisp_cdar)
 DEFINE_CXR(builtin_cddr, "cddr", lisp_cddr)
 DEFINE_CXR(builtin_caddr, "caddr", lisp_caddr)
 DEFINE_CXR(builtin_cadddr, "cadddr", lisp_cadddr)
+DEFINE_CXR(builtin_cdddr, "cdddr", lisp_cdddr)
 #undef DEFINE_CXR
 
 /* Readable list accessors */
@@ -580,6 +581,7 @@ void register_lists_builtins(Environment *env)
     REGISTER("cddr", builtin_cddr);
     REGISTER("caddr", builtin_caddr);
     REGISTER("cadddr", builtin_cadddr);
+    REGISTER("cdddr", builtin_cdddr);
     REGISTER("first", builtin_first);
     REGISTER("second", builtin_second);
     REGISTER("third", builtin_third);

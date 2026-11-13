@@ -461,6 +461,7 @@ LispObject *lisp_cdar(LispObject *obj);
 LispObject *lisp_cddr(LispObject *obj);
 LispObject *lisp_caddr(LispObject *obj);
 LispObject *lisp_cadddr(LispObject *obj);
+LispObject *lisp_cdddr(LispObject *obj);
 
 /* Regex helper functions */
 pcre2_code *compile_regex_pattern(const char *pattern, char **error_msg);

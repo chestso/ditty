@@ -157,7 +157,7 @@
     ;; --- Symbols (src/builtins_symbols.c) ---
     "symbol->string" "string->symbol" "keyword-name"
     ;; --- Lists (src/builtins_lists.c) ---
-    "car" "cdr" "caar" "cadr" "cdar" "cddr" "caddr" "cadddr"
+    "car" "cdr" "caar" "cadr" "cdar" "cddr" "caddr" "cadddr" "cdddr"
     "first" "second" "third" "fourth" "rest"
     "set-car!" "set-cdr!" "cons" "list" "length" "list-ref"
     "reverse" "append" "assoc" "assq" "assv" "alist-get"

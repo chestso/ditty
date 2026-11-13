@@ -176,6 +176,7 @@ error that is signaled carries the stack where it was raised. A returned
 | `lisp_cadr(obj)`   | Second element        |
 | `lisp_caddr(obj)`  | Third element         |
 | `lisp_cadddr(obj)` | Fourth element        |
+| `lisp_cdddr(obj)`  | Rest after three      |
 
 > Mutating `set-car!` and `set-cdr!` are available as Lisp builtins, not as C API functions. Use `LISP_CAR(v)` and `LISP_CDR(v)` as lvalues to mutate cons cells from C.
 

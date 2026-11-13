@@ -147,6 +147,7 @@ The list without its first two elements.
 
 - `cdr` - Rest of list
 - `caddr` - Third element
+- `cdddr` - Rest after three elements
 
 ## `caddr`
 
@@ -195,6 +196,30 @@ The fourth element of the list.
 
 - `caddr` - Third element
 - `fourth` - Alias for this function
+
+## `cdddr`
+
+Return the cdr of the cdr of the cdr of a list. Equivalent to `(cdr (cdr (cdr x)))`.
+
+### Parameters
+
+- `list` - A list with at least three elements
+
+### Returns
+
+The list without its first three elements.
+
+### Examples
+
+```lisp
+(cdddr '(1 2 3 4 5)) ; => (4 5)
+(cdddr '(a b c))     ; => nil
+```
+
+### See Also
+
+- `cddr` - Rest after two elements
+- `cadddr` - Fourth element
 
 ## `first`
 
