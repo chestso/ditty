@@ -3,8 +3,9 @@
 #include <signal.h>
 
 #ifdef _WIN32
-#include <windows.h>
+#include <fcntl.h>
 #include <io.h>
+#include <windows.h>
 #else
 #include <fcntl.h>
 #include <poll.h>
@@ -663,12 +664,24 @@ static LispObject *builtin_read_byte_timeout(LispObject *args, Environment *env)
  * waits for the descriptor when another process left the tty non-blocking. */
 static int write_all_stdout(const char *buf, size_t len)
 {
+    int rc = 0;
+
+#ifdef _WIN32
+    /* fd 1 is in text mode, where _write turns every "\n" into "\r\n" and so
+     * makes the output one byte longer per line. Write the bytes as they are
+     * and put the descriptor back the way it was found, so princ and format
+     * keep their text-mode translation. */
+    int prev_mode = _setmode(1, _O_BINARY);
+#endif
+
     while (len > 0) {
 #ifdef _WIN32
         unsigned int chunk = len > INT_MAX ? INT_MAX : (unsigned int)len;
         int n = _write(1, buf, chunk);
-        if (n < 0)
-            return -1;
+        if (n < 0) {
+            rc = -1;
+            break;
+        }
 #else
         ssize_t n = write(STDOUT_FILENO, buf, len);
         if (n < 0) {
@@ -684,12 +697,19 @@ static int write_all_stdout(const char *buf, size_t len)
 #endif
         if (n == 0) {
             errno = EIO;
-            return -1;
+            rc = -1;
+            break;
         }
         buf += n;
         len -= (size_t)n;
     }
-    return 0;
+
+#ifdef _WIN32
+    if (prev_mode != -1)
+        (void)_setmode(1, prev_mode);
+#endif
+
+    return rc;
 }
 
 /* terminal-write: write a string to stdout without stdio's line buffering, so
