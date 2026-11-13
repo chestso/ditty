@@ -9,23 +9,23 @@
 ;; Verify terminal exports the public API (order is implementation-defined)
 (define expected-exports
   '(terminal-read-event terminal-read-escape-sequence terminal-key-event?
-    terminal-key-name terminal-key-byte terminal-key-mods terminal-reply-event?
-    terminal-parse-csi-reply terminal-mouse-event? terminal-focus-event?
-    terminal-paste-start? terminal-paste-end? terminal-enable-mouse
-    terminal-disable-mouse terminal-enable-focus-events
+    terminal-key-name terminal-key-code terminal-key-text terminal-key-mods
+    terminal-reply-event? terminal-parse-csi-reply terminal-mouse-event?
+    terminal-focus-event? terminal-paste-start? terminal-paste-end?
+    terminal-enable-mouse terminal-disable-mouse terminal-enable-focus-events
     terminal-disable-focus-events terminal-enable-bracketed-paste
     terminal-disable-bracketed-paste terminal-set-clipboard
     terminal-request-clipboard terminal-enter-alt-screen
     terminal-exit-alt-screen terminal-hide-cursor terminal-show-cursor
     terminal-push-keyboard-flags terminal-pop-keyboard-flags
     terminal-query-keyboard-flags terminal-call-with-raw terminal-event-loop
-    terminal-env-capabilities terminal-capabilities-from-replies
-    terminal-capabilities terminal-query))
+    terminal-make-decoder terminal-env-capabilities
+    terminal-capabilities-from-replies terminal-capabilities terminal-query))
 
 (define actual-exports (package-exports 'terminal))
 
-(assert-equal 33 (length expected-exports)
- "expected terminal export list has 33 names")
+(assert-equal 35 (length expected-exports)
+ "expected terminal export list has 35 names")
 (assert-equal (length expected-exports) (length actual-exports)
  "terminal exports correct number of symbols")
 
@@ -48,8 +48,11 @@
  (terminal-key-name (terminal-read-event (make-fake-reader '(120))))
  "plain x key")
 (assert-equal 120
- (terminal-key-byte (terminal-read-event (make-fake-reader '(120))))
- "plain x key byte")
+ (terminal-key-code (terminal-read-event (make-fake-reader '(120))))
+ "plain x key code")
+(assert-equal "x"
+ (terminal-key-text (terminal-read-event (make-fake-reader '(120))))
+ "plain x key text")
 (assert-equal 0
  (terminal-key-mods (terminal-read-event (make-fake-reader '(120))))
  "plain x key has no modifiers")
@@ -60,10 +63,48 @@
  (terminal-key-name (terminal-read-event (make-fake-reader '(32))))
  "space key")
 
+;; UTF-8 input: one code point is one key event
+(define aring (terminal-read-event (make-fake-reader '(195 165))))
+
+(assert-equal "å" (terminal-key-name aring) "UTF-8 å key name")
+(assert-equal 229 (terminal-key-code aring) "UTF-8 å key code")
+(assert-equal "å" (terminal-key-text aring) "UTF-8 å key text")
+(assert-equal 0 (terminal-key-mods aring) "UTF-8 å has no modifiers")
+(assert-equal 1 (length (terminal-key-name aring)) "å name is one character")
+
+(define emoji (terminal-read-event (make-fake-reader '(240 159 152 128))))
+
+(assert-equal "😀" (terminal-key-name emoji) "four-byte emoji key name")
+(assert-equal 128512 (terminal-key-code emoji) "four-byte emoji key code")
+(assert-equal "😀" (terminal-key-text emoji) "four-byte emoji key text")
+(assert-equal 1 (length (terminal-key-name emoji))
+ "emoji name is one character")
+
+;; Malformed input becomes U+FFFD, which is visible text.
+(define replacement (terminal-read-event (make-fake-reader '(255))))
+
+(assert-equal (char->string (code-char #xFFFD)) (terminal-key-name replacement)
+ "a stray byte becomes U+FFFD")
+(assert-equal #xFFFD (terminal-key-code replacement) "replacement key code")
+(assert-equal (char->string (code-char #xFFFD)) (terminal-key-text replacement)
+ "U+FFFD is typed text")
+
+;; C1 controls are not text.
+(define c1 (terminal-read-event (make-fake-reader '(194 133))))
+
+(assert-equal "c1-133" (terminal-key-name c1) "C2 85 is a C1 control")
+(assert-equal 133 (terminal-key-code c1) "C1 control code")
+
+(assert-nil (terminal-key-text c1) "C1 control is not text")
+
 ;; Control characters
-(assert-equal "C-a"
- (terminal-key-name (terminal-read-event (make-fake-reader '(1))))
- "C-a key")
+(define ctrl-a (terminal-read-event (make-fake-reader '(1))))
+
+(assert-equal "C-a" (terminal-key-name ctrl-a) "C-a key")
+(assert-equal 1 (terminal-key-code ctrl-a) "C-a key code")
+
+(assert-nil (terminal-key-text ctrl-a) "C-a is not text")
+
 (assert-equal "C-d"
  (terminal-key-name (terminal-read-event (make-fake-reader '(4))))
  "C-d key")
@@ -90,6 +131,13 @@
  (terminal-key-name (terminal-read-event (make-fake-reader '(27 91 51 126))))
  "delete")
 
+(assert-nil
+ (terminal-key-code (terminal-read-event (make-fake-reader '(27 91 65))))
+ "a named key has no code")
+(assert-nil
+ (terminal-key-text (terminal-read-event (make-fake-reader '(27 91 65))))
+ "a named key is not text")
+
 ;; Special keys via SS3
 (assert-equal "up"
  (terminal-key-name (terminal-read-event (make-fake-reader '(27 79 65))))
@@ -103,6 +151,29 @@
  (terminal-key-mods (terminal-read-event (make-fake-reader '(27))))
  "lone escape has no modifiers")
 
+;; A multi-byte character after ESC is one unit, not a stray text event.
+(define esc-reader (make-fake-reader '(27 195 165)))
+
+(define esc-aring (terminal-read-event esc-reader))
+
+(assert-equal "esc-229" (terminal-key-name esc-aring)
+ "ESC + UTF-8 å is one escape-sequence unit")
+
+(assert-nil (terminal-read-event esc-reader)
+ "ESC + UTF-8 å leaves no stray text event")
+
+;; OSC payloads decode to code points (title/clipboard replies).
+(define osc-reader (make-fake-reader '(93 53 50 59 99 59 195 165 7)))
+
+(define osc-dec (terminal-make-decoder))
+
+(define osc-seq
+  (terminal-read-escape-sequence
+   (lambda () (terminal:terminal-decoder-next osc-dec osc-reader))))
+
+(assert-equal '(93 53 50 59 99 59 229 7) osc-seq
+ "an OSC payload decodes its UTF-8 bytes")
+
 ;; Kitty keyboard protocol: CSI 27 u is Escape with flag 1 enabled.
 (assert-equal "escape"
  (terminal-key-name (terminal-read-event (make-fake-reader '(27 91 50 55 117))))
@@ -112,12 +183,36 @@
  "kitty escape has no modifiers")
 
 ;; Kitty modified keys get a prefix so they never look like typed text.
-(define ctrl-a
+(define kitty-ctrl-a
   (terminal-read-event (make-fake-reader '(27 91 57 55 59 53 117))))
 
-(assert-equal "C-a" (terminal-key-name ctrl-a) "kitty CSI 97;5u is C-a")
-(assert-equal 4 (terminal-key-mods ctrl-a) "kitty CSI 97;5u has ctrl")
-(assert-equal 97 (terminal-key-byte ctrl-a) "kitty CSI 97;5u carries its byte")
+(assert-equal "C-a" (terminal-key-name kitty-ctrl-a) "kitty CSI 97;5u is C-a")
+(assert-equal 4 (terminal-key-mods kitty-ctrl-a) "kitty CSI 97;5u has ctrl")
+(assert-equal 97 (terminal-key-code kitty-ctrl-a)
+ "kitty CSI 97;5u carries its code")
+
+(assert-nil (terminal-key-text kitty-ctrl-a)
+ "kitty CSI 97;5u is not typed text")
+
+;; Kitty unmodified character keys carry a code but never associated text.
+(define kitty-aring
+  (terminal-read-event (make-fake-reader '(27 91 50 50 56 117))))
+
+(assert-equal "ä" (terminal-key-name kitty-aring) "kitty CSI 228 u is ä")
+(assert-equal 228 (terminal-key-code kitty-aring) "kitty CSI 228 u code")
+
+(assert-nil (terminal-key-text kitty-aring)
+ "kitty CSI 228 u has no text")
+
+;; Surrogates and out-of-range code points are not scalar values.
+(assert-equal "key-55296"
+ (terminal-key-name
+  (terminal-read-event (make-fake-reader '(27 91 53 53 50 57 54 117))))
+ "kitty CSI 55296 u is named, not minted")
+(assert-equal "key-1114112"
+ (terminal-key-name
+  (terminal-read-event (make-fake-reader '(27 91 49 49 49 52 49 49 50 117))))
+ "kitty CSI 1114112 u is named, not minted")
 
 (define alt-x
   (terminal-read-event (make-fake-reader '(27 91 49 50 48 59 51 117))))
@@ -233,7 +328,8 @@
 (assert-false (terminal-key-event? mouse-ev) "mouse is not key event")
 (assert-false (terminal-reply-event? mouse-ev) "mouse is not a reply")
 
-;; Modifier accessors on non-key events
+;; Accessors on non-key events
 (assert-equal 0 (terminal-key-mods mouse-ev) "mouse has no key modifiers")
 
-(assert-nil (terminal-key-byte mouse-ev) "mouse has no key byte")
+(assert-nil (terminal-key-code mouse-ev) "mouse has no key code")
+(assert-nil (terminal-key-text mouse-ev) "mouse has no key text")

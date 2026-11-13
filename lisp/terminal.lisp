@@ -19,10 +19,10 @@
 ;;   (terminal-event-loop (lambda (ev) (handle ev)) '((:mouse . #t)))
 ;;
 ;; Public API (exported from the `terminal` package):
-;;   terminal-read-event, terminal-read-escape-sequence,
-;;   terminal-key-event?, terminal-key-name, terminal-key-byte,
-;;   terminal-key-mods, terminal-reply-event?, terminal-parse-csi-reply,
-;;   terminal-mouse-event?, terminal-focus-event?,
+;;   terminal-read-event, terminal-read-escape-sequence, terminal-make-decoder,
+;;   terminal-key-event?, terminal-key-name, terminal-key-code,
+;;   terminal-key-text, terminal-key-mods, terminal-reply-event?,
+;;   terminal-parse-csi-reply, terminal-mouse-event?, terminal-focus-event?,
 ;;   terminal-paste-start?, terminal-paste-end?,
 ;;   terminal-enable-mouse, terminal-disable-mouse,
 ;;   terminal-enable-focus-events, terminal-disable-focus-events,
@@ -39,9 +39,11 @@
 
 (export 'terminal-read-event
  'terminal-read-escape-sequence
+ 'terminal-make-decoder
  'terminal-key-event?
  'terminal-key-name
- 'terminal-key-byte
+ 'terminal-key-code
+ 'terminal-key-text
  'terminal-key-mods
  'terminal-reply-event?
  'terminal-parse-csi-reply
@@ -81,7 +83,7 @@
     (terminal-last (cdr lst))))
 
 (defun terminal-integer-list->string (ints)
-  "Convert a list of byte integers to a string."
+  "Convert a list of code point integers to a string."
   (join (map (lambda (b) (char->string (code-char b))) ints) ""))
 
 (defun terminal-opt-value (opts key default)
@@ -90,15 +92,106 @@
     (if pair (cdr pair) default)))
 
 ;; ---------------------------------------------------------------------------
+;; UTF-8 decoder
+;; ---------------------------------------------------------------------------
+;; The parser below works on Unicode scalar values. This decoder turns a byte
+;; stream into scalar values, one at a time. It is incremental: a character
+;; split across two reads leaves its state in the decoder, and "no byte now"
+;; is reported as nil without losing that state. Malformed input follows the
+;; Unicode "maximal subpart" rule (Table 3-7): the bytes consumed so far
+;; become U+FFFD, and the byte that exposed the error is re-examined as if the
+;; decoder were idle, so it is never swallowed.
+(defun terminal-make-decoder ()
+  "Return a new incremental UTF-8 decoder. Decoder state is mutable: pass the
+   same decoder to successive `terminal-read-event` calls so a character split
+   across two reads decodes correctly."
+  (let ((dec (make-vector 5 nil)))
+    (vector-set! dec 0 0)
+    (vector-set! dec 1 0)
+    (vector-set! dec 2 #x80)
+    (vector-set! dec 3 #xBF)
+    (vector-set! dec 4 nil)
+    dec))
+
+(defun terminal-decoder-reset! (dec)
+  "Reset DEC to the idle state."
+  (vector-set! dec 0 0)
+  (vector-set! dec 1 0)
+  (vector-set! dec 2 #x80)
+  (vector-set! dec 3 #xBF))
+
+(defun terminal-decoder-start! (dec need acc lo hi)
+  "Put DEC in the middle of a character: NEED continuations, accumulator ACC,
+   next continuation in [LO, HI]."
+  (vector-set! dec 0 need)
+  (vector-set! dec 1 acc)
+  (vector-set! dec 2 lo)
+  (vector-set! dec 3 hi)
+  nil)
+
+(defun terminal-decoder-feed (dec byte)
+  "Feed one BYTE to DEC. Return a code point, or nil while a character is
+   still incomplete. A malformed sequence yields U+FFFD and files at most one
+   more code point (the re-examined byte's result) in DEC's held slot."
+  (if (= (vector-ref dec 0) 0)
+    (cond
+      ((< byte #x80) byte)
+      ((and (>= byte #xC2) (<= byte #xDF))
+       (terminal-decoder-start! dec 1 (logand byte #x1F) #x80 #xBF))
+      ((= byte #xE0)
+       (terminal-decoder-start! dec 2 (logand byte #x0F) #xA0 #xBF))
+      ((or (and (>= byte #xE1) (<= byte #xEC))
+           (and (>= byte #xEE) (<= byte #xEF)))
+       (terminal-decoder-start! dec 2 (logand byte #x0F) #x80 #xBF))
+      ((= byte #xED)
+       (terminal-decoder-start! dec 2 (logand byte #x0F) #x80 #x9F))
+      ((= byte #xF0)
+       (terminal-decoder-start! dec 3 (logand byte #x07) #x90 #xBF))
+      ((and (>= byte #xF1) (<= byte #xF3))
+       (terminal-decoder-start! dec 3 (logand byte #x07) #x80 #xBF))
+      ((= byte #xF4)
+       (terminal-decoder-start! dec 3 (logand byte #x07) #x80 #x8F))
+      (#t #xFFFD)) ; stray continuation, overlong lead, invalid lead
+    (let ((lo (vector-ref dec 2))
+          (hi (vector-ref dec 3)))
+      (if (and (>= byte lo) (<= byte hi))
+        (let ((acc (logior (ash (vector-ref dec 1) 6) (logand byte #x3F)))
+              (left (- (vector-ref dec 0) 1)))
+          (if (= left 0)
+            (progn (terminal-decoder-reset! dec) acc)
+            (terminal-decoder-start! dec left acc #x80 #xBF)))
+        ;; The maximal subpart consumed so far is malformed: replace it with
+        ;; U+FFFD, then re-examine this byte as if the decoder were idle.
+        (progn (terminal-decoder-reset! dec)
+          (vector-set! dec 4 (terminal-decoder-feed dec byte))
+          #xFFFD)))))
+
+(defun terminal-decoder-next (dec read-byte-fn)
+  "Return the next code point from DEC, reading bytes with READ-BYTE-FN, or
+   nil when no byte is available right now. State survives across calls; nil
+   never means EOF by itself."
+  (let ((held (vector-ref dec 4)))
+    (if (not (null? held))
+      (progn (vector-set! dec 4 nil) held)
+      (let loop ()
+        (let ((byte (read-byte-fn)))
+          (if (null? byte)
+            nil
+            (let ((cp (terminal-decoder-feed dec byte)))
+              (if (null? cp) (loop) cp))))))))
+
+;; ---------------------------------------------------------------------------
 ;; Escape sequence buffer
 ;; ---------------------------------------------------------------------------
 (defun terminal-read-escape-sequence (read-byte-fn)
-  "Read bytes following an ESC (0x1b) and return them as a list of integers.
+  "Read the units following an ESC (0x1b) and return them as a list.
    The leading ESC is not included. Handles SS3, CSI, and OSC sequences.
 
-   READ-BYTE-FN must return nil when no byte is already available, and must
-   never wait for one: a lone Escape is detected by the absence of a
-   continuation byte, not by a timeout."
+   A unit is a byte or a decoded Unicode scalar value; every sequence byte is
+   below 0x80, so the two coincide wherever the grammar matters. READ-BYTE-FN
+   must return nil when no unit is already available, and must never wait for
+   one: a lone Escape is detected by the absence of a continuation unit, not by
+   a timeout."
   (define b1 (read-byte-fn))
   (cond
     ((null? b1) nil)
@@ -146,7 +239,7 @@
         (if value value 0)))))
 
 (defun terminal-parse-csi-reply (seq)
-  "Parse a CSI byte list SEQ (which starts with 91, '[') into a triple
+  "Parse a CSI unit list SEQ (which starts with 91, '[') into a triple
    (PREFIX PARAMS FINAL).
 
    PREFIX is \"?\", \">\", \"<\", \"=\" or \"\".  PARAMS is a list of
@@ -171,7 +264,7 @@
        (char->string (code-char final))))))
 
 (defun terminal-csi-reply-seq? (seq)
-  "Return #t if the CSI byte list SEQ carries a terminal reply, not a key."
+  "Return #t if the CSI unit list SEQ carries a terminal reply, not a key."
   (let ((parsed (terminal-parse-csi-reply seq)))
     (if (null? parsed)
       nil
@@ -182,7 +275,7 @@
 ;; Keyboard events
 ;; ---------------------------------------------------------------------------
 (defun terminal-lookup-csi-key (final param)
-  "Map a CSI final byte and optional numeric parameter to a key name.
+  "Map a CSI final unit and optional numeric parameter to a key name.
    Returns nil if the sequence is not recognized."
   (if (= final 126)
     (cond
@@ -219,7 +312,7 @@
       (#t nil))))
 
 (defun terminal-lookup-ss3-key (final)
-  "Map an SS3 final byte to a key name. Returns nil if not recognized."
+  "Map an SS3 final unit to a key name. Returns nil if not recognized."
   (cond
     ((= final 65) "up")
     ((= final 66) "down")
@@ -231,7 +324,7 @@
 
 (defun terminal-csi-fields (seq)
   "Return the ';'-separated parameter fields of a CSI sequence as strings.
-   SEQ starts with 91 and ends with the final byte."
+   SEQ starts with 91 and ends with the final unit."
   (let* ((body (reverse (cdr (reverse (cdr seq)))))
          (first-byte (if (null? body) nil (car body)))
          (stripped
@@ -259,6 +352,11 @@
    (if (not (= 0 (logand mods 2))) "M-" "")
    (if (not (= 0 (logand mods 8))) "s-" "")))
 
+(defun terminal-scalar-value? (code)
+  "Return #t if CODE is a Unicode scalar value: 0..U+10FFFF, no surrogates."
+  (and (>= code 0) (<= code 1114111)
+       (not (and (>= code 55296) (<= code 57343)))))
+
 (defun terminal-kitty-key-name (code)
   "Return the base key name for a kitty keyboard code point CODE."
   (cond
@@ -266,13 +364,16 @@
     ((= code 13) "return")
     ((= code 9) "tab")
     ((= code 127) "backspace")
-    ((and (>= code 0) (<= code 1114111)) (char->string (code-char code)))
+    ((terminal-scalar-value? code) (char->string (code-char code)))
     (#t (format nil "key-~A" code))))
 
-(defun terminal-make-key-event (name byte mods event)
-  "Build a key event alist."
+(defun terminal-make-key-event (name code mods event &optional text)
+  "Build a key event alist. CODE is the Unicode scalar value for character
+   keys (nil for named keys); TEXT is the typed string, and is present only
+   for plain printable input."
   (let* ((ev (list (cons 'type 'key) (cons 'key name)))
-         (ev (if (null? byte) ev (append ev (list (cons 'byte byte))))))
+         (ev (if (null? code) ev (append ev (list (cons 'code code)))))
+         (ev (if (null? text) ev (append ev (list (cons 'text text))))))
     (append ev
      (list (cons 'mods (if (null? mods) 0 mods))
       (cons 'event (if (null? event) 'press event))))))
@@ -292,9 +393,10 @@
            (event (terminal-csi-event mods-field)))
       (if (= final 117) ; 'u' - kitty keyboard protocol
         (let* ((base (terminal-kitty-key-name code))
-               (name (concat (terminal-modifier-prefix mods) base))
-               (byte (if (< code 128) code nil)))
-          (terminal-make-key-event name byte mods event))
+               (name (concat (terminal-modifier-prefix mods) base)))
+          ;; CSI u never carries associated text: flag 1 does not request it,
+          ;; and a modified key must not look like plain input.
+          (terminal-make-key-event name code mods event))
         (let ((name (terminal-lookup-csi-key final code)))
           (if name
             (terminal-make-key-event name nil mods event)
@@ -303,7 +405,7 @@
              event)))))))
 
 (defun terminal-parse-keyboard-sequence (seq)
-  "Parse a list of bytes after ESC into a keyboard event alist."
+  "Parse a list of units after ESC into a keyboard event alist."
   (cond
     ((null? seq) (terminal-make-key-event "escape" nil 0 'press))
     ((= (car seq) 79) ; SS3 (ESC O ...)
@@ -325,9 +427,15 @@
   "Return the key name of a keyboard event, or nil if not a key event."
   (and (terminal-key-event? ev) (cdr (assoc 'key ev))))
 
-(defun terminal-key-byte (ev)
-  "Return the byte field of a keyboard event, or nil."
-  (and (terminal-key-event? ev) (cdr (assoc 'byte ev))))
+(defun terminal-key-code (ev)
+  "Return the code field of a keyboard event, or nil.
+   The code is a Unicode scalar value for character keys."
+  (and (terminal-key-event? ev) (cdr (assoc 'code ev))))
+
+(defun terminal-key-text (ev)
+  "Return the text field of a keyboard event, or nil.
+   Text is present only for plain printable input: a string safe to insert."
+  (and (terminal-key-event? ev) (cdr (assoc 'text ev))))
 
 (defun terminal-key-mods (ev)
   "Return the modifier bitmask of a keyboard event (0 when absent)."
@@ -356,7 +464,7 @@
 
 (defun terminal-parse-mouse-sequence (seq)
   "Parse an SGR mouse sequence (ESC [ < Cb ; Cx ; Cy (M|m)) into an event.
-   SEQ is the bytes after ESC."
+   SEQ is the units after ESC."
   (if
     (or (null? seq) (not (= (car seq) 91)) (< (length seq) 2)
         (not (= (cadr seq) 60)))
@@ -516,47 +624,59 @@
 ;; ---------------------------------------------------------------------------
 ;; Event reader
 ;; ---------------------------------------------------------------------------
-(defun terminal-read-event (read-byte-fn)
+(defun terminal-read-event (read-byte-fn &optional decoder)
   "Read one terminal event using READ-BYTE-FN. Returns a keyboard event for
    printable input, a mouse/focus/paste marker for special sequences, a reply
-   event for a CSI terminal reply, or nil on timeout/EOF.
+   event for a CSI terminal reply, or nil when no event can be produced from
+   the input available now.
 
-   READ-BYTE-FN must return nil when no byte is already available and must
-   never wait: after ESC, the absence of a continuation byte means a lone
-   Escape.  The limit of that rule is that a legacy escape sequence split
-   across two writes reads as `escape` plus text; terminals write a sequence
-   in one write, and the kitty keyboard protocol (flag 1) removes the issue
-   wherever it is supported."
-  (define b (read-byte-fn))
-  (cond
-    ((null? b) nil)
-    ((= b 27) ; ESC
-     (let ((seq (terminal-read-escape-sequence read-byte-fn)))
-       (cond
-         ((terminal-paste-start? seq) (list (cons 'type 'paste-start)))
-         ((terminal-paste-end? seq) (list (cons 'type 'paste-end)))
-         ((and (not (null? seq)) (= (car seq) 91) (> (length seq) 1)
-               (= (cadr seq) 60))
-          (terminal-parse-mouse-sequence seq))
-         ((and (not (null? seq)) (= (car seq) 91) (> (length seq) 1)
-               (terminal-csi-reply-seq? seq))
-          (let ((reply (terminal-parse-csi-reply seq)))
-            (list (cons 'type 'reply)
-             (cons 'prefix (car reply))
-             (cons 'params (cadr reply))
-             (cons 'final (caddr reply)))))
-         ((terminal-focus-sequence? seq) (terminal-parse-focus-sequence seq))
-         (#t (terminal-parse-keyboard-sequence seq)))))
-    ((= b 13) (terminal-make-key-event "return" nil 0 'press)) ; CR -> return
-    ((= b 10) (terminal-make-key-event "newline" nil 0 'press)) ; LF
-    ((= b 9) (terminal-make-key-event "tab" nil 0 'press))
-    ((= b 127) (terminal-make-key-event "backspace" nil 0 'press))
-    ((< b 32) ; control character
-     (terminal-make-key-event
-      (concat "C-" (char->string (char-downcase (code-char (+ b 64))))) b 0
-      'press))
-    (#t ; printable ASCII/Unicode byte -- return the byte as key
-     (terminal-make-key-event (char->string (code-char b)) b 0 'press))))
+   READ-BYTE-FN returns the next byte, or nil when none is already available;
+   it must never wait. DECODER is an incremental decoder from
+   `terminal-make-decoder`; omitting it uses a fresh one (right for finite
+   input, where a truncated character simply yields no event). Pass the same
+   decoder across calls (the event loop does) so a character split across two
+   reads decodes as one key.
+
+   After ESC, the absence of a continuation unit means a lone Escape. The
+   limit of that rule is that a legacy escape sequence split across two writes
+   reads as `escape` plus text; terminals write a sequence in one write, and
+   the kitty keyboard protocol (flag 1) removes the issue wherever it is
+   supported."
+  (let* ((dec (if (null? decoder) (terminal-make-decoder) decoder))
+         (next-unit (lambda () (terminal-decoder-next dec read-byte-fn)))
+         (b (next-unit)))
+    (cond
+      ((null? b) nil)
+      ((= b 27) ; ESC
+       (let ((seq (terminal-read-escape-sequence next-unit)))
+         (cond
+           ((terminal-paste-start? seq) (list (cons 'type 'paste-start)))
+           ((terminal-paste-end? seq) (list (cons 'type 'paste-end)))
+           ((and (not (null? seq)) (= (car seq) 91) (> (length seq) 1)
+                 (= (cadr seq) 60))
+            (terminal-parse-mouse-sequence seq))
+           ((and (not (null? seq)) (= (car seq) 91) (> (length seq) 1)
+                 (terminal-csi-reply-seq? seq))
+            (let ((reply (terminal-parse-csi-reply seq)))
+              (list (cons 'type 'reply)
+               (cons 'prefix (car reply))
+               (cons 'params (cadr reply))
+               (cons 'final (caddr reply)))))
+           ((terminal-focus-sequence? seq) (terminal-parse-focus-sequence seq))
+           (#t (terminal-parse-keyboard-sequence seq)))))
+      ((= b 13) (terminal-make-key-event "return" nil 0 'press)) ; CR -> return
+      ((= b 10) (terminal-make-key-event "newline" nil 0 'press)) ; LF
+      ((= b 9) (terminal-make-key-event "tab" nil 0 'press))
+      ((= b 127) (terminal-make-key-event "backspace" nil 0 'press))
+      ((< b 32) ; control character
+       (terminal-make-key-event
+        (concat "C-" (char->string (char-downcase (code-char (+ b 64))))) b 0
+        'press))
+      ((and (>= b 128) (<= b 159)) ; C1 control: named, never text
+       (terminal-make-key-event (format nil "c1-~A" b) b 0 'press))
+      (#t ; printable character -- name and text are the character itself
+       (terminal-make-key-event (char->string (code-char b)) b 0 'press
+        (char->string (code-char b)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Capabilities

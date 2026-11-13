@@ -201,6 +201,7 @@ TESTS = \
     basic/terminal_loop.lisp \
     basic/terminal_modes.lisp \
     basic/terminal_query.lisp \
+    basic/terminal_utf8.lisp \
     advanced/collection_iteration.lisp \
     advanced/cond_case.lisp \
     advanced/condition-system.lisp \
@@ -298,6 +299,7 @@ EXTRA_DIST = \
     basic/terminal_loop.lisp \
     basic/terminal_modes.lisp \
     basic/terminal_query.lisp \
+    basic/terminal_utf8.lisp \
     advanced/collection_iteration.lisp \
     advanced/cond_case.lisp \
     advanced/condition-system.lisp \
