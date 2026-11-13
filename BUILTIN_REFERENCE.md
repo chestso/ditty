@@ -271,6 +271,7 @@ docstrings via `scripts/gen-docstrings.sh`.
   - `terminal-resized-p`
   - `read-byte`
   - `read-byte-timeout`
+  - `terminal-write`
 - [Type Predicates](#type-predicates)
   - `null?`
   - `atom?`
@@ -7012,8 +7013,8 @@ Clears accumulated profiling data without stopping the profiler.
 
 Terminal user interface primitives. These functions provide the minimal
 OS-level support needed for interactive terminal applications: raw mode, byte
-input, size, resize notification, and a blocking wait that an event loop can
-build on. The higher-level features (keyboard decoding, mouse and focus events,
+input, unbuffered output, size, resize notification, and a blocking wait that
+an event loop can build on. The higher-level features (keyboard decoding, mouse and focus events,
 bracketed paste, clipboard integration, capability probes, and the event loop
 itself) are implemented in the `terminal.lisp` library by parsing the raw byte
 sequences produced by these primitives.
@@ -7465,6 +7466,41 @@ stdin are not supported.
 #### Errors
 
 Returns an error if the timeout is not a non-negative integer.
+
+### `terminal-write`
+
+Write a string to standard output with as few `write(2)` calls as possible.
+
+`princ` goes through stdio, which is line-buffered on a terminal with a small
+buffer (1024 bytes on Linux): a long string is cut into several writes, and a
+string holding a newline is cut at the newline. A screen frame written that way
+reaches the terminal in pieces, which can show as flicker.
+`terminal-write` flushes anything stdio still holds, then writes the whole
+string straight to the file descriptor, retrying on short writes and
+interruption, so the terminal sees the frame as one contiguous byte run.
+
+One `write(2)` is still not an atomic screen update: the kernel and the
+terminal may split a large write. Wrap a frame in the synchronized-output mode
+(`ESC[?2026h` ... `ESC[?2026l`) to make the terminal present it all at once.
+
+#### Parameters
+
+- `string` - The text to write, escape sequences included
+
+#### Returns
+
+`string`, like `princ`.
+
+#### Examples
+
+```lisp
+(terminal-write (concat "\033[?2026h" frame "\033[?2026l"))
+```
+
+#### Errors
+
+Returns an error if the argument is not a string, or if the write fails (for
+example when the terminal has gone away).
 
 ### Known limitations
 

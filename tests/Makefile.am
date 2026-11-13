@@ -211,6 +211,7 @@ TESTS = \
     basic/tui_sleep.lisp \
     basic/tui_terminal.lisp \
     basic/tui_read_byte.lisp \
+    basic/tui_write.lisp \
     basic/terminal_events.lisp \
     basic/terminal_loop.lisp \
     basic/terminal_modes.lisp \
@@ -265,6 +266,7 @@ AM_TESTS_ENVIRONMENT = \
 # Shell tests
 TESTS += regression/test_caught_error_suppress_print.sh
 TESTS += regression/terminal_utf8_pipe.sh
+TESTS += regression/terminal_output_pipe.sh
 TESTS += regression/script_stray_paren.sh
 
 EXTRA_DIST = \
@@ -314,6 +316,7 @@ EXTRA_DIST = \
     basic/tui_sleep.lisp \
     basic/tui_terminal.lisp \
     basic/tui_read_byte.lisp \
+    basic/tui_write.lisp \
     basic/terminal_events.lisp \
     basic/terminal_loop.lisp \
     basic/terminal_modes.lisp \
@@ -352,6 +355,7 @@ EXTRA_DIST = \
     regression/unwind_protect_tail_call.lisp \
     regression/test_caught_error_suppress_print.sh \
     regression/terminal_utf8_pipe.sh \
+    regression/terminal_output_pipe.sh \
     regression/script_stray_paren.sh \
     regression/caught_error_suppress_print.lisp \
     bench/fib.lisp \
@@ -360,4 +364,6 @@ EXTRA_DIST = \
     bench/run.sh \
     fixtures/app_lib/app-helper.lisp \
     fixtures/extra_lib/extra-lib.lisp \
-    fixtures/terminal_keys.lisp
+    fixtures/terminal_keys.lisp \
+    fixtures/terminal_write.lisp \
+    fixtures/terminal_write_large.lisp

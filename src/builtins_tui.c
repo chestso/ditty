@@ -7,6 +7,7 @@
 #include <io.h>
 #else
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <termios.h>
@@ -653,6 +654,68 @@ static LispObject *builtin_read_byte_timeout(LispObject *args, Environment *env)
 #endif
 }
 
+/* ========================================================================== */
+/* Raw output                                                                 */
+/* ========================================================================== */
+
+/* Write all LEN bytes of BUF to stdout, bypassing stdio. Returns 0 on
+ * success, or -1 with errno set. Retries on EINTR and short writes, and
+ * waits for the descriptor when another process left the tty non-blocking. */
+static int write_all_stdout(const char *buf, size_t len)
+{
+    while (len > 0) {
+#ifdef _WIN32
+        unsigned int chunk = len > INT_MAX ? INT_MAX : (unsigned int)len;
+        int n = _write(1, buf, chunk);
+        if (n < 0)
+            return -1;
+#else
+        ssize_t n = write(STDOUT_FILENO, buf, len);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd = { STDOUT_FILENO, POLLOUT, 0 };
+                (void)poll(&pfd, 1, -1);
+                continue;
+            }
+            return -1;
+        }
+#endif
+        if (n == 0) {
+            errno = EIO;
+            return -1;
+        }
+        buf += n;
+        len -= (size_t)n;
+    }
+    return 0;
+}
+
+/* terminal-write: write a string to stdout without stdio's line buffering, so
+ * a whole frame goes out in one write(2) however long it is or whatever
+ * newlines it holds. Returns the string, like princ. */
+static LispObject *builtin_terminal_write(LispObject *args, Environment *env)
+{
+    (void)env;
+
+    if (args == NIL || LISP_CDR(args) != NIL)
+        return lisp_raise_error("terminal-write requires 1 argument");
+
+    LispObject *arg = LISP_CAR(args);
+    if (LISP_TYPE(arg) != LISP_STRING)
+        return lisp_raise_error("terminal-write: argument must be a string");
+
+    const char *text = LISP_STR_VAL(arg);
+
+    /* Anything princ or format left in the stdio buffer goes out first. */
+    fflush(stdout);
+    if (write_all_stdout(text, strlen(text)) != 0)
+        return lisp_raise_error("terminal-write: write failed");
+
+    return arg;
+}
+
 void register_tui_builtins(Environment *env)
 {
     REGISTER("sleep", builtin_sleep);
@@ -666,4 +729,5 @@ void register_tui_builtins(Environment *env)
     REGISTER("terminal-resized-p", builtin_terminal_resized_p);
     REGISTER("read-byte", builtin_read_byte);
     REGISTER("read-byte-timeout", builtin_read_byte_timeout);
+    REGISTER("terminal-write", builtin_terminal_write);
 }
