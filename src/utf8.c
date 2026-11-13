@@ -286,6 +286,45 @@ int utf8_put_codepoint(unsigned int codepoint, char *buf)
     return 0;
 }
 
+/* Encode one UTF-16 code unit as UTF-8, joining surrogate pairs.
+ *
+ * A high surrogate is stored in *pending_high and 0 bytes are written; the
+ * next unit either completes the pair (a 4-byte sequence) or exposes an
+ * unpaired surrogate, which becomes U+FFFD before that unit's own encoding.
+ * A lone low surrogate becomes U+FFFD. The output buffer needs room for the
+ * replacement plus a 4-byte sequence and its terminator (8 bytes). */
+int utf8_encode_utf16_unit(uint16_t unit, uint16_t *pending_high, char out[8])
+{
+    int written = 0;
+
+    if (pending_high == NULL || out == NULL)
+        return 0;
+
+    if (*pending_high != 0) {
+        uint16_t high = *pending_high;
+        *pending_high = 0;
+
+        if (unit >= 0xDC00 && unit <= 0xDFFF) {
+            unsigned int codepoint =
+                0x10000u + (((unsigned int)(high - 0xD800)) << 10) + (unsigned int)(unit - 0xDC00);
+            return utf8_put_codepoint(codepoint, out);
+        }
+
+        /* Unpaired high surrogate: replace it, then encode the new unit. */
+        written = utf8_put_codepoint(0xFFFD, out);
+    }
+
+    if (unit >= 0xD800 && unit <= 0xDBFF) {
+        *pending_high = unit;
+        return written;
+    }
+    if (unit >= 0xDC00 && unit <= 0xDFFF) {
+        /* Unpaired low surrogate. */
+        return written + utf8_put_codepoint(0xFFFD, out + written);
+    }
+    return written + utf8_put_codepoint(unit, out + written);
+}
+
 /* East Asian Ambiguous codepoints: explicitly narrow (width 1) in ditty,
  * matching coffer's no-locale model. Kept as a sorted range table for parity
  * and so future locale-aware work has a hook. */

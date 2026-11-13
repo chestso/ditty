@@ -357,6 +357,13 @@ int utf8_get_codepoint(const char *ptr);
 /* Buffer must have space for at least 5 bytes (4 UTF-8 bytes + null terminator) */
 int utf8_put_codepoint(unsigned int codepoint, char *buf);
 
+/* Encode one UTF-16 code unit as UTF-8, joining surrogate pairs.
+ * A high surrogate is stored in *pending_high (0 bytes written); a following
+ * low surrogate completes the pair. An unpaired surrogate is written as
+ * U+FFFD, followed by the new unit's own encoding when there is one.
+ * Returns the number of bytes written (0-6). OUT must have room for 8 bytes. */
+int utf8_encode_utf16_unit(uint16_t unit, uint16_t *pending_high, char out[8]);
+
 /* Get display width of a single codepoint (base width, no selectors/VS/ZWJ) */
 /* Returns 0 for control/combining chars, 2 for wide chars (CJK/emoji), 1 otherwise */
 int utf8_codepoint_width(int codepoint);

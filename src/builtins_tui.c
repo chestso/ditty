@@ -4,7 +4,6 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <conio.h>
 #include <io.h>
 #else
 #include <fcntl.h>
@@ -104,11 +103,61 @@ static int is_tty_output(void)
 /* ========================================================================== */
 
 #ifdef _WIN32
-/* Returns 1 if a key-down record carrying a character is queued (the next
- * read-byte will not block), else 0. Discards, as it scans, every record
- * that can never produce a byte; WINDOW_BUFFER_SIZE_EVENT records set
- * winch_flag first. Returns 0 when stdin is not a console. */
-static int win_console_input_pending(void)
+/* UTF-8 byte queue fed from console key records.
+ *
+ * ReadConsoleInputW reports UTF-16 code units in UnicodeChar, independent of
+ * the console input code page. The queue holds their UTF-8 encoding, so
+ * read-byte is byte-exact for any character, and terminal-input-available-p
+ * and terminal-wait agree with what read-byte will return. These are plain C
+ * statics holding no Lisp objects, so the GC never needs to scan them. */
+#define WIN_INPUT_QUEUE_CAP 256
+
+static unsigned char win_input_queue[WIN_INPUT_QUEUE_CAP];
+static size_t win_input_head = 0;
+static size_t win_input_tail = 0;
+static uint16_t win_pending_high = 0;
+
+/* Sentinel results for win_next_byte (bytes are 0..255). */
+#define WIN_NEXT_TIMEOUT (-1)
+#define WIN_NEXT_EOF     (-2)
+
+static size_t win_queue_count(void)
+{
+    return win_input_tail - win_input_head;
+}
+
+static int win_queue_push(const char *bytes, int count)
+{
+    if (count <= 0)
+        return 1;
+    if ((size_t)count > WIN_INPUT_QUEUE_CAP - win_queue_count())
+        return 0;
+
+    if (win_input_tail + (size_t)count > WIN_INPUT_QUEUE_CAP) {
+        memmove(win_input_queue, win_input_queue + win_input_head, win_queue_count());
+        win_input_tail -= win_input_head;
+        win_input_head = 0;
+    }
+    memcpy(win_input_queue + win_input_tail, bytes, (size_t)count);
+    win_input_tail += (size_t)count;
+    return 1;
+}
+
+static int win_queue_pop(unsigned char *out)
+{
+    if (win_input_head == win_input_tail)
+        return 0;
+    *out = win_input_queue[win_input_head++];
+    if (win_input_head == win_input_tail)
+        win_input_head = win_input_tail = 0;
+    return 1;
+}
+
+/* Queue the bytes of every character key-down record, discarding records that
+ * can never produce a byte. WINDOW_BUFFER_SIZE_EVENT records set winch_flag.
+ * Returns 1 when a byte is queued, 0 when nothing is available (or stdin is
+ * not a console). */
+static int win_input_pending(void)
 {
     init_tui_handles();
     if (tui_stdin_handle == INVALID_HANDLE_VALUE)
@@ -119,40 +168,79 @@ static int win_console_input_pending(void)
         return 0;
 
     for (;;) {
+        if (win_queue_count() > 0)
+            return 1;
+
         DWORD available = 0;
         if (!GetNumberOfConsoleInputEvents(tui_stdin_handle, &available) || available == 0)
             return 0;
 
-        DWORD to_peek = available < 128 ? available : 128;
-        INPUT_RECORD records[128];
-        DWORD peeked = 0;
-        if (!PeekConsoleInputW(tui_stdin_handle, records, to_peek, &peeked) || peeked == 0)
+        INPUT_RECORD record;
+        DWORD consumed = 0;
+        if (!ReadConsoleInputW(tui_stdin_handle, &record, 1, &consumed) || consumed == 0)
             return 0;
 
-        DWORD match = peeked;
-        int found = 0;
-        for (DWORD i = 0; i < peeked; i++) {
-            if (records[i].EventType == KEY_EVENT && records[i].Event.KeyEvent.bKeyDown &&
-                records[i].Event.KeyEvent.uChar.UnicodeChar != 0) {
-                match = i;
-                found = 1;
-                break;
-            }
+        if (record.EventType == WINDOW_BUFFER_SIZE_EVENT) {
+            winch_flag = 1;
+            continue;
+        }
+        if (record.EventType != KEY_EVENT || !record.Event.KeyEvent.bKeyDown)
+            continue;
+
+        uint16_t unit = record.Event.KeyEvent.uChar.UnicodeChar;
+        if (unit == 0)
+            continue;
+
+        DWORD repeat = record.Event.KeyEvent.wRepeatCount;
+        if (repeat == 0)
+            repeat = 1;
+        for (DWORD i = 0; i < repeat; i++) {
+            char bytes[8];
+            int n = utf8_encode_utf16_unit(unit, &win_pending_high, bytes);
+            if (n == 0)
+                continue; /* a high surrogate, held for the next record */
+            if (!win_queue_push(bytes, n))
+                break; /* repeat overflow: clamp to the queue capacity */
+        }
+    }
+}
+
+/* Return the next byte, WIN_NEXT_TIMEOUT, or WIN_NEXT_EOF. A timeout below 0
+ * waits forever. With redirected stdin this reads bytes with ReadFile (no
+ * timeout support: the read blocks until data or EOF). */
+static int win_next_byte(long long timeout_ms)
+{
+    unsigned char byte;
+    if (win_queue_pop(&byte))
+        return (int)byte;
+
+    init_tui_handles();
+    if (tui_stdin_handle == INVALID_HANDLE_VALUE)
+        return WIN_NEXT_EOF;
+
+    DWORD mode;
+    if (!GetConsoleMode(tui_stdin_handle, &mode)) {
+        DWORD read = 0;
+        if (!ReadFile(tui_stdin_handle, &byte, 1, &read, NULL) || read == 0)
+            return WIN_NEXT_EOF;
+        return (int)byte;
+    }
+
+    ULONGLONG start = GetTickCount64();
+    for (;;) {
+        if (win_input_pending() && win_queue_pop(&byte))
+            return (int)byte;
+
+        DWORD wait_ms = INFINITE;
+        if (timeout_ms >= 0) {
+            ULONGLONG elapsed = GetTickCount64() - start;
+            if (elapsed >= (ULONGLONG)timeout_ms)
+                return WIN_NEXT_TIMEOUT;
+            wait_ms = (DWORD)((ULONGLONG)timeout_ms - elapsed);
         }
 
-        if (match > 0) {
-            DWORD consumed = 0;
-            if (ReadConsoleInputW(tui_stdin_handle, records, match, &consumed)) {
-                for (DWORD i = 0; i < consumed; i++) {
-                    if (records[i].EventType == WINDOW_BUFFER_SIZE_EVENT)
-                        winch_flag = 1;
-                }
-            }
-        }
-
-        if (found)
-            return 1;
-        /* Nothing readable in this batch: more records may sit beyond it. */
+        if (WaitForSingleObject(tui_stdin_handle, wait_ms) == WAIT_TIMEOUT)
+            return WIN_NEXT_TIMEOUT;
     }
 }
 #else
@@ -340,7 +428,7 @@ static LispObject *builtin_terminal_input_available_p(LispObject *args, Environm
     int available = 0;
 
 #ifdef _WIN32
-    available = win_console_input_pending();
+    available = win_input_pending();
 #else
     fd_set fds;
     struct timeval tv;
@@ -372,7 +460,7 @@ static LispObject *builtin_terminal_resized_p(LispObject *args, Environment *env
 
 #ifdef _WIN32
     /* Pick up WINDOW_BUFFER_SIZE_EVENT records before looking at the flag. */
-    win_console_input_pending();
+    win_input_pending();
 #else
     ensure_winch_handler();
 #endif
@@ -418,7 +506,7 @@ static LispObject *builtin_terminal_wait(LispObject *args, Environment *env)
 
     ULONGLONG start = GetTickCount64();
     for (;;) {
-        if (win_console_input_pending())
+        if (win_input_pending())
             return lisp_intern("input");
         if (winch_flag) {
             winch_flag = 0;
@@ -512,10 +600,10 @@ static LispObject *builtin_read_byte(LispObject *args, Environment *env)
     (void)env;
 
 #ifdef _WIN32
-    int ch = _getch();
-    if (ch == EOF)
+    int ch = win_next_byte(-1);
+    if (ch < 0)
         return NIL;
-    return lisp_make_integer(ch & 0xFF);
+    return lisp_make_integer(ch);
 #else
     unsigned char c;
     ssize_t n = read(STDIN_FILENO, &c, 1);
@@ -543,18 +631,10 @@ static LispObject *builtin_read_byte_timeout(LispObject *args, Environment *env)
         return lisp_raise_error("read-byte-timeout: timeout cannot be negative");
 
 #ifdef _WIN32
-    long long elapsed = 0;
-    while (elapsed < ms) {
-        if (_kbhit()) {
-            int ch = _getch();
-            if (ch == EOF)
-                return NIL;
-            return lisp_make_integer(ch & 0xFF);
-        }
-        Sleep(1);
-        elapsed++;
-    }
-    return NIL;
+    int ch = win_next_byte(ms);
+    if (ch < 0)
+        return NIL;
+    return lisp_make_integer(ch);
 #else
     fd_set fds;
     struct timeval tv;

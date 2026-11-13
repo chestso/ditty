@@ -11,7 +11,7 @@ FLARE_TESTS = \
     test_flare_terminal_style \
     test_highlight_sequence
 
-check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils $(FLARE_TESTS)
+check_PROGRAMS = test_sf_kind test_repl_completeness test_auto_indent test_file_utils test_utf16 $(FLARE_TESTS)
 if HAVE_BOBA
 check_PROGRAMS += test_repl_app test_history
 endif
@@ -36,6 +36,18 @@ test_file_utils_CPPFLAGS = \
     $(GC_CFLAGS) \
     $(PCRE2_CFLAGS)
 test_file_utils_LDADD = \
+    $(top_builddir)/src/libditty.a \
+    $(GC_LIBS) \
+    $(PCRE2_LIBS)
+
+test_utf16_SOURCES = test_utf16.c
+test_utf16_CPPFLAGS = \
+    -I$(top_srcdir)/include \
+    -I$(top_srcdir)/src \
+    -I$(top_builddir)/src \
+    $(GC_CFLAGS) \
+    $(PCRE2_CFLAGS)
+test_utf16_LDADD = \
     $(top_builddir)/src/libditty.a \
     $(GC_LIBS) \
     $(PCRE2_LIBS)
@@ -148,6 +160,7 @@ $(test_sf_kind_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_repl_completeness_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_auto_indent_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_file_utils_OBJECTS): $(top_builddir)/src/ditty_version.h
+$(test_utf16_OBJECTS): $(top_builddir)/src/ditty_version.h
 $(test_history_OBJECTS): $(top_builddir)/src/ditty_version.h
 if HAVE_BOBA
 $(test_repl_app_OBJECTS): $(top_builddir)/src/ditty_version.h
@@ -237,6 +250,7 @@ TESTS = \
     test_repl_completeness \
     test_auto_indent \
     test_file_utils \
+    test_utf16 \
     $(FLARE_TESTS) \
     $(BOBA_TESTS)
 
@@ -257,6 +271,7 @@ EXTRA_DIST = \
     test_repl_completeness.c \
     test_auto_indent.c \
     test_file_utils.c \
+    test_utf16.c \
     test_repl_app.c \
     flare_testkit.h \
     test-helpers.lisp \
