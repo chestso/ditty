@@ -897,6 +897,13 @@
 
    :tick-ms     integer; deliver a ((type . tick)) event that often
    :on-start    thunk called once after setup, before the first wait
+   :on-idle     thunk called each time the loop is about to block: once after
+                :on-start (and the capabilities event of a non-terminal
+                stdin), then after every wake-up has been delivered in full.
+                A burst of input is drained first, so the thunk runs once
+                per burst, not once per event: record changes in the
+                handler and draw them here.  Not called once the loop is
+                stopping.
    :probe       #t (default) to probe the terminal at start
    :keyboard    #t (default) to push kitty keyboard flags 1 once the probe
                 shows support (needs :probe, which is on by default)
@@ -908,6 +915,7 @@
    error and never exits."
   (let* ((tick-ms (terminal-opt-value opts :tick-ms nil))
          (on-start (terminal-opt-value opts :on-start nil))
+         (on-idle (terminal-opt-value opts :on-idle nil))
          (probe (terminal-opt-value opts :probe #t))
          (keyboard (terminal-opt-value opts :keyboard #t))
          (wait-fn (terminal-opt-value opts :wait-fn terminal-wait))
@@ -980,16 +988,21 @@
         nil
         (let ((left (- (+ last-tick tick-ms) (current-time-ms))))
           (if (< left 0) 0 left))))
+    ;; The loop is about to block: every event of the last wake-up has been
+    ;; delivered.  The timeout is computed after this, so a slow thunk does
+    ;; not delay the next tick.
+    (define (idle) (when (not (null? on-idle)) (on-idle)))
     (define (loop)
       (if stop
         nil
-        (let ((why (wait-fn (next-timeout))))
-          (cond
-            ((equal? why 'resize) (deliver-resize) (deliver-maybe-tick))
-            ((equal? why 'timeout) (deliver-maybe-tick))
-            ((equal? why 'input) (drain-input))
-            (#t nil))
-          (when (and (not stop) (not eof)) (loop)))))
+        (progn (idle)
+          (let ((why (wait-fn (next-timeout))))
+            (cond
+              ((equal? why 'resize) (deliver-resize) (deliver-maybe-tick))
+              ((equal? why 'timeout) (deliver-maybe-tick))
+              ((equal? why 'input) (drain-input))
+              (#t nil))
+            (when (and (not stop) (not eof)) (loop))))))
     (define (body) (when (not (null? on-start)) (on-start))
       (when probe
         (if tty-p

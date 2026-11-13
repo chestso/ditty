@@ -254,6 +254,162 @@
  "no DECRQM reply means no sync-output")
 
 ;; ---------------------------------------------------------------------------
+;; :on-idle runs each time the loop is about to block.
+;; ---------------------------------------------------------------------------
+;; The harness keeps its state in top-level variables so each helper stays
+;; small. One log records idle calls, waits and handled events in order.
+(define idle-log nil)
+
+(define idle-current nil)
+
+(define idle-pending nil)
+
+(define idle-responses nil)
+
+(define idle-stop-on nil)
+
+(defun idle-note (entry) (set! idle-log (cons entry idle-log)))
+
+(defun idle-load-chunk ()
+  "Make the next chunk of bytes readable, as an input wake-up does."
+  (when (not (null? idle-pending)) (set! idle-current (car idle-pending))
+    (set! idle-pending (cdr idle-pending))))
+
+(defun idle-wait (timeout)
+  "A :wait-fn that replays the responses, then reports EOF-style input."
+  (idle-note 'wait)
+  (if (null? idle-responses)
+    'input
+    (let ((response (car idle-responses)))
+      (set! idle-responses (cdr idle-responses))
+      (when (equal? response 'input) (idle-load-chunk))
+      response)))
+
+(defun idle-read-byte ()
+  (if (null? idle-current)
+    nil
+    (let ((b (car idle-current)))
+      (set! idle-current (cdr idle-current))
+      b)))
+
+(defun idle-handler (ev)
+  "Log a key's name (or another event's type); stop on IDLE-STOP-ON."
+  (let ((name
+         (if (terminal-key-event? ev)
+           (terminal-key-name ev)
+           (cdr (assoc 'type ev)))))
+    (idle-note name)
+    (when (equal? name idle-stop-on) 'stop)))
+
+(defun idle-opts ()
+  (list (cons :probe nil) (cons :tty-p nil)
+   (cons :on-idle (lambda () (idle-note 'idle)))
+   (cons :wait-fn idle-wait)
+   (cons :read-byte-fn idle-read-byte)
+   (cons :available-fn (lambda () (not (null? idle-current))))))
+
+(defun run-idle-loop (chunks responses stop-on)
+  "Run the loop over CHUNKS (one per input wake-up in RESPONSES) and return
+   (LOG . RESULT), LOG in order."
+  (set! idle-log nil)
+  (set! idle-current nil)
+  (set! idle-pending chunks)
+  (set! idle-responses responses)
+  (set! idle-stop-on stop-on)
+  (let ((result (terminal-event-loop idle-handler (idle-opts))))
+    (cons (reverse idle-log) result)))
+
+;; A burst is drained before idle: x y z arrive in one wake-up, so idle runs
+;; once for them, not three times; and it runs before the first wait.
+(define burst-run (run-idle-loop '((120 121 122) (119)) '(input input) "w"))
+
+(assert-nil (cdr burst-run) "the idle loop stops cleanly")
+
+(assert-equal '(idle wait "x" "y" "z" idle wait "w") (car burst-run)
+ "on-idle runs before each wait, once per burst, and not after stop")
+
+;; Nothing to deliver: idle runs once before the first wait, and not again
+;; once EOF ends the loop.
+(define eof-run (run-idle-loop '() '(input) "never"))
+
+(assert-nil (cdr eof-run) "an idle loop ends at EOF")
+
+(assert-equal '(idle wait) (car eof-run)
+ "on-idle runs before the first wait and not after EOF")
+
+;; Resize and timeout wake-ups are wake-ups too.
+(define resize-run (run-idle-loop '() '(resize timeout resize) "never"))
+
+(assert-equal '(idle wait resize idle wait idle wait resize idle wait)
+ (car resize-run) "on-idle runs after resize and timeout wake-ups")
+
+;; The capabilities event of a non-terminal stdin comes before the first idle.
+(define caps-log nil)
+
+(terminal-event-loop
+ (lambda (ev) (set! caps-log (cons (cdr (assoc 'type ev)) caps-log))
+   nil)
+ (list (cons :probe #t) (cons :tty-p nil)
+  (cons :on-idle (lambda () (set! caps-log (cons 'idle caps-log))))
+  (cons :wait-fn
+   (lambda (timeout) (set! caps-log (cons 'wait caps-log))
+     'input))
+  (cons :read-byte-fn (lambda () nil))
+  (cons :available-fn (lambda () nil))))
+
+(assert-equal '(capabilities idle wait) (reverse caps-log)
+ "on-idle runs after the capabilities event and before the first wait")
+
+;; :on-idle runs after :on-start.
+(define start-log nil)
+
+(terminal-event-loop (lambda (ev) nil)
+ (list (cons :probe nil) (cons :tty-p nil)
+  (cons :on-start (lambda () (set! start-log (cons 'start start-log))))
+  (cons :on-idle (lambda () (set! start-log (cons 'idle start-log))))
+  (cons :wait-fn
+   (lambda (timeout) (set! start-log (cons 'wait start-log))
+     'input))
+  (cons :read-byte-fn (lambda () nil))
+  (cons :available-fn (lambda () nil))))
+
+(assert-equal '(start idle wait) (reverse start-log)
+ "on-idle runs after on-start")
+
+;; The tick timeout is computed after on-idle, so time spent in the thunk
+;; counts against the tick interval instead of delaying the tick: with a
+;; 50 ms interval and a 30 ms thunk, the first wait gets about 20 ms.
+(define seen-timeouts nil)
+
+(terminal-event-loop
+ (lambda (ev) (when (equal? (cdr (assoc 'type ev)) 'tick) 'stop))
+ (list (cons :tick-ms 50) (cons :probe nil) (cons :tty-p nil)
+  (cons :on-idle (lambda () (sleep 30)))
+  (cons :wait-fn
+   (lambda (timeout) (set! seen-timeouts (cons timeout seen-timeouts))
+     'timeout))
+  (cons :read-byte-fn (lambda () nil))
+  (cons :available-fn (lambda () nil))))
+
+(assert-true (< (car (reverse seen-timeouts)) 45)
+ "the tick timeout is computed after a slow on-idle thunk")
+
+;; An error from the thunk unwinds like a handler error.
+(define idle-error
+  (terminal-event-loop (lambda (ev) nil)
+   (list (cons :probe nil) (cons :tty-p nil)
+    (cons :on-idle (lambda () (error "idle exploded")))
+    (cons :wait-fn (fake-wait '(timeout)))
+    (cons :read-byte-fn (lambda () nil))
+    (cons :available-fn (lambda () nil)))))
+
+(assert-true (error? idle-error)
+ "an error from :on-idle is returned by the loop")
+
+(assert-equal 0 terminal:*terminal-raw-depth*
+ "raw depth is restored after an :on-idle error")
+
+;; ---------------------------------------------------------------------------
 ;; UTF-8 across wake-ups: a character split over two reads is one key event.
 ;; ---------------------------------------------------------------------------
 (defun run-chunked (chunks max-events)

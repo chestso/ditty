@@ -7167,6 +7167,16 @@ and returns `nil` after a clean stop or stdin EOF, or the error object.
   `terminal-call-with-raw`.
 - `:tick-ms` delivers `((type . tick))` at that interval.
 - `:on-start` is a thunk called once after setup, before the first wait.
+- `:on-idle` is a thunk called each time the loop is about to block: once
+  after `:on-start` (and after the `capabilities` event of a non-terminal
+  stdin), then after every wake-up has been delivered in full. A burst of
+  input is drained first, so the thunk runs once per burst rather than once
+  per event. This is the place to draw: record changes in the handler and
+  render here, so a paste costs one frame, not one per character. The wait
+  timeout is computed after the thunk, so time spent in it counts against the
+  tick interval. The thunk is not called once the loop is stopping (the
+  handler returned `stop`, or stdin reached EOF), and an error from it
+  unwinds like a handler error.
 - `:probe` (default `#t`) sends the capability probe at start.
 - `:keyboard` (default `#t`) pushes kitty keyboard flags 1 once the probe
   shows support, and pops them during cleanup.
