@@ -210,3 +210,63 @@
 
 (assert-true (cdr (assoc 'sixel query-caps))
  "DA1 parameter 4 advertises sixel")
+
+;; ---------------------------------------------------------------------------
+;; UTF-8 across wake-ups: a character split over two reads is one key event.
+;; ---------------------------------------------------------------------------
+(defun run-chunked (chunks max-events)
+  "Run the loop over CHUNKS, one chunk per wake-up. Stop after MAX-EVENTS
+   events (nil = never stop); return the events in arrival order."
+  (let ((current nil)
+        (pending chunks)
+        (seen nil))
+    (terminal-event-loop
+     (lambda (ev) (set! seen (cons ev seen))
+       (when (and max-events (>= (length seen) max-events)) 'stop))
+     (loop-opts
+      (lambda (timeout)
+        (if (null? pending)
+          'input ; EOF: a real terminal reports it as readable, forever
+          (progn (set! current (car pending)) (set! pending (cdr pending))
+            'input)))
+      (lambda ()
+        (if (null? current)
+          nil
+          (let ((b (car current)))
+            (set! current (cdr current))
+            b)))
+      (lambda () (not (null? current)))))
+    (reverse seen)))
+
+(define split-events (run-chunked '((195) (165)) 1))
+
+(assert-equal 1 (length split-events) "a split character is one event")
+(assert-equal "å" (terminal-key-name (car split-events)) "split character name")
+(assert-equal 229 (terminal-key-code (car split-events)) "split character code")
+(assert-equal "å" (terminal-key-text (car split-events)) "split character text")
+
+;; EOF in the middle of a character: no event, and the loop ends.
+(define partial-eof-events (run-chunked '((195)) nil))
+
+(assert-equal '() partial-eof-events
+ "a partial character at EOF produces no event")
+
+;; A malformed byte does not swallow the ASCII that exposed the error.
+(define malformed-events (run-chunked '((226 130 65)) 2))
+
+(assert-equal 2 (length malformed-events) "malformed input yields two events")
+(assert-equal (char->string (code-char #xFFFD))
+ (terminal-key-name (car malformed-events))
+ "the malformed subpart becomes U+FFFD")
+(assert-equal "A" (terminal-key-name (cadr malformed-events))
+ "the exposing byte is delivered as text")
+(assert-equal "A" (terminal-key-text (cadr malformed-events))
+ "the exposing byte is typed text")
+
+;; ... including when the split falls between the malformed byte and the
+;; exposing byte.
+(define split-malformed-events (run-chunked '((226 130) (65)) 2))
+
+(assert-equal (map terminal-key-name malformed-events)
+ (map terminal-key-name split-malformed-events)
+ "a split before the exposing byte gives the same events")

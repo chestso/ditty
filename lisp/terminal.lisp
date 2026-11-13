@@ -889,7 +889,6 @@
         (deliver (list (cons 'type 'capabilities) (cons 'caps caps)))))
     (define (dispatch ev)
       (cond
-        ((null? ev) (set! eof #t))
         ((and probe-pending (terminal-reply-event? ev))
          (set! replies (cons ev replies))
          (if
@@ -898,20 +897,27 @@
            (finish-probe)
            nil))
         (#t (deliver ev))))
-    (define (make-reader) (define first #t)
+    ;; One decoder per loop, so a character split across two wake-ups decodes
+    ;; as one key. The first read of a wake-up is unconditional so that EOF is
+    ;; observed; a nil read is EOF, and is recorded here at the source.
+    (define decoder (terminal-make-decoder))
+    (define (make-reader forced) (define first forced)
       (lambda ()
-        (if first
-          (progn (set! first #f) (read-byte-fn))
-          (if (available-fn) (read-byte-fn) nil))))
+        (if (or first (available-fn))
+          (progn (set! first #f)
+            (let ((b (read-byte-fn)))
+              (when (null? b) (set! eof #t))
+              b))
+          nil)))
+    ;; Drain until the reader has no event now. A decoder holding a partial
+    ;; character also makes terminal-read-event return nil; that is not EOF,
+    ;; which only the byte reader above can report.
     (define (drain-input)
-      (let loop ()
-        (let ((ev (terminal-read-event (make-reader))))
-          (cond
-            ((null? ev) (set! eof #t))
-            (#t
-             (dispatch ev)
-             (deliver-maybe-tick)
-             (when (and (not stop) (not eof) (available-fn)) (loop)))))))
+      (let loop ((forced #t))
+        (let ((ev (terminal-read-event (make-reader forced) decoder)))
+          (when ev (dispatch ev)
+            (deliver-maybe-tick)
+            (when (and (not stop) (not eof)) (loop #f))))))
     (define (next-timeout)
       (if (null? tick-ms)
         nil
