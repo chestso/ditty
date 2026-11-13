@@ -46,6 +46,19 @@
 (assert-equal #\A (code-char 65) "code-char 65")
 (assert-equal #\space (code-char 32) "code-char 32")
 (assert-equal #\null (code-char 0) "code-char 0")
+
+;; Surrogate code points are not Unicode scalar values: strings must always
+;; be valid UTF-8, so code-char refuses them.
+(assert-equal #xD7FF (char-code (code-char #xD7FF)) "code-char accepts U+D7FF")
+
+(assert-error (code-char #xD800) "code-char rejects U+D800")
+(assert-error (code-char #xDFFF) "code-char rejects U+DFFF")
+
+(assert-equal #xE000 (char-code (code-char #xE000)) "code-char accepts U+E000")
+(assert-equal #x10FFFF (char-code (code-char #x10FFFF))
+ "code-char accepts U+10FFFF")
+
+(assert-error (code-char #x110000) "code-char rejects U+110000")
 ;; ===========================================
 ;; String/Character Conversion
 ;; ===========================================

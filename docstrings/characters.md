@@ -53,11 +53,18 @@ Convert a Unicode code point to a character.
 
 ### Parameters
 
-- `integer` - Unicode code point (integer)
+- `integer` - Unicode scalar value (integer): 0 to 0x10FFFF, excluding the
+  surrogate range 0xD800-0xDFFF
 
 ### Returns
 
 The character with the given code point.
+
+### Errors
+
+Returns an error if the argument is not an integer, is negative, is above
+0x10FFFF, or is a surrogate code point. Surrogates are not Unicode scalar
+values, so accepting one would mint a string that is not valid UTF-8.
 
 ### Examples
 
@@ -65,6 +72,7 @@ The character with the given code point.
 (code-char 97)       ; => #\a
 (code-char 65)       ; => #\A
 (code-char 32)       ; => #\space
+(code-char 229)      ; => #\å
 ```
 
 ### See Also

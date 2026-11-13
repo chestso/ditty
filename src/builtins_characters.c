@@ -30,7 +30,7 @@ static LispObject *builtin_code_char(LispObject *args, Environment *env)
         return lisp_raise_error("code-char requires an integer");
     }
     long long code = LISP_INT_VAL(code_obj);
-    if (code < 0 || code > 0x10FFFF) {
+    if (code < 0 || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) {
         return lisp_raise_error("code-char: invalid Unicode codepoint");
     }
     return lisp_make_char((unsigned int)code);
