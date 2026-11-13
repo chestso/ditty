@@ -170,14 +170,14 @@
 
 (define env-caps (cdr (assoc 'caps (car capability-events))))
 
-(assert-equal 7 (length env-caps) "the capabilities alist has seven keys")
+(assert-equal 8 (length env-caps) "the capabilities alist has eight keys")
 
 (assert-true
  (null?
   (filter
    (lambda (key) (null? (assoc key env-caps)))
    '(sixel kitty-graphics iterm2-images kitty-keyboard pixel-size cell-size
-     source)))
+     sync-output source)))
  "the capabilities alist carries every documented key")
 (assert-true
  (or (equal? (cdr (assoc 'source env-caps)) "env")
@@ -210,6 +210,48 @@
 
 (assert-true (cdr (assoc 'sixel query-caps))
  "DA1 parameter 4 advertises sixel")
+
+;; ---------------------------------------------------------------------------
+;; :probe with a DECRQM reply: sync-output reaches the capabilities event.
+;; ---------------------------------------------------------------------------
+(defun probe-caps (bytes)
+  "Run the probe loop over BYTES and return the capabilities alist."
+  (let ((input (fake-input bytes))
+        (found nil))
+    (terminal-event-loop
+     (lambda (ev)
+       (when (equal? (cdr (assoc 'type ev)) 'capabilities)
+         (set! found (cdr (assoc 'caps ev)))
+         'stop))
+     (list (cons :probe #t) (cons :keyboard #f) (cons :tty-p #t)
+      (cons :wait-fn (fake-wait '(input)))
+      (cons :read-byte-fn (car input))
+      (cons :available-fn (cadr input))))
+    found))
+
+;; ESC [ ? 2026 ; 2 $ y, then DA1 ESC [ ? 6 4 ; 4 c
+(define sync-caps
+  (probe-caps
+   '(27 91 63 50 48 50 54 59 50 36 121 27 91 63 54 52 59 52 99)))
+
+(assert-true (cdr (assoc 'sync-output sync-caps))
+ "a DECRQM 2026 reply (status 2) reaches the capabilities as sync-output")
+(assert-true (cdr (assoc 'sixel sync-caps))
+ "the DA1 reply after a DECRQM reply still ends the probe")
+
+;; ESC [ ? 2026 ; 0 $ y: the terminal does not know the mode.
+(define unsync-caps
+  (probe-caps
+   '(27 91 63 50 48 50 54 59 48 36 121 27 91 63 54 52 59 52 99)))
+
+(assert-false (cdr (assoc 'sync-output unsync-caps))
+ "a DECRQM 2026 reply with status 0 is not sync-output")
+
+;; A terminal that ignores DECRQM answers only DA1.
+(define silent-caps (probe-caps '(27 91 63 54 52 59 52 99)))
+
+(assert-false (cdr (assoc 'sync-output silent-caps))
+ "no DECRQM reply means no sync-output")
 
 ;; ---------------------------------------------------------------------------
 ;; UTF-8 across wake-ups: a character split over two reads is one key event.

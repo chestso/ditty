@@ -710,10 +710,10 @@
 ;; ---------------------------------------------------------------------------
 ;; Capabilities
 ;; ---------------------------------------------------------------------------
-(defconst *terminal-probe-queries* "\033[?u\033[16t\033[14t"
+(defconst *terminal-probe-queries* "\033[?u\033[16t\033[14t\033[?2026$p"
   "The capability queries without the sentinel: kitty keyboard flags, cell
-   size and pixel size.  `terminal-query` appends the sentinel itself, so it
-   takes these.")
+   size, pixel size, and the synchronized-output mode status (DECRQM, mode
+   2026).  `terminal-query` appends the sentinel itself, so it takes these.")
 
 (defconst *terminal-probe* (concat *terminal-probe-queries* "\033[c")
   "Capability probe: `*terminal-probe-queries*` followed by the Device
@@ -790,16 +790,32 @@
        (floor (/ (cdr pixel-size) (car size))))
       nil)))
 
+(defun terminal-mode-supported? (reply)
+  "Return #t if REPLY, a DECRQM reply triple (\"?\" (MODE STATUS) \"y\"),
+   says the terminal implements the mode.  STATUS 1 (set), 2 (reset) and 3
+   (permanently set) do; 0 (not recognised) and 4 (permanently reset) do not."
+  (if (null? reply)
+    nil
+    (let ((params (cadr reply)))
+      (if (or (null? params) (null? (cdr params)))
+        nil
+        (let ((status (cadr params)))
+          (if (and (>= status 1) (<= status 3)) #t nil))))))
+
 (defun terminal-capabilities-from-replies (replies &optional getenv-fn)
   "Fold parsed REPLIES (triples or reply events) and the environment into an
    alist with all of: sixel, kitty-graphics, iterm2-images, kitty-keyboard,
-   pixel-size, cell-size, and source.  This function is pure."
+   pixel-size, cell-size, sync-output, and source.  sync-output is #t when
+   the terminal answered the DECRQM query for synchronized output (mode
+   2026) with a status that means it implements the mode.  This function is
+   pure."
   (let* ((env (terminal-env-capabilities getenv-fn))
          (parsed (terminal-normalise-replies replies))
          (da1 (terminal-find-reply parsed "?" "c"))
          (keyboard-reply (terminal-find-reply parsed "?" "u"))
          (pixel-reply (terminal-find-reply parsed "" "t" 4))
          (cell-reply (terminal-find-reply parsed "" "t" 6))
+         (sync-reply (terminal-find-reply parsed "?" "y" 2026))
          (env-sixel (alist-get 'sixel env))
          (da-sixel (if (null? da1) nil (if (member 4 (cadr da1)) #t nil)))
          (sixel (if (or da-sixel env-sixel) #t nil))
@@ -828,6 +844,7 @@
           (car (cadr keyboard-reply)))))
      (cons 'pixel-size pixel)
      (cons 'cell-size cell)
+     (cons 'sync-output (terminal-mode-supported? sync-reply))
      (cons 'source source))))
 
 (defun terminal-query (query &optional timeout-ms)

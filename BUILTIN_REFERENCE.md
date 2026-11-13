@@ -7178,6 +7178,15 @@ event (built from the environment alone when stdin is not a terminal),
 after the probe's replies are folded, and `reply` events after that arrive
 raw. Return the symbol `stop` from the handler to end the loop.
 
+The `caps` alist has the keys `sixel`, `kitty-graphics`, `iterm2-images`,
+`kitty-keyboard`, `pixel-size`, `cell-size`, `sync-output` and `source`.
+`sync-output` is `#t` when the terminal answered the DECRQM query for
+synchronized output (mode 2026) with a status that means it implements the
+mode (1 set, 2 reset, 3 permanently set), and `nil` for status 0 (not
+recognised), status 4 (permanently reset) or no answer. Emitting
+`ESC[?2026h` ... `ESC[?2026l` is harmless on a terminal that does not know the
+mode, so the flag is for callers that want to skip the wrapper there.
+
 `terminal-call-with-raw` tracks nesting with its own depth counter, so only
 the outermost session calls `set-terminal-raw`/`restore-terminal`. Code that
 calls `set-terminal-raw` directly bypasses the counter.
