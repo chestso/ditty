@@ -69,21 +69,3 @@ characters `x1b`, with no error and no warning:
   now uses octal `"\033"`.
 - Decide: add `\xHH` (and `\uXXXX`?), reject unknown escapes as a reader
   error, or at minimum document the supported set. `\033` must keep working.
-
-## Terminal input
-
-### Decode UTF-8 in the event parser
-
-**Status:** OPEN - `terminal-read-event` decodes input one byte at a time.
-
-- Assemble UTF-8 continuation bytes into a single key whose name is the
-  character, instead of reporting several one-byte "characters".
-- Make the byte count of a key explicit in the event.
-
-### Byte-accurate input on Windows
-
-**Status:** OPEN - `read-byte` uses `_getch`, which truncates wide characters.
-
-- Replace `_getch` with a `ReadFile` on the console handle (console input code
-  page set to UTF-8) so `read-byte` behaves like POSIX.
-- Handle redirected stdin, which `read-byte` currently ignores.
