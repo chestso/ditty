@@ -943,11 +943,20 @@ int main(int argc, char **argv)
             const char *parse_start = input;
             LispObject *expr = lisp_read(&input);
 
-            if (expr == NULL || input == parse_start)
+            if (expr == NULL)
                 break;
 
+            /* Check for a parse error before the progress test: the reader
+             * does not advance past a stray ')' glued to the previous form,
+             * and stopping there would silently drop the rest of the code. */
             if (LISP_TYPE(expr) == LISP_ERROR) {
                 fprintf(stderr, "%s\n", lisp_error_report(expr));
+                lisp_cleanup();
+                return 1;
+            }
+
+            if (input == parse_start) {
+                fprintf(stderr, "ERROR: reader made no progress\n");
                 lisp_cleanup();
                 return 1;
             }
@@ -1038,11 +1047,20 @@ int main(int argc, char **argv)
                 const char *parse_start = input;
                 LispObject *expr = lisp_read(&input);
 
-                if (expr == NULL || input == parse_start)
+                if (expr == NULL)
                     break;
 
+                /* Check for a parse error before the progress test: the
+                 * reader does not advance past a stray ')' glued to the
+                 * previous form, and stopping there would silently drop the
+                 * rest of the script. */
                 if (LISP_TYPE(expr) == LISP_ERROR) {
                     fprintf(stderr, "%s: %s\n", argv[i], lisp_error_report(expr));
+                    return 1;
+                }
+
+                if (input == parse_start) {
+                    fprintf(stderr, "%s: ERROR: reader made no progress\n", argv[i]);
                     return 1;
                 }
 

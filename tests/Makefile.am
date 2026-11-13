@@ -264,6 +264,7 @@ AM_TESTS_ENVIRONMENT = \
 # Shell tests
 TESTS += regression/test_caught_error_suppress_print.sh
 TESTS += regression/terminal_utf8_pipe.sh
+TESTS += regression/script_stray_paren.sh
 
 EXTRA_DIST = \
     run-test.sh \
@@ -349,6 +350,7 @@ EXTRA_DIST = \
     regression/unwind_protect_tail_call.lisp \
     regression/test_caught_error_suppress_print.sh \
     regression/terminal_utf8_pipe.sh \
+    regression/script_stray_paren.sh \
     regression/caught_error_suppress_print.lisp \
     bench/fib.lisp \
     bench/loop.lisp \
