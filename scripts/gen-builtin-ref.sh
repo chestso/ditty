@@ -50,8 +50,6 @@ for md_file in $md_files; do
 	grep -E '^## `[^`]+`' "$md_file" 2>/dev/null | sed 's/^## `\([^`]*\)`.*/  - `\1`/' || true
 done
 
-echo ""
-
 # --- Body: each doc file with demoted headings ---
 
 for md_file in $md_files; do
