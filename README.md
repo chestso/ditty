@@ -131,7 +131,7 @@ Useful targets (from `build/`):
 - `make` — build `libditty.a` (includes Flare) and `flare` and `cli/ditty`
 - `make check` — run the test suite
 - `make install` — install library, headers, REPL, `flare`, pkg-config files
-- `make format` — clang-format on C, shfmt on shell, prettier on Markdown, lisp-fmt on Lisp
+- `make format` — clang-format on C, shfmt on shell, dprint on Markdown, lisp-fmt on Lisp
 - `make bear` — produce `compile_commands.json` for clangd
 
 The default build enables AddressSanitizer and UndefinedBehaviorSanitizer. Use `--enable-release` for an optimized production build or `--enable-debug` for an unsanitized debug build (-O0 -g3).

@@ -60,7 +60,7 @@ Run from the `build/` directory:
 | -------------- | ---------------------------------------------------------------------------- |
 | `make`         | Build `libditty.a` (includes Flare), `flare`, and `cli/ditty`                |
 | `make check`   | Run the full test suite (Lisp + C tests in parallel)                         |
-| `make format`  | clang-format on C, shfmt on shell, prettier on Markdown, lisp-fmt on Lisp    |
+| `make format`  | clang-format on C, shfmt on shell, dprint on Markdown, lisp-fmt on Lisp      |
 | `make install` | Install library, headers, REPL, `flare`, pkg-config files                    |
 | `make bear`    | Produce `compile_commands.json` for clangd (runs clean + rebuild under bear) |
 

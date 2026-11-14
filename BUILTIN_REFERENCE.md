@@ -2752,7 +2752,7 @@ Result of last expression in file, or error if load fails.
 #### See Also
 
 - `read-sexp` - Read without evaluating
-- `expand-path` - Expand `~/ paths
+- ``expand-path`` - Expand `~/ paths
 
 ---
 
