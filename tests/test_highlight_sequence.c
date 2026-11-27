@@ -81,14 +81,14 @@ static char *simulate_repl_highlight(const char *text, size_t len, Environment *
         return ansi;
 
 fallback:
-{
-    char *fallback = malloc(len + 1);
-    if (fallback) {
-        memcpy(fallback, text, len);
-        fallback[len] = '\0';
+    {
+        char *fallback = malloc(len + 1);
+        if (fallback) {
+            memcpy(fallback, text, len);
+            fallback[len] = '\0';
+        }
+        return fallback;
     }
-    return fallback;
-}
 }
 
 static void test_highlight_foo_sequence(void)
