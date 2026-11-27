@@ -50,7 +50,7 @@ Get error type symbol from error object.
 
 ### Returns
 
-Symbol representing the error type (e.g., `'error`, `'division-by-zero`, `'file-error`).
+Symbol representing the error type (e.g., `'simple-error`, `'division-by-zero`, `'file-error`).
 
 ### Examples
 
@@ -247,7 +247,7 @@ or reported by the top level).
 
 ### Common Error Types
 
-- `'error` - Generic error (catch-all)
+- `'simple-error` - Generic error (the type raised by `error`)
 - `'division-by-zero` - Division by zero
 - `'wrong-type-argument` - Wrong type passed to function
 - `'wrong-number-of-arguments` - Arity mismatch
@@ -294,11 +294,11 @@ Does not return (raises error that must be caught with `condition-case`).
 
 ```lisp
 (error "Something went wrong")
-; => ERROR: [error] Something went wrong
+; => ERROR: [simple-error] Something went wrong
 
 ; With non-string message
 (error 404)
-; => ERROR: [error] 404
+; => ERROR: [simple-error] 404
 
 ; Catching errors
 (condition-case e
@@ -309,7 +309,7 @@ Does not return (raises error that must be caught with `condition-case`).
 
 ### Notes
 
-This is equivalent to `(signal 'error message)`. For typed errors, use `signal` instead.
+This is equivalent to `(signal 'simple-error message)`. For typed errors, use `signal` instead.
 
 ### See Also
 

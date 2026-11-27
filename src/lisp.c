@@ -25,7 +25,7 @@ LispObject *sym_unquote_splicing = NULL;
 LispObject *sym_else = NULL;
 LispObject *sym_optional = NULL;
 LispObject *sym_rest = NULL;
-LispObject *sym_error = NULL;
+LispObject *sym_simple_error = NULL;
 LispObject *sym_unclosed_input = NULL;
 LispObject *sym_star_package_star = NULL;
 LispObject *sym_star_features_star = NULL;
@@ -716,7 +716,7 @@ Environment *lisp_init(void)
     sym_else = lisp_intern("else");
     sym_optional = lisp_intern("&optional");
     sym_rest = lisp_intern("&rest");
-    sym_error = lisp_intern("error");
+    sym_simple_error = lisp_intern("simple-error");
     sym_unclosed_input = lisp_intern("unclosed-input");
     sym_star_package_star = lisp_intern("*package*");
     sym_star_features_star = lisp_intern("*features*");

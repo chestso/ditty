@@ -25,8 +25,8 @@ static LispObject *builtin_error_type(LispObject *args, Environment *env)
     if (LISP_ERROR_TYPE(obj) != NULL) {
         return LISP_ERROR_TYPE(obj);
     }
-    /* Fallback to 'error symbol if somehow NULL */
-    return sym_error;
+    /* Fallback to 'simple-error symbol if somehow NULL */
+    return sym_simple_error;
 }
 
 /* error-message - Get error message string */
@@ -129,7 +129,7 @@ static LispObject *builtin_error(LispObject *args, Environment *env)
         message = lisp_print(message_obj);
     }
 
-    return lisp_raise_typed_data(sym_error, message, NIL);
+    return lisp_raise_typed_data(sym_simple_error, message, NIL);
 }
 
 void register_errors_builtins(Environment *env)

@@ -24,7 +24,8 @@
 
 (assert-true (error? generic-err) "error function creates error")
 
-(assert-equal 'error (error-type generic-err) "error function uses error type")
+(assert-equal 'simple-error (error-type generic-err)
+ "error function uses simple-error type")
 (assert-equal "generic error message" (error-message generic-err)
  "error function message")
 ;;; condition-case with specific handler

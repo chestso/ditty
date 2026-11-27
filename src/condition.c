@@ -59,7 +59,7 @@ _Noreturn LispObject *lisp_raise(LispObject *error)
     EvalFrame *f = g_eval_frame;
 
     if (error == NULL || LISP_TYPE(error) != LISP_ERROR)
-        error = lisp_make_typed_error(sym_error, "attempt to signal a non-error object", NIL);
+        error = lisp_make_typed_error(sym_simple_error, "attempt to signal a non-error object", NIL);
 
     if (f == NULL)
         fatal_unframed_signal(error);
@@ -71,7 +71,7 @@ _Noreturn LispObject *lisp_raise(LispObject *error)
 
 _Noreturn LispObject *lisp_raise_error(const char *message)
 {
-    lisp_raise(lisp_make_typed_error(sym_error, message, NIL));
+    lisp_raise(lisp_make_typed_error(sym_simple_error, message, NIL));
 }
 
 _Noreturn LispObject *lisp_raise_typed(const char *type_name, const char *message)

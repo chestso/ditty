@@ -815,7 +815,7 @@ does **not** re-signal it. To send one onward, use `(signal ERR)`.
 
 ```lisp
 (error "Something went wrong")
-; => ERROR: [error] Something went wrong
+; => ERROR: [simple-error] Something went wrong
 ```
 
 ### Condition-Case (Error Catching)
@@ -1003,7 +1003,7 @@ as `#<error TYPE "MESSAGE">`, distinct from the report:
 
 Standard error types (user-extensible):
 
-- `'error` - Generic error (catch-all)
+- `'simple-error` - Generic error (the type raised by `error`)
 - `'division-by-zero` - Division by zero
 - `'wrong-type-argument` - Wrong type passed to function
 - `'wrong-number-of-arguments` - Arity mismatch

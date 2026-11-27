@@ -423,7 +423,7 @@ outward instead of being caught again.
 
 ; The handler's value is the form's value, even when it is an error object.
 (condition-case e (error "boom") (error e))
-; => #<error error "boom">
+; => #<error simple-error "boom">
 ```
 
 ## `unwind-protect`

@@ -81,7 +81,7 @@
 
 (assert-true (error? (eval 'captured)) "eval returns an error object as data")
 
-(assert-equal "#<error error \"boom\">" (format nil "~S" captured)
+(assert-equal "#<error simple-error \"boom\">" (format nil "~S" captured)
  "an error value prints as data, not as the ERROR: diagnostic")
 
 ;; --- unwind-protect --------------------------------------------------------

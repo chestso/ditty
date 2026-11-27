@@ -303,7 +303,7 @@ char *lisp_error_report(LispObject *error)
     if (LISP_ERROR_TYPE(error) != NULL && LISP_TYPE(LISP_ERROR_TYPE(error)) == LISP_SYMBOL) {
         append_str(&buffer, &size, &pos, LISP_SYM_VAL(LISP_ERROR_TYPE(error))->name);
     } else {
-        append_str(&buffer, &size, &pos, "error");
+        append_str(&buffer, &size, &pos, "simple-error");
     }
     append_str(&buffer, &size, &pos, "] ");
     append_str(&buffer, &size, &pos, LISP_ERROR_MESSAGE(error));

@@ -382,7 +382,7 @@ extern LispObject *sym_unquote_splicing;
 extern LispObject *sym_else;
 extern LispObject *sym_optional;
 extern LispObject *sym_rest;
-extern LispObject *sym_error;
+extern LispObject *sym_simple_error;   /* generic error type; the `error` function and catch-all handler keep that name */
 extern LispObject *sym_unclosed_input; /* reader signals incomplete input with this type */
 extern LispObject *sym_star_package_star;
 extern LispObject *sym_star_features_star;
