@@ -50,22 +50,25 @@ outer `condition-case` catches and returns the error object.
 
 ### Hex escapes in string literals
 
-**Status:** OPEN - `\xHH` is not an escape; it is silently read as text.
+**Status:** FIXED — strict escape set with `\xHH`, `\uXXXX`, `\UXXXXXXXX`.
 
-`read_string()` in `src/reader.c` handles `\n \t \r \\ \"` and one-to-three
-octal digits; any other backslash escape drops the backslash and keeps the
-next character. So `"\x1b"` (four characters in the source) is the three
-characters `x1b`, with no error and no warning:
+`read_string()` in `src/reader.c` accepts `\a \b \t \n \v \f \r \e \\ \"`,
+1–3 octal digits (`\033` keeps working), and fixed-width hex escapes:
+`\xHH` (2 digits), `\uXXXX` (4), `\UXXXXXXXX` (8). All numeric escapes
+denote Unicode codepoints encoded as UTF-8, so the reader always
+produces valid UTF-8 strings (octal `\377` no longer emits a raw byte).
+Hex escapes are fixed-width — `"\x41bc"` reads as `"Abc"` — unlike the
+greedy `#\x` character literals, because inside a string there is no
+delimiter.
 
-```lisp
-(string-length "\x1b")   ; => 3
-```
+Unknown escapes are no longer silently read as text: they signal
+`reader-error`, as do malformed hex escapes, surrogates (U+D800–U+DFFF)
+and codepoints above U+10FFFF. Input ending mid-escape returns
+`unclosed-input`, so the REPL continues the line. This also fixed an
+out-of-bounds read when a string ended in a lone backslash at end of
+input. The escape set is documented in `LANGUAGE_GUIDE.md`
+(String Escapes).
 
-- `LANGUAGE_GUIDE.md` never documents the string escape set, so neither the
-  supported escapes nor the missing `\x` form is discoverable.
-- This was live: the `tui-events` library wrote `"\x1b[?1003h"` and friends
-  for mouse, focus, paste, clipboard and alt-screen control, all of which
-  printed the literal text `x1b[...` to the terminal. `lisp/terminal.lisp`
-  now uses octal `"\033"`.
-- Decide: add `\xHH` (and `\uXXXX`?), reject unknown escapes as a reader
-  error, or at minimum document the supported set. `\033` must keep working.
+**Tests:** `tests/basic/string_escapes.lisp` and
+`tests/test_repl_completeness.c` (trailing backslash, truncated hex,
+malformed escapes, fixed width).

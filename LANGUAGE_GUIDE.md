@@ -203,6 +203,38 @@ As McCarthy later reflected, the survival of S-expressions and the disappearance
 - **Keywords**: Self-evaluating interned symbols starting with `:` (e.g., `:foo`, `:key`)
 - **Lambda Functions**: User-defined closures with lexical scoping
 
+### String Escapes
+
+String literals support the following escape sequences. All numeric escapes denote Unicode codepoints and are encoded as UTF-8 — they never emit raw bytes.
+
+| Escape       | Meaning                                              |
+| ------------ | ---------------------------------------------------- |
+| `\a`         | Alarm (U+0007)                                       |
+| `\b`         | Backspace (U+0008)                                   |
+| `\t`         | Tab (U+0009)                                         |
+| `\n`         | Newline (U+000A)                                     |
+| `\v`         | Vertical tab (U+000B)                                |
+| `\f`         | Form feed (U+000C)                                   |
+| `\r`         | Carriage return (U+000D)                             |
+| `\e`         | Escape (U+001B)                                      |
+| `\\`         | Backslash                                            |
+| `\"`         | Double quote                                         |
+| `\N`–`\NNN`  | Octal, 1–3 digits (`\033` is ESC, `\101` is `A`)     |
+| `\xHH`       | Exactly 2 hex digits                                 |
+| `\uXXXX`     | Exactly 4 hex digits                                 |
+| `\UXXXXXXXX` | Exactly 8 hex digits (for codepoints beyond the BMP) |
+
+Hex escapes are fixed-width: `"\x41bc"` reads as `"Abc"` (U+0041 followed by literal `b` and `c`), not U+41BC. This differs from character literals (`#\x41bc` is the single character U+41BC), which are delimited by whitespace or parentheses. Octal escapes consume at most three digits: `"\1234"` is `"S4"`.
+
+Unknown escapes (e.g. `\q`) and malformed escapes (wrong number of hex digits, surrogate codepoints U+D800–U+DFFF, values above U+10FFFF) signal a `reader-error`. Input that ends mid-escape is incomplete input (`unclosed-input`), so the REPL prompts for a continuation line.
+
+```lisp
+"\x1b[?1003h"   ; terminal control sequence (ESC + "[?1003h")
+"\033[0m"       ; the same ESC via octal
+"\u20ac"        ; "€"
+"\U0001F600"    ; "😀"
+```
+
 ## Special Forms
 
 - `quote` - Quote expressions (also supported via `'expr` syntax)
