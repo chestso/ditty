@@ -42,6 +42,10 @@ void frame_unwind(EvalFrame *f);
  * handler form `(TYPE BODY...)`, or NIL when nothing matches. */
 LispObject *condition_find_handler(LispObject *handlers, LispObject *error);
 
+/* Build the error-type ancestor table from the ERROR_TYPES X-macro. Called
+ * once by lisp_init() after the type symbols are interned. */
+void condition_init_types(void);
+
 static inline void frame_push(EvalFrame *f)
 {
     f->parent = g_eval_frame;

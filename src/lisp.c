@@ -25,8 +25,10 @@ LispObject *sym_unquote_splicing = NULL;
 LispObject *sym_else = NULL;
 LispObject *sym_optional = NULL;
 LispObject *sym_rest = NULL;
-LispObject *sym_simple_error = NULL;
-LispObject *sym_unclosed_input = NULL;
+/* Error-type symbols (ERROR_TYPES X-macro) */
+#define DEFINE_ERROR_SYM(c_name, lisp_name, ...) LispObject *c_name = NULL;
+ERROR_TYPES(DEFINE_ERROR_SYM)
+#undef DEFINE_ERROR_SYM
 LispObject *sym_star_package_star = NULL;
 LispObject *sym_star_features_star = NULL;
 LispObject *sym_star_load_path_star = NULL;
@@ -716,8 +718,11 @@ Environment *lisp_init(void)
     sym_else = lisp_intern("else");
     sym_optional = lisp_intern("&optional");
     sym_rest = lisp_intern("&rest");
-    sym_simple_error = lisp_intern("simple-error");
-    sym_unclosed_input = lisp_intern("unclosed-input");
+    /* Error-type symbols (third column ignored) */
+#define INIT_ERROR_SYM(c_name, lisp_name, ...) c_name = lisp_intern(lisp_name);
+    ERROR_TYPES(INIT_ERROR_SYM)
+#undef INIT_ERROR_SYM
+    condition_init_types();
     sym_star_package_star = lisp_intern("*package*");
     sym_star_features_star = lisp_intern("*features*");
     sym_star_load_path_star = lisp_intern("*load-path*");

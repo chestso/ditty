@@ -181,6 +181,7 @@ TESTS = \
     basic/bitwise.lisp \
     basic/characters.lisp \
     basic/define_shorthand.lisp \
+    basic/error-types.lisp \
     basic/filesystem.lisp \
     basic/floor_modulo.lisp \
     basic/format.lisp \
@@ -286,6 +287,7 @@ EXTRA_DIST = \
     basic/bitwise.lisp \
     basic/characters.lisp \
     basic/define_shorthand.lisp \
+    basic/error-types.lisp \
     basic/filesystem.lisp \
     basic/floor_modulo.lisp \
     basic/format.lisp \

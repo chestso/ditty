@@ -287,7 +287,7 @@ LispStatus lisp_try_load_file(const char *filename, Environment *env, LispObject
  * from a builtin, binding one to a variable, or passing one to car/apply/
  * eval does not signal. */
 _Noreturn LispObject *lisp_raise(LispObject *error);
-_Noreturn LispObject *lisp_raise_error(const char *message); /* type 'error */
+_Noreturn LispObject *lisp_raise_error(const char *message); /* type 'simple-error */
 _Noreturn LispObject *lisp_raise_typed(const char *type_name, const char *message);
 _Noreturn LispObject *lisp_raise_typed_data(LispObject *type, const char *message, LispObject *data);
 
@@ -376,14 +376,40 @@ typedef enum
 SPECIAL_FORMS(DECLARE_SYM)
 #undef DECLARE_SYM
 
+/* Runtime condition taxonomy — a small, Common Lisp-leaning subset of the
+ * CLHS condition types, right-sized for ditty. X(c_name, lisp_name, parent):
+ * `parent` is another entry's c_name and must appear earlier in the table
+ * (the root `error` is its own parent). condition.c turns this into an
+ * ancestor bitmask per type so condition-case matches a handler against the
+ * whole chain in O(1); an unregistered signal type is treated as a direct
+ * child of `error`. `error` is both the hierarchy root and the catch-all
+ * handler name; `simple-error` is the generic type the `error` function
+ * signals. */
+#define ERROR_TYPES(X)                                              \
+    X(sym_error, "error", sym_error)                                \
+    X(sym_simple_error, "simple-error", sym_error)                  \
+    X(sym_type_error, "type-error", sym_error)                      \
+    X(sym_program_error, "program-error", sym_error)                \
+    X(sym_unbound_variable, "unbound-variable", sym_error)          \
+    X(sym_arithmetic_error, "arithmetic-error", sym_error)          \
+    X(sym_division_by_zero, "division-by-zero", sym_arithmetic_error) \
+    X(sym_file_error, "file-error", sym_error)                      \
+    X(sym_stream_error, "stream-error", sym_error)                  \
+    X(sym_reader_error, "reader-error", sym_error)                  \
+    X(sym_unclosed_input, "unclosed-input", sym_reader_error)       \
+    X(sym_package_error, "package-error", sym_error)
+
+/* Declare error-type symbol globals (third column ignored) */
+#define DECLARE_ERROR_SYM(c_name, lisp_name, ...) extern LispObject *c_name;
+ERROR_TYPES(DECLARE_ERROR_SYM)
+#undef DECLARE_ERROR_SYM
+
 /* Non-special-form pre-interned symbols */
 extern LispObject *sym_unquote;
 extern LispObject *sym_unquote_splicing;
 extern LispObject *sym_else;
 extern LispObject *sym_optional;
 extern LispObject *sym_rest;
-extern LispObject *sym_simple_error;   /* generic error type; the `error` function and catch-all handler keep that name */
-extern LispObject *sym_unclosed_input; /* reader signals incomplete input with this type */
 extern LispObject *sym_star_package_star;
 extern LispObject *sym_star_features_star;
 extern LispObject *sym_star_load_path_star;

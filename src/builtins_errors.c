@@ -15,11 +15,11 @@ static LispObject *builtin_error_question(LispObject *args, Environment *env)
 static LispObject *builtin_error_type(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_typed("wrong-number-of-arguments", "error-type requires 1 argument");
+        return lisp_raise_typed("program-error", "error-type requires 1 argument");
     }
     LispObject *obj = lisp_car(args);
     if (LISP_TYPE(obj) != LISP_ERROR) {
-        return lisp_raise_typed("wrong-type-argument", "error-type: argument must be an error");
+        return lisp_raise_typed("type-error", "error-type: argument must be an error");
     }
     /* Return error type (guaranteed to be a symbol) */
     if (LISP_ERROR_TYPE(obj) != NULL) {
@@ -33,11 +33,11 @@ static LispObject *builtin_error_type(LispObject *args, Environment *env)
 static LispObject *builtin_error_message(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_typed("wrong-number-of-arguments", "error-message requires 1 argument");
+        return lisp_raise_typed("program-error", "error-message requires 1 argument");
     }
     LispObject *obj = lisp_car(args);
     if (LISP_TYPE(obj) != LISP_ERROR) {
-        return lisp_raise_typed("wrong-type-argument", "error-message: argument must be an error");
+        return lisp_raise_typed("type-error", "error-message: argument must be an error");
     }
     return lisp_make_string(LISP_ERROR_MESSAGE(obj));
 }
@@ -46,11 +46,11 @@ static LispObject *builtin_error_message(LispObject *args, Environment *env)
 static LispObject *builtin_error_stack(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_typed("wrong-number-of-arguments", "error-stack requires 1 argument");
+        return lisp_raise_typed("program-error", "error-stack requires 1 argument");
     }
     LispObject *obj = lisp_car(args);
     if (LISP_TYPE(obj) != LISP_ERROR) {
-        return lisp_raise_typed("wrong-type-argument", "error-stack: argument must be an error");
+        return lisp_raise_typed("type-error", "error-stack: argument must be an error");
     }
     LispObject *stack = LISP_ERROR_STACK_TRACE(obj);
     return (stack != NULL) ? stack : NIL;
@@ -60,11 +60,11 @@ static LispObject *builtin_error_stack(LispObject *args, Environment *env)
 static LispObject *builtin_error_data(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_typed("wrong-number-of-arguments", "error-data requires 1 argument");
+        return lisp_raise_typed("program-error", "error-data requires 1 argument");
     }
     LispObject *obj = lisp_car(args);
     if (LISP_TYPE(obj) != LISP_ERROR) {
-        return lisp_raise_typed("wrong-type-argument", "error-data: argument must be an error");
+        return lisp_raise_typed("type-error", "error-data: argument must be an error");
     }
     LispObject *data = LISP_ERROR_DATA(obj);
     return (data != NULL) ? data : NIL;
@@ -78,7 +78,7 @@ static LispObject *builtin_signal(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL) {
-        return lisp_raise_typed("wrong-number-of-arguments", "signal requires at least 1 argument");
+        return lisp_raise_typed("program-error", "signal requires at least 1 argument");
     }
 
     LispObject *error_type = lisp_car(args);
@@ -89,7 +89,7 @@ static LispObject *builtin_signal(LispObject *args, Environment *env)
         lisp_raise(error_type);
 
     if (LISP_TYPE(error_type) != LISP_SYMBOL) {
-        return lisp_raise_typed("wrong-type-argument", "signal: first argument must be a symbol or an error");
+        return lisp_raise_typed("type-error", "signal: first argument must be a symbol or an error");
     }
 
     /* Get optional data argument */
@@ -117,7 +117,7 @@ static LispObject *builtin_error(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL) {
-        return lisp_raise_typed("wrong-number-of-arguments", "error requires 1 argument");
+        return lisp_raise_typed("program-error", "error requires 1 argument");
     }
 
     LispObject *message_obj = lisp_car(args);

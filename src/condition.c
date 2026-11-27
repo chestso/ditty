@@ -8,7 +8,6 @@
 #include "condition_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 EvalFrame *g_eval_frame = NULL;
 
@@ -84,32 +83,96 @@ _Noreturn LispObject *lisp_raise_typed_data(LispObject *type, const char *messag
     lisp_raise(lisp_make_typed_error(type, message, data));
 }
 
-/* The only handler matcher. An exact type match wins (compared by symbol
- * name, so package-qualified type names keep working); `error` is the
- * catch-all. Kept in one function so an error hierarchy can be added here
- * later. */
+/* ---- Error-type hierarchy ----
+ *
+ * A static ancestor bitmask per registered type, built once from the
+ * ERROR_TYPES X-macro. Matching is pointer equality + a bit test — no string
+ * compares, no per-signal allocation. Parents precede children in the macro,
+ * so a single forward pass computes every mask. */
+enum
+{
+#define ERR_INDEX(c_name, lisp_name, parent) ERR_IDX_##c_name,
+    ERROR_TYPES(ERR_INDEX)
+#undef ERR_INDEX
+    ERROR_TYPE_COUNT
+};
+
+static const int err_parent[ERROR_TYPE_COUNT] = {
+#define ERR_PARENT(c_name, lisp_name, parent) ERR_IDX_##parent,
+    ERROR_TYPES(ERR_PARENT)
+#undef ERR_PARENT
+};
+
+static struct
+{
+    LispObject *sym;
+    uint32_t mask; /* self bit | ancestors' bits */
+} err_types[ERROR_TYPE_COUNT];
+
+void condition_init_types(void)
+{
+    uint32_t masks[ERROR_TYPE_COUNT];
+    for (int i = 0; i < ERROR_TYPE_COUNT; i++)
+        masks[i] = (1u << i) | (err_parent[i] == i ? 0 : masks[err_parent[i]]);
+#define ERR_SET(c_name, lisp_name, parent)                  \
+    err_types[ERR_IDX_##c_name].sym = c_name;               \
+    err_types[ERR_IDX_##c_name].mask = masks[ERR_IDX_##c_name];
+    ERROR_TYPES(ERR_SET)
+#undef ERR_SET
+}
+
+static uint32_t error_type_mask(LispObject *type)
+{
+    for (int i = 0; i < ERROR_TYPE_COUNT; i++)
+        if (err_types[i].sym == type)
+            return err_types[i].mask;
+    return 0;
+}
+
+static uint32_t error_type_bit(LispObject *type)
+{
+    for (int i = 0; i < ERROR_TYPE_COUNT; i++)
+        if (err_types[i].sym == type)
+            return 1u << i;
+    return 0;
+}
+
+/* Error types are package-agnostic: a qualified symbol (core:error) matches
+ * the same type as its unqualified name. Normalize qualified symbols to the
+ * canonical interned symbol for matching only — the error keeps its original
+ * type object. Cold path (once per signal), so the intern lookup is free. */
+static LispObject *canonical_type(LispObject *type)
+{
+    if (type != NULL && LISP_TYPE(type) == LISP_SYMBOL && LISP_SYM_VAL(type)->namespace != NULL)
+        return lisp_intern(LISP_SYM_VAL(type)->name);
+    return type;
+}
+
+/* The only handler matcher. Clauses are tried in order; the first whose type
+ * is the signal's type or one of its ancestors wins (CL/Elisp semantics).
+ * `error` is the root, so it catches every registered type; an unregistered
+ * signal type is treated as a direct child of `error`, and an unregistered
+ * handler name matches only that exact type. */
 LispObject *condition_find_handler(LispObject *handlers, LispObject *error)
 {
-    LispObject *error_type = LISP_ERROR_TYPE(error);
-    LispObject *catch_all = NIL;
+    LispObject *error_type = canonical_type(LISP_ERROR_TYPE(error));
+    uint32_t mask = error_type_mask(error_type);
+    if (mask == 0)
+        mask = 1u; /* unregistered type: direct child of error (root bit) */
 
     for (LispObject *h = handlers; h != NIL && LISP_TYPE(h) == LISP_CONS; h = lisp_cdr(h)) {
         LispObject *handler = lisp_car(h);
         if (handler == NIL || LISP_TYPE(handler) != LISP_CONS)
             continue;
-        LispObject *handler_type = lisp_car(handler);
+        LispObject *handler_type = canonical_type(lisp_car(handler));
         if (handler_type == NULL || LISP_TYPE(handler_type) != LISP_SYMBOL)
             continue;
 
-        if (error_type != NULL && LISP_TYPE(error_type) == LISP_SYMBOL &&
-            strcmp(LISP_SYM_VAL(handler_type)->name, LISP_SYM_VAL(error_type)->name) == 0)
+        if (handler_type == error_type || (mask & error_type_bit(handler_type)))
             return handler;
-
-        if (strcmp(LISP_SYM_VAL(handler_type)->name, "error") == 0)
-            catch_all = handler;
     }
 
-    return catch_all;
+    return NIL;
 }
 
 /* ---- Protected API ---- */
