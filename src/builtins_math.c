@@ -26,7 +26,7 @@ static void check_exact_args(LispObject *args, int expected, const char *name)
 
     char message[64];
     snprintf(message, sizeof(message), "%s requires %d argument%s", name, expected, expected == 1 ? "" : "s");
-    lisp_raise_error(message);
+    lisp_raise_typed("program-error", message);
 }
 
 /* Store the numeric value of OBJ in OUT. Returns 0 when OBJ is not a number. */
@@ -48,21 +48,21 @@ static LispObject *requires_a_number(const char *name)
 {
     char message[64];
     snprintf(message, sizeof(message), "%s requires a number", name);
-    return lisp_raise_error(message);
+    return lisp_raise_typed("type-error", message);
 }
 
 static LispObject *requires_numbers(const char *name)
 {
     char message[64];
     snprintf(message, sizeof(message), "%s requires numbers", name);
-    return lisp_raise_error(message);
+    return lisp_raise_typed("type-error", message);
 }
 
 static LispObject *not_finite(const char *name)
 {
     char message[80];
     snprintf(message, sizeof(message), "%s: result is not a finite number", name);
-    return lisp_raise_error(message);
+    return lisp_raise_typed("arithmetic-error", message);
 }
 
 /* Wrap a computed float result, rejecting NaN and infinities */
@@ -110,7 +110,7 @@ static LispObject *builtin_sqrt(LispObject *args, Environment *env)
     one_number_arg(args, "sqrt", &x);
 
     if (x < 0)
-        return lisp_raise_error("sqrt: argument must be non-negative");
+        return lisp_raise_typed("arithmetic-error", "sqrt: argument must be non-negative");
     return make_float_result(sqrt(x), "sqrt");
 }
 
@@ -149,7 +149,7 @@ static LispObject *inverse_trig(LispObject *args, const char *name, double (*fn)
     if (!(x >= -1.0 && x <= 1.0)) {
         char message[64];
         snprintf(message, sizeof(message), "%s: argument out of range", name);
-        return lisp_raise_error(message);
+        return lisp_raise_typed("arithmetic-error", message);
     }
     return make_float_result(fn(x), name);
 }
@@ -171,7 +171,7 @@ static LispObject *builtin_atan(LispObject *args, Environment *env)
     (void)env;
     int count = arg_count(args);
     if (count != 1 && count != 2)
-        return lisp_raise_error("atan requires 1 or 2 arguments");
+        return lisp_raise_typed("program-error", "atan requires 1 or 2 arguments");
 
     double y;
     if (!number_value(lisp_car(args), &y))
@@ -215,7 +215,7 @@ static LispObject *builtin_log(LispObject *args, Environment *env)
     one_number_arg(args, "log", &x);
 
     if (x <= 0)
-        return lisp_raise_error("log: argument must be positive");
+        return lisp_raise_typed("arithmetic-error", "log: argument must be positive");
     return make_float_result(log(x), "log");
 }
 
@@ -259,7 +259,7 @@ static LispObject *builtin_expt(LispObject *args, Environment *env)
         long long exponent_int = LISP_INT_VAL(exponent_obj);
 
         if (exponent_int < 0 && base_int == 0)
-            return lisp_raise_error("Division by zero");
+            return lisp_raise_typed("division-by-zero", "Division by zero");
 
         if (exponent_int >= 0) {
             long long result;
@@ -360,7 +360,7 @@ static LispObject *builtin_random(LispObject *args, Environment *env)
     if (LISP_TYPE(arg) == LISP_INTEGER) {
         long long n = LISP_INT_VAL(arg);
         if (n <= 0)
-            return lisp_raise_error("random: argument must be positive");
+            return lisp_raise_typed("type-error", "random: argument must be positive");
 
         /* Rejection sampling avoids modulo bias */
         uint64_t range = (uint64_t)n;
@@ -375,7 +375,7 @@ static LispObject *builtin_random(LispObject *args, Environment *env)
     if (LISP_TYPE(arg) == LISP_NUMBER) {
         double x = LISP_NUM_VAL(arg);
         if (!(x > 0))
-            return lisp_raise_error("random: argument must be positive");
+            return lisp_raise_typed("type-error", "random: argument must be positive");
         return lisp_make_number((double)(random_next() >> 11) * (1.0 / 9007199254740992.0) * x);
     }
 
@@ -389,7 +389,7 @@ static LispObject *builtin_random_seed(LispObject *args, Environment *env)
 
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_INTEGER)
-        return lisp_raise_error("random-seed requires an integer");
+        return lisp_raise_typed("type-error", "random-seed requires an integer");
 
     uint64_t seed = (uint64_t)LISP_INT_VAL(arg);
     random_state = splitmix64_next(&seed);

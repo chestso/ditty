@@ -48,12 +48,12 @@ static LispObject *builtin_open(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL) {
-        return lisp_raise_error("open requires at least 1 argument");
+        return lisp_raise_typed("program-error", "open requires at least 1 argument");
     }
 
     LispObject *filename_obj = lisp_car(args);
     if (LISP_TYPE(filename_obj) != LISP_STRING) {
-        return lisp_raise_error("open requires a string filename");
+        return lisp_raise_typed("type-error", "open requires a string filename");
     }
 
     /* Default mode is "r" (read) */
@@ -62,7 +62,7 @@ static LispObject *builtin_open(LispObject *args, Environment *env)
     if (rest != NIL && rest != NULL) {
         LispObject *mode_obj = lisp_car(rest);
         if (LISP_TYPE(mode_obj) != LISP_STRING) {
-            return lisp_raise_error("open mode must be a string");
+            return lisp_raise_typed("type-error", "open mode must be a string");
         }
         mode = LISP_STR_VAL(mode_obj);
         rest = lisp_cdr(rest);
@@ -72,7 +72,7 @@ static LispObject *builtin_open(LispObject *args, Environment *env)
     if (file == NULL) {
         char error[512];
         snprintf(error, sizeof(error), "open: cannot open file '%s'", LISP_STR_VAL(filename_obj));
-        return lisp_raise_error(error);
+        return lisp_raise_typed_data(sym_file_error, error, filename_obj);
     }
 
     LispObject *stream = lisp_make_file_stream(file);
@@ -83,7 +83,7 @@ static LispObject *builtin_open(LispObject *args, Environment *env)
         if (eol_obj != NIL && eol_obj != NULL) {
             if (LISP_TYPE(eol_obj) != LISP_STRING) {
                 fclose(file);
-                return lisp_raise_error("open: eol argument must be a string or nil");
+                return lisp_raise_typed("type-error", "open: eol argument must be a string or nil");
             }
             const char *e = LISP_STR_VAL(eol_obj);
             if (strcmp(e, "\n") == 0) {
@@ -100,7 +100,7 @@ static LispObject *builtin_open(LispObject *args, Environment *env)
                 [2] = '\0';
             } else {
                 fclose(file);
-                return lisp_raise_error("open: eol must be \"\\n\" or \"\\r\\n\"");
+                return lisp_raise_typed("type-error", "open: eol must be \"\\n\" or \"\\r\\n\"");
             }
             return stream;
         }
@@ -121,7 +121,7 @@ static LispObject *builtin_close(LispObject *args, Environment *env)
 
     LispObject *stream_obj = lisp_car(args);
     if (LISP_TYPE(stream_obj) != LISP_FILE_STREAM) {
-        return lisp_raise_error("close requires a file stream");
+        return lisp_raise_typed("type-error", "close requires a file stream");
     }
 
     if (LISP_FILE_FP(stream_obj) != NULL) {
@@ -139,12 +139,12 @@ static LispObject *builtin_read_line(LispObject *args, Environment *env)
 
     LispObject *stream_obj = lisp_car(args);
     if (LISP_TYPE(stream_obj) != LISP_FILE_STREAM) {
-        return lisp_raise_error("read-line requires a file stream");
+        return lisp_raise_typed("type-error", "read-line requires a file stream");
     }
 
     FILE *file = LISP_FILE_FP(stream_obj);
     if (file == NULL) {
-        return lisp_raise_error("read-line: file is closed");
+        return lisp_raise_typed("stream-error", "read-line: file is closed");
     }
 
     /* Read line with dynamic buffer */
@@ -216,27 +216,27 @@ static LispObject *builtin_write_line(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL) {
-        return lisp_raise_error("write-line requires at least 1 argument");
+        return lisp_raise_typed("program-error", "write-line requires at least 1 argument");
     }
 
     LispObject *stream_obj = lisp_car(args);
     if (LISP_TYPE(stream_obj) != LISP_FILE_STREAM) {
-        return lisp_raise_error("write-line requires a file stream");
+        return lisp_raise_typed("type-error", "write-line requires a file stream");
     }
 
     FILE *file = LISP_FILE_FP(stream_obj);
     if (file == NULL) {
-        return lisp_raise_error("write-line: file is closed");
+        return lisp_raise_typed("stream-error", "write-line: file is closed");
     }
 
     LispObject *rest = lisp_cdr(args);
     if (rest == NIL) {
-        return lisp_raise_error("write-line requires a string to write");
+        return lisp_raise_typed("type-error", "write-line requires a string to write");
     }
 
     LispObject *text_obj = lisp_car(rest);
     if (LISP_TYPE(text_obj) != LISP_STRING) {
-        return lisp_raise_error("write-line requires a string");
+        return lisp_raise_typed("type-error", "write-line requires a string");
     }
 
     const char *text = LISP_STR_VAL(text_obj);
@@ -253,27 +253,27 @@ static LispObject *builtin_write_string(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL) {
-        return lisp_raise_error("write-string requires at least 1 argument");
+        return lisp_raise_typed("program-error", "write-string requires at least 1 argument");
     }
 
     LispObject *stream_obj = lisp_car(args);
     if (LISP_TYPE(stream_obj) != LISP_FILE_STREAM) {
-        return lisp_raise_error("write-string requires a file stream");
+        return lisp_raise_typed("type-error", "write-string requires a file stream");
     }
 
     FILE *file = LISP_FILE_FP(stream_obj);
     if (file == NULL) {
-        return lisp_raise_error("write-string: file is closed");
+        return lisp_raise_typed("stream-error", "write-string: file is closed");
     }
 
     LispObject *rest = lisp_cdr(args);
     if (rest == NIL) {
-        return lisp_raise_error("write-string requires a string to write");
+        return lisp_raise_typed("type-error", "write-string requires a string to write");
     }
 
     LispObject *text_obj = lisp_car(rest);
     if (LISP_TYPE(text_obj) != LISP_STRING) {
-        return lisp_raise_error("write-string requires a string");
+        return lisp_raise_typed("type-error", "write-string requires a string");
     }
 
     const char *text = LISP_STR_VAL(text_obj);
@@ -295,7 +295,7 @@ static LispObject *builtin_stream_eol(LispObject *args, Environment *env)
 
     LispObject *stream_obj = lisp_car(args);
     if (LISP_TYPE(stream_obj) != LISP_FILE_STREAM) {
-        return lisp_raise_error("stream-eol requires a file stream");
+        return lisp_raise_typed("type-error", "stream-eol requires a file stream");
     }
 
     return lisp_make_string(LISP_FILE_EOL(stream_obj));
@@ -315,7 +315,7 @@ static LispObject *builtin_read_sexp(LispObject *args, Environment *env)
     if (LISP_TYPE(arg) == LISP_FILE_STREAM) {
         file = LISP_FILE_FP(arg);
         if (file == NULL) {
-            return lisp_raise_error("read-sexp: file is closed");
+            return lisp_raise_typed("stream-error", "read-sexp: file is closed");
         }
     } else if (LISP_TYPE(arg) == LISP_STRING) {
         /* Open file */
@@ -323,11 +323,11 @@ static LispObject *builtin_read_sexp(LispObject *args, Environment *env)
         if (file == NULL) {
             char error[512];
             snprintf(error, sizeof(error), "read-sexp: cannot open file '%s'", LISP_STR_VAL(arg));
-            return lisp_raise_error(error);
+            return lisp_raise_typed_data(sym_file_error, error, arg);
         }
         should_close = 1;
     } else {
-        return lisp_raise_error("read-sexp requires a filename (string) or file stream");
+        return lisp_raise_typed("type-error", "read-sexp requires a filename (string) or file stream");
     }
 
     /* Read entire file */
@@ -339,7 +339,7 @@ static LispObject *builtin_read_sexp(LispObject *args, Environment *env)
         if (should_close) {
             fclose(file);
         }
-        return lisp_raise_error("read-sexp: cannot determine file size");
+        return lisp_raise_typed("file-error", "read-sexp: cannot determine file size");
     }
 
     char *buffer = GC_malloc(size + 1);
@@ -405,7 +405,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
     if (LISP_TYPE(arg) == LISP_FILE_STREAM) {
         file = LISP_FILE_FP(arg);
         if (file == NULL) {
-            return lisp_raise_error("read-json: file is closed");
+            return lisp_raise_typed("stream-error", "read-json: file is closed");
         }
     } else if (LISP_TYPE(arg) == LISP_STRING) {
         /* Open file */
@@ -413,11 +413,11 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
         if (file == NULL) {
             char error[512];
             snprintf(error, sizeof(error), "read-json: cannot open file '%s'", LISP_STR_VAL(arg));
-            return lisp_raise_error(error);
+            return lisp_raise_typed_data(sym_file_error, error, arg);
         }
         should_close = 1;
     } else {
-        return lisp_raise_error("read-json requires a filename (string) or file stream");
+        return lisp_raise_typed("type-error", "read-json requires a filename (string) or file stream");
     }
 
     /* Read entire file */
@@ -429,7 +429,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
         if (should_close) {
             fclose(file);
         }
-        return lisp_raise_error("read-json: cannot determine file size");
+        return lisp_raise_typed("file-error", "read-json: cannot determine file size");
     }
 
     char *buffer = GC_malloc(size + 1);
@@ -468,7 +468,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
 
             /* Parse key (must be string) */
             if (*p != '"') {
-                return lisp_raise_error("read-json: object key must be a string");
+                return lisp_raise_typed("reader-error", "read-json: object key must be a string");
             }
             p++; /* Skip '"' */
             const char *key_start = p;
@@ -480,7 +480,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
                 }
             }
             if (*p != '"') {
-                return lisp_raise_error("read-json: unterminated string");
+                return lisp_raise_typed("reader-error", "read-json: unterminated string");
             }
             size_t key_len = p - key_start;
             char *key = GC_malloc(key_len + 1);
@@ -493,7 +493,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
                 p++;
             }
             if (*p != ':') {
-                return lisp_raise_error("read-json: expected ':' after key");
+                return lisp_raise_typed("reader-error", "read-json: expected ':' after key");
             }
             p++; /* Skip ':' */
 
@@ -516,7 +516,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
                     }
                 }
                 if (*p != '"') {
-                    return lisp_raise_error("read-json: unterminated string");
+                    return lisp_raise_typed("reader-error", "read-json: unterminated string");
                 }
                 size_t val_len = p - val_start;
                 char *val_str = GC_malloc(val_len + 1);
@@ -555,7 +555,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
                     json_value = lisp_make_integer(atoll(num_str));
                 }
             } else {
-                return lisp_raise_error("read-json: unexpected character");
+                return lisp_raise_typed("reader-error", "read-json: unexpected character");
             }
 
             /* Store in hash table */
@@ -568,7 +568,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
             if (*p == ',') {
                 p++; /* Skip ',' */
             } else if (*p != '}') {
-                return lisp_raise_error("read-json: expected ',' or '}'");
+                return lisp_raise_typed("reader-error", "read-json: expected ',' or '}'");
             }
         }
         if (*p == '}') {
@@ -586,7 +586,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
             }
         }
         if (*p != '"') {
-            return lisp_raise_error("read-json: unterminated string");
+            return lisp_raise_typed("reader-error", "read-json: unterminated string");
         }
         size_t str_len = p - str_start;
         char *str = GC_malloc(str_len + 1);
@@ -616,7 +616,7 @@ static LispObject *builtin_read_json(LispObject *args, Environment *env)
             result = lisp_make_integer(atoll(num_str));
         }
     } else {
-        return lisp_raise_error("read-json: unsupported JSON value type");
+        return lisp_raise_typed("reader-error", "read-json: unsupported JSON value type");
     }
 
     return result;
@@ -630,7 +630,7 @@ static LispObject *builtin_delete_file(LispObject *args, Environment *env)
 
     LispObject *filename_obj = lisp_car(args);
     if (LISP_TYPE(filename_obj) != LISP_STRING) {
-        return lisp_raise_error("delete-file requires a string filename");
+        return lisp_raise_typed("type-error", "delete-file requires a string filename");
     }
 
     if (file_is_directory(LISP_STR_VAL(filename_obj))) {
@@ -638,7 +638,7 @@ static LispObject *builtin_delete_file(LispObject *args, Environment *env)
         snprintf(errbuf, sizeof(errbuf),
                  "delete-file: '%s' is a directory; use delete-directory instead",
                  LISP_STR_VAL(filename_obj));
-        return lisp_raise_error(errbuf);
+        return lisp_raise_typed_data(sym_file_error, errbuf, filename_obj);
     }
 
     /* Attempt to delete the file */
@@ -650,7 +650,7 @@ static LispObject *builtin_delete_file(LispObject *args, Environment *env)
         char error[512];
         snprintf(error, sizeof(error), "delete-file: failed to delete '%s': %s", LISP_STR_VAL(filename_obj),
                  strerror(errno));
-        return lisp_raise_error(error);
+        return lisp_raise_typed_data(sym_file_error, error, filename_obj);
     }
 }
 
@@ -661,7 +661,7 @@ static LispObject *builtin_load(LispObject *args, Environment *env)
 
     LispObject *filename_obj = lisp_car(args);
     if (LISP_TYPE(filename_obj) != LISP_STRING) {
-        return lisp_raise_error("load requires a string filename");
+        return lisp_raise_typed("type-error", "load requires a string filename");
     }
 
     /* Save current *package* and restore it on the normal path and on any
@@ -685,7 +685,7 @@ static LispObject *builtin_read_file_raw(LispObject *args, Environment *env)
 
     LispObject *filename_obj = lisp_car(args);
     if (LISP_TYPE(filename_obj) != LISP_STRING) {
-        return lisp_raise_error("read-file-raw requires a string filename");
+        return lisp_raise_typed("type-error", "read-file-raw requires a string filename");
     }
 
     FILE *file = file_open(LISP_STR_VAL(filename_obj), "rb");
@@ -693,18 +693,18 @@ static LispObject *builtin_read_file_raw(LispObject *args, Environment *env)
         char error[512];
         snprintf(error, sizeof(error), "read-file-raw: cannot open file '%s'",
                  LISP_STR_VAL(filename_obj));
-        return lisp_raise_error(error);
+        return lisp_raise_typed_data(sym_file_error, error, filename_obj);
     }
 
     /* Determine file size */
     if (fseek(file, 0, SEEK_END) != 0) {
         fclose(file);
-        return lisp_raise_error("read-file-raw: fseek failed");
+        return lisp_raise_typed("file-error", "read-file-raw: fseek failed");
     }
     long size = ftell(file);
     if (size < 0) {
         fclose(file);
-        return lisp_raise_error("read-file-raw: ftell failed");
+        return lisp_raise_typed("file-error", "read-file-raw: ftell failed");
     }
     rewind(file);
 
@@ -717,7 +717,7 @@ static LispObject *builtin_read_file_raw(LispObject *args, Environment *env)
     size_t read = fread(buffer, 1, (size_t)size, file);
     fclose(file);
     if (read != (size_t)size) {
-        return lisp_raise_error("read-file-raw: short read");
+        return lisp_raise_typed("file-error", "read-file-raw: short read");
     }
     buffer[size] = '\0';
 

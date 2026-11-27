@@ -21,7 +21,7 @@ static LispObject *builtin_add(LispObject *args, Environment *env)
             all_integers = 0;
             float_sum += LISP_NUM_VAL(arg);
         } else {
-            return lisp_raise_error("+ requires numbers");
+            return lisp_raise_typed("type-error", "+ requires numbers");
         }
         args = lisp_cdr(args);
     }
@@ -57,7 +57,7 @@ static LispObject *builtin_subtract(LispObject *args, Environment *env)
     LispObject *first = lisp_car(args);
     LispType first_type = LISP_TYPE(first);
     if (first_type != LISP_INTEGER && first_type != LISP_NUMBER)
-        return lisp_raise_error("- requires numbers");
+        return lisp_raise_typed("type-error", "- requires numbers");
 
     LispObject *rest = lisp_cdr(args);
 
@@ -88,7 +88,7 @@ static LispObject *builtin_subtract(LispObject *args, Environment *env)
             all_integers = 0;
             float_result -= LISP_NUM_VAL(arg);
         } else {
-            return lisp_raise_error("- requires numbers");
+            return lisp_raise_typed("type-error", "- requires numbers");
         }
     }
 
@@ -134,7 +134,7 @@ static LispObject *builtin_multiply(LispObject *args, Environment *env)
             all_integers = 0;
             float_product *= LISP_NUM_VAL(arg);
         } else {
-            return lisp_raise_error("* requires numbers");
+            return lisp_raise_typed("type-error", "* requires numbers");
         }
         args = lisp_cdr(args);
     }
@@ -164,7 +164,7 @@ static LispObject *builtin_divide(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL) {
-        return lisp_raise_error("/ requires at least one argument");
+        return lisp_raise_typed("program-error", "/ requires at least one argument");
     }
 
     LispObject *first = lisp_car(args);
@@ -186,7 +186,7 @@ static LispObject *builtin_divide(LispObject *args, Environment *env)
         int arg_is_integer = 0;
         double val = get_numeric_value(arg, &arg_is_integer);
         if (arg_is_integer == 0 && LISP_TYPE(arg) != LISP_NUMBER && LISP_TYPE(arg) != LISP_INTEGER) {
-            return lisp_raise_error("/ requires numbers");
+            return lisp_raise_typed("type-error", "/ requires numbers");
         }
         if (val == 0) {
             return lisp_raise_typed("division-by-zero", "Division by zero");
@@ -231,7 +231,7 @@ static LispObject *builtin_quotient(LispObject *args, Environment *env)
     LispObject *second = lisp_car(lisp_cdr(args));
 
     if (!is_number_object(first) || !is_number_object(second))
-        return lisp_raise_error("quotient requires numbers");
+        return lisp_raise_typed("type-error", "quotient requires numbers");
 
     if (LISP_TYPE(first) == LISP_INTEGER && LISP_TYPE(second) == LISP_INTEGER) {
         long long first_val = LISP_INT_VAL(first);
@@ -252,7 +252,7 @@ static LispObject *builtin_quotient(LispObject *args, Environment *env)
 
     double result = trunc(first_val / second_val);
     if (!isfinite(result))
-        return lisp_raise_error("quotient: result is not a finite number");
+        return lisp_raise_typed("arithmetic-error", "quotient: result is not a finite number");
     return make_integral_result(result);
 }
 
@@ -265,7 +265,7 @@ static LispObject *builtin_remainder(LispObject *args, Environment *env)
     LispObject *second = lisp_car(lisp_cdr(args));
 
     if (!is_number_object(first) || !is_number_object(second))
-        return lisp_raise_error("remainder requires numbers");
+        return lisp_raise_typed("type-error", "remainder requires numbers");
 
     if (LISP_TYPE(first) == LISP_INTEGER && LISP_TYPE(second) == LISP_INTEGER) {
         long long first_val = LISP_INT_VAL(first);
@@ -286,7 +286,7 @@ static LispObject *builtin_remainder(LispObject *args, Environment *env)
 
     double result = fmod(first_val, second_val);
     if (!isfinite(result))
-        return lisp_raise_error("remainder: result is not a finite number");
+        return lisp_raise_typed("arithmetic-error", "remainder: result is not a finite number");
     return lisp_make_number(result);
 }
 
@@ -295,11 +295,11 @@ static LispObject *builtin_floor(LispObject *args, Environment *env)
     (void)env;
     int count = arg_count(args);
     if (count != 1 && count != 2)
-        return lisp_raise_error("floor requires 1 or 2 arguments");
+        return lisp_raise_typed("program-error", "floor requires 1 or 2 arguments");
 
     LispObject *first = lisp_car(args);
     if (!is_number_object(first))
-        return lisp_raise_error("floor requires numbers");
+        return lisp_raise_typed("type-error", "floor requires numbers");
 
     if (count == 1) {
         if (LISP_TYPE(first) == LISP_INTEGER)
@@ -307,13 +307,13 @@ static LispObject *builtin_floor(LispObject *args, Environment *env)
 
         double result = floor(LISP_NUM_VAL(first));
         if (!isfinite(result))
-            return lisp_raise_error("floor: result is not a finite number");
+            return lisp_raise_typed("arithmetic-error", "floor: result is not a finite number");
         return make_integral_result(result);
     }
 
     LispObject *second = lisp_car(lisp_cdr(args));
     if (!is_number_object(second))
-        return lisp_raise_error("floor requires numbers");
+        return lisp_raise_typed("type-error", "floor requires numbers");
 
     if (LISP_TYPE(first) == LISP_INTEGER && LISP_TYPE(second) == LISP_INTEGER) {
         long long first_val = LISP_INT_VAL(first);
@@ -339,7 +339,7 @@ static LispObject *builtin_floor(LispObject *args, Environment *env)
 
     double result = floor(first_val / second_val);
     if (!isfinite(result))
-        return lisp_raise_error("floor: result is not a finite number");
+        return lisp_raise_typed("arithmetic-error", "floor: result is not a finite number");
     return make_integral_result(result);
 }
 
@@ -352,7 +352,7 @@ static LispObject *builtin_modulo(LispObject *args, Environment *env)
     LispObject *second = lisp_car(lisp_cdr(args));
 
     if (!is_number_object(first) || !is_number_object(second))
-        return lisp_raise_error("modulo requires numbers");
+        return lisp_raise_typed("type-error", "modulo requires numbers");
 
     if (LISP_TYPE(first) == LISP_INTEGER && LISP_TYPE(second) == LISP_INTEGER) {
         long long first_val = LISP_INT_VAL(first);
@@ -380,7 +380,7 @@ static LispObject *builtin_modulo(LispObject *args, Environment *env)
     if (result != 0 && ((result < 0) != (second_val < 0)))
         result += second_val;
     if (!isfinite(result))
-        return lisp_raise_error("modulo: result is not a finite number");
+        return lisp_raise_typed("arithmetic-error", "modulo: result is not a finite number");
     return lisp_make_number(result);
 }
 
@@ -398,11 +398,11 @@ static LispObject *builtin_even_question(LispObject *args, Environment *env)
     if (type == LISP_NUMBER) {
         double value = LISP_NUM_VAL(arg);
         if (!isfinite(value))
-            return lisp_raise_error("even?: argument must be finite");
+            return lisp_raise_typed("arithmetic-error", "even?: argument must be finite");
         return fmod(trunc(value), 2.0) == 0 ? LISP_TRUE : NIL;
     }
 
-    return lisp_raise_error("even? requires a number");
+    return lisp_raise_typed("type-error", "even? requires a number");
 }
 
 static LispObject *builtin_odd_question(LispObject *args, Environment *env)
@@ -419,29 +419,29 @@ static LispObject *builtin_odd_question(LispObject *args, Environment *env)
     if (type == LISP_NUMBER) {
         double value = LISP_NUM_VAL(arg);
         if (!isfinite(value))
-            return lisp_raise_error("odd?: argument must be finite");
+            return lisp_raise_typed("arithmetic-error", "odd?: argument must be finite");
         return fmod(trunc(value), 2.0) != 0 ? LISP_TRUE : NIL;
     }
 
-    return lisp_raise_error("odd? requires a number");
+    return lisp_raise_typed("type-error", "odd? requires a number");
 }
 
 static LispObject *builtin_max(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL)
-        return lisp_raise_error("max requires at least one argument");
+        return lisp_raise_typed("program-error", "max requires at least one argument");
 
     LispObject *best = lisp_car(args);
     LispType best_type = LISP_TYPE(best);
     if (best_type != LISP_INTEGER && best_type != LISP_NUMBER)
-        return lisp_raise_error("max requires numbers");
+        return lisp_raise_typed("type-error", "max requires numbers");
 
     for (args = lisp_cdr(args); args != NIL && args != NULL; args = lisp_cdr(args)) {
         LispObject *arg = lisp_car(args);
         LispType type = LISP_TYPE(arg);
         if (type != LISP_INTEGER && type != LISP_NUMBER)
-            return lisp_raise_error("max requires numbers");
+            return lisp_raise_typed("type-error", "max requires numbers");
 
         int unordered = 0;
         if (number_compare(arg, best, &unordered) > 0)
@@ -455,18 +455,18 @@ static LispObject *builtin_min(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL)
-        return lisp_raise_error("min requires at least one argument");
+        return lisp_raise_typed("program-error", "min requires at least one argument");
 
     LispObject *best = lisp_car(args);
     LispType best_type = LISP_TYPE(best);
     if (best_type != LISP_INTEGER && best_type != LISP_NUMBER)
-        return lisp_raise_error("min requires numbers");
+        return lisp_raise_typed("type-error", "min requires numbers");
 
     for (args = lisp_cdr(args); args != NIL && args != NULL; args = lisp_cdr(args)) {
         LispObject *arg = lisp_car(args);
         LispType type = LISP_TYPE(arg);
         if (type != LISP_INTEGER && type != LISP_NUMBER)
-            return lisp_raise_error("min requires numbers");
+            return lisp_raise_typed("type-error", "min requires numbers");
 
         int unordered = 0;
         if (number_compare(arg, best, &unordered) < 0)
@@ -486,7 +486,7 @@ static LispObject *builtin_logand(LispObject *args, Environment *env)
     while (args != NIL && args != NULL) {
         LispObject *arg = lisp_car(args);
         if (LISP_TYPE(arg) != LISP_INTEGER)
-            return lisp_raise_error("logand requires integers");
+            return lisp_raise_typed("type-error", "logand requires integers");
         result &= LISP_INT_VAL(arg);
         args = lisp_cdr(args);
     }
@@ -502,7 +502,7 @@ static LispObject *builtin_logior(LispObject *args, Environment *env)
     while (args != NIL && args != NULL) {
         LispObject *arg = lisp_car(args);
         if (LISP_TYPE(arg) != LISP_INTEGER)
-            return lisp_raise_error("logior requires integers");
+            return lisp_raise_typed("type-error", "logior requires integers");
         result |= LISP_INT_VAL(arg);
         args = lisp_cdr(args);
     }
@@ -518,7 +518,7 @@ static LispObject *builtin_logxor(LispObject *args, Environment *env)
     while (args != NIL && args != NULL) {
         LispObject *arg = lisp_car(args);
         if (LISP_TYPE(arg) != LISP_INTEGER)
-            return lisp_raise_error("logxor requires integers");
+            return lisp_raise_typed("type-error", "logxor requires integers");
         result ^= LISP_INT_VAL(arg);
         args = lisp_cdr(args);
     }
@@ -533,7 +533,7 @@ static LispObject *builtin_lognot(LispObject *args, Environment *env)
 
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_INTEGER)
-        return lisp_raise_error("lognot requires an integer");
+        return lisp_raise_typed("type-error", "lognot requires an integer");
 
     return lisp_make_integer(~LISP_INT_VAL(arg));
 }
@@ -547,9 +547,9 @@ static LispObject *builtin_ash(LispObject *args, Environment *env)
     LispObject *count_obj = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(value_obj) != LISP_INTEGER)
-        return lisp_raise_error("ash requires an integer value");
+        return lisp_raise_typed("type-error", "ash requires an integer value");
     if (LISP_TYPE(count_obj) != LISP_INTEGER)
-        return lisp_raise_error("ash requires an integer count");
+        return lisp_raise_typed("type-error", "ash requires an integer count");
 
     long long value = LISP_INT_VAL(value_obj);
     long long count = LISP_INT_VAL(count_obj);
@@ -582,11 +582,11 @@ static LispObject *builtin_ash(LispObject *args, Environment *env)
 
     /* Beyond the integer range: fall back to a float */
     if (count > 1024)
-        return lisp_raise_error("ash: result is not a finite number");
+        return lisp_raise_typed("arithmetic-error", "ash: result is not a finite number");
 
     double result = ldexp((double)value, (int)count);
     if (!isfinite(result))
-        return lisp_raise_error("ash: result is not a finite number");
+        return lisp_raise_typed("arithmetic-error", "ash: result is not a finite number");
     return lisp_make_number(result);
 }
 
@@ -597,7 +597,7 @@ static LispObject *builtin_logcount(LispObject *args, Environment *env)
 
     LispObject *arg = lisp_car(args);
     if (LISP_TYPE(arg) != LISP_INTEGER)
-        return lisp_raise_error("logcount requires an integer");
+        return lisp_raise_typed("type-error", "logcount requires an integer");
 
     long long value = LISP_INT_VAL(arg);
     int count = 0;

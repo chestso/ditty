@@ -25,15 +25,15 @@ static LispObject *builtin_sleep(LispObject *args, Environment *env)
     (void)env;
 
     if (args == NIL)
-        return lisp_raise_error("sleep requires 1 argument");
+        return lisp_raise_typed("program-error", "sleep requires 1 argument");
 
     LispObject *arg = LISP_CAR(args);
     if (LISP_TYPE(arg) != LISP_INTEGER)
-        return lisp_raise_error("sleep: argument must be an integer");
+        return lisp_raise_typed("type-error", "sleep: argument must be an integer");
 
     long long ms = LISP_INT_VAL(arg);
     if (ms < 0)
-        return lisp_raise_error("sleep: duration cannot be negative");
+        return lisp_raise_typed("type-error", "sleep: duration cannot be negative");
 
 #ifdef _WIN32
     Sleep((DWORD)ms);
@@ -490,10 +490,10 @@ static LispObject *builtin_terminal_wait(LispObject *args, Environment *env)
         LispObject *arg = LISP_CAR(args);
         if (arg != NIL) {
             if (LISP_TYPE(arg) != LISP_INTEGER)
-                return lisp_raise_error("terminal-wait: timeout must be a non-negative integer, or nil");
+                return lisp_raise_typed("type-error", "terminal-wait: timeout must be a non-negative integer, or nil");
             timeout = LISP_INT_VAL(arg);
             if (timeout < 0)
-                return lisp_raise_error("terminal-wait: timeout cannot be negative");
+                return lisp_raise_typed("type-error", "terminal-wait: timeout cannot be negative");
         }
     }
 
@@ -622,15 +622,15 @@ static LispObject *builtin_read_byte_timeout(LispObject *args, Environment *env)
     (void)env;
 
     if (args == NIL)
-        return lisp_raise_error("read-byte-timeout requires 1 argument");
+        return lisp_raise_typed("program-error", "read-byte-timeout requires 1 argument");
 
     LispObject *arg = LISP_CAR(args);
     if (LISP_TYPE(arg) != LISP_INTEGER)
-        return lisp_raise_error("read-byte-timeout: argument must be an integer");
+        return lisp_raise_typed("type-error", "read-byte-timeout: argument must be an integer");
 
     long long ms = LISP_INT_VAL(arg);
     if (ms < 0)
-        return lisp_raise_error("read-byte-timeout: timeout cannot be negative");
+        return lisp_raise_typed("type-error", "read-byte-timeout: timeout cannot be negative");
 
 #ifdef _WIN32
     int ch = win_next_byte(ms);
@@ -720,11 +720,11 @@ static LispObject *builtin_terminal_write(LispObject *args, Environment *env)
     (void)env;
 
     if (args == NIL || LISP_CDR(args) != NIL)
-        return lisp_raise_error("terminal-write requires 1 argument");
+        return lisp_raise_typed("program-error", "terminal-write requires 1 argument");
 
     LispObject *arg = LISP_CAR(args);
     if (LISP_TYPE(arg) != LISP_STRING)
-        return lisp_raise_error("terminal-write: argument must be a string");
+        return lisp_raise_typed("type-error", "terminal-write: argument must be a string");
 
     const char *text = LISP_STR_VAL(arg);
 
