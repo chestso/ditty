@@ -306,7 +306,7 @@
 ;;; Hash Token Reading (#t, #f, #\, #()
 ;;; ----------------------------------------------------------------------------
 (defun read-hash-token (state line col)
-  "Read a # prefixed token (#t, #f, #\, #(), #xNN, #oNN, #bNN, #dNN)."
+  "Read a # prefixed token (#t, #f, #\\, #(), #xNN, #oNN, #bNN, #dNN)."
   (reader-advance! state) ; skip #
   (let ((ch (reader-peek state)))
     (cond

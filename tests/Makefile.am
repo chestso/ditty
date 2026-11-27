@@ -202,6 +202,7 @@ TESTS = \
     basic/printing.lisp \
     basic/recursion.lisp \
     basic/string-index.lisp \
+    basic/string_escapes.lisp \
     basic/string_number_conversion.lisp \
     basic/string_ports.lisp \
     basic/strings.lisp \
@@ -308,6 +309,7 @@ EXTRA_DIST = \
     basic/printing.lisp \
     basic/recursion.lisp \
     basic/string-index.lisp \
+    basic/string_escapes.lisp \
     basic/string_number_conversion.lisp \
     basic/string_ports.lisp \
     basic/strings.lisp \

@@ -189,6 +189,73 @@ static void test_read_unquote_splicing_unclosed(void)
                 ",@( should be unclosed-input, not wrapped in unquote-splicing");
 }
 
+/* Test: a string ending in a lone backslash is unclosed-input.
+ * Regression: the old escape default case consumed the NUL terminator
+ * and read past the end of the input buffer. */
+static void test_read_string_trailing_backslash(void)
+{
+    const char *input = "\"abc\\";
+    const char *ptr = input;
+    LispObject *result = lisp_read(&ptr);
+
+    ASSERT_TRUE(result != NULL, "read should return non-NULL for trailing backslash");
+    ASSERT_TRUE(LISP_TYPE(result) == LISP_ERROR, "trailing backslash should be an error");
+    ASSERT_TRUE(LISP_ERROR_TYPE(result) == sym_unclosed_input,
+                "trailing backslash should be unclosed-input");
+}
+
+/* Test: hex escapes truncated at end of input are unclosed-input, so the
+ * REPL continues the line instead of evaluating a malformed form. */
+static void test_read_string_truncated_hex_escape(void)
+{
+    const char *inputs[] = { "\"\\x1", "\"\\u12", "\"\\U0001F6" };
+    for (size_t i = 0; i < sizeof(inputs) / sizeof(inputs[0]); i++) {
+        const char *ptr = inputs[i];
+        LispObject *result = lisp_read(&ptr);
+
+        ASSERT_TRUE(result != NULL, "read should return non-NULL for truncated escape");
+        ASSERT_TRUE(LISP_TYPE(result) == LISP_ERROR, "truncated escape should be an error");
+        ASSERT_TRUE(LISP_ERROR_TYPE(result) == sym_unclosed_input,
+                    "truncated hex escape should be unclosed-input");
+    }
+}
+
+/* Test: malformed escapes in a complete string are reader-error, NOT
+ * unclosed-input: the form is complete, just invalid. */
+static void test_read_string_bad_escape(void)
+{
+    const char *inputs[] = {
+        "\"\\q\"",        /* unknown escape */
+        "\"\\x1\"",       /* \x needs exactly 2 hex digits */
+        "\"\\u12x4\"",    /* \u needs exactly 4 hex digits */
+        "\"\\ud800\"",    /* surrogate codepoint */
+        "\"\\U00110000\"" /* beyond U+10FFFF */
+    };
+    for (size_t i = 0; i < sizeof(inputs) / sizeof(inputs[0]); i++) {
+        const char *ptr = inputs[i];
+        LispObject *result = lisp_read(&ptr);
+
+        ASSERT_TRUE(result != NULL, "read should return non-NULL for bad escape");
+        ASSERT_TRUE(LISP_TYPE(result) == LISP_ERROR, "bad escape should be an error");
+        ASSERT_TRUE(LISP_ERROR_TYPE(result) == sym_reader_error,
+                    "bad escape should be reader-error, not unclosed-input");
+    }
+}
+
+/* Test: hex escapes are fixed-width — "\x41bc" reads as "Abc", not U+41BC */
+static void test_read_string_hex_fixed_width(void)
+{
+    const char *input = "\"\\x41bc\"";
+    const char *ptr = input;
+    LispObject *result = lisp_read(&ptr);
+
+    ASSERT_TRUE(result != NULL, "read should return non-NULL");
+    ASSERT_TRUE(LISP_TYPE(result) == LISP_STRING, "hex escape string should read as a string");
+    ASSERT_TRUE(strcmp(LISP_STR_VAL(result), "Abc") == 0,
+                "\\x41bc should be \"Abc\" (exactly two hex digits)");
+    ASSERT_TRUE(*ptr == '\0', "ptr should advance past the closing quote");
+}
+
 int main(void)
 {
     lisp_init();
@@ -206,6 +273,10 @@ int main(void)
     RUN_TEST(test_read_backquote_unclosed);
     RUN_TEST(test_read_unquote_unclosed);
     RUN_TEST(test_read_unquote_splicing_unclosed);
+    RUN_TEST(test_read_string_trailing_backslash);
+    RUN_TEST(test_read_string_truncated_hex_escape);
+    RUN_TEST(test_read_string_bad_escape);
+    RUN_TEST(test_read_string_hex_fixed_width);
 
     lisp_cleanup();
 

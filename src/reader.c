@@ -42,74 +42,175 @@ static void skip_whitespace(const char **input)
     }
 }
 
+static int hex_digit_value(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return 10 + (c - 'a');
+    if (c >= 'A' && c <= 'F')
+        return 10 + (c - 'A');
+    return -1;
+}
+
+/* Fixed-width hex escape scan: exactly `digits` hex digits. End-of-input
+ * mid-escape means the form is incomplete (the REPL continues the line);
+ * a non-hex digit where one is required means the form is malformed. */
+typedef enum
+{
+    HEX_OK,
+    HEX_BAD,
+    HEX_EOF
+} HexScanResult;
+
+static HexScanResult read_hex_escape(const char **input, int digits, unsigned int *out)
+{
+    unsigned int value = 0;
+    for (int i = 0; i < digits; i++) {
+        if (**input == '\0')
+            return HEX_EOF;
+        int digit = hex_digit_value(**input);
+        if (digit < 0)
+            return HEX_BAD;
+        value = value * 16 + (unsigned int)digit;
+        (*input)++;
+    }
+    *out = value;
+    return HEX_OK;
+}
+
+/* String escapes are strict: an unknown escape is a reader error, never
+ * silent text. All numeric escapes (\NNN octal, \xHH, \uXXXX, \UXXXXXXXX)
+ * denote Unicode codepoints and are encoded as UTF-8, so a string built
+ * by the reader is always valid UTF-8. Hex escapes are fixed-width —
+ * unlike the greedy #\x character literals — because inside a string
+ * there is no delimiter: "\x41bc" must read as "Abc", not U+41BC. */
 static LispObject *read_string(const char **input)
 {
     (*input)++; /* Skip opening quote */
 
     size_t capacity = 64;
     size_t length = 0;
-    char *buffer = GC_malloc(capacity);
+    char *buffer = GC_malloc_atomic(capacity);
 
     while (**input && **input != '"') {
-        if (length + 2 >= capacity) {
+        /* Headroom for the largest single expansion: 4 UTF-8 bytes plus
+         * the NUL that utf8_put_codepoint writes after them. */
+        if (length + 5 >= capacity) {
             capacity *= 2;
-            char *new_buffer = GC_malloc(capacity);
+            char *new_buffer = GC_malloc_atomic(capacity);
             memcpy(new_buffer, buffer, length);
             buffer = new_buffer;
         }
 
-        if (**input == '\\') {
-            (*input)++;
-            switch (**input) {
-            case 'n':
-                buffer[length++] = '\n';
-                (*input)++;
-                break;
-            case 't':
-                buffer[length++] = '\t';
-                (*input)++;
-                break;
-            case 'r':
-                buffer[length++] = '\r';
-                (*input)++;
-                break;
-            case '\\':
-                buffer[length++] = '\\';
-                (*input)++;
-                break;
-            case '"':
-                buffer[length++] = '"';
-                (*input)++;
-                break;
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            {
-                /* Octal escape sequence: \0, \00, \000 (1-3 digits) */
-                int octal_value = 0;
-                int digit_count = 0;
-                while (**input >= '0' && **input <= '7' && digit_count < 3) {
-                    octal_value = octal_value * 8 + (**input - '0');
-                    (*input)++;
-                    digit_count++;
-                }
-                buffer[length++] = (char)octal_value;
-                break;
-            }
-            default:
-                buffer[length++] = **input;
-                (*input)++;
-                break;
-            }
-        } else {
+        if (**input != '\\') {
             buffer[length++] = **input;
             (*input)++;
+            continue;
         }
+
+        (*input)++; /* Skip backslash */
+        if (**input == '\0')
+            return reader_unclosed("Unclosed string: trailing backslash");
+
+        unsigned int codepoint = 0;
+        switch (**input) {
+        case 'a':
+            codepoint = '\a';
+            (*input)++;
+            break;
+        case 'b':
+            codepoint = '\b';
+            (*input)++;
+            break;
+        case 't':
+            codepoint = '\t';
+            (*input)++;
+            break;
+        case 'n':
+            codepoint = '\n';
+            (*input)++;
+            break;
+        case 'v':
+            codepoint = '\v';
+            (*input)++;
+            break;
+        case 'f':
+            codepoint = '\f';
+            (*input)++;
+            break;
+        case 'r':
+            codepoint = '\r';
+            (*input)++;
+            break;
+        case 'e':
+            codepoint = 0x1b;
+            (*input)++;
+            break;
+        case '\\':
+            codepoint = '\\';
+            (*input)++;
+            break;
+        case '"':
+            codepoint = '"';
+            (*input)++;
+            break;
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        {
+            /* Octal escape sequence: \0, \00, \000 (1-3 digits, max \377) */
+            int digit_count = 0;
+            while (**input >= '0' && **input <= '7' && digit_count < 3) {
+                codepoint = codepoint * 8 + (unsigned int)(**input - '0');
+                (*input)++;
+                digit_count++;
+            }
+            break;
+        }
+        case 'x':
+        case 'u':
+        case 'U':
+        {
+            char esc = **input;
+            int digits = (esc == 'x') ? 2 : (esc == 'u') ? 4
+                                                         : 8;
+            (*input)++;
+            HexScanResult scan = read_hex_escape(input, digits, &codepoint);
+            if (scan == HEX_EOF)
+                return reader_unclosed("Unclosed string: incomplete hex escape");
+            if (scan == HEX_BAD) {
+                char errbuf[96];
+                snprintf(errbuf, sizeof(errbuf), "Invalid \\%c escape: expected %d hex digits", esc, digits);
+                return reader_error(errbuf);
+            }
+            break;
+        }
+        default:
+        {
+            unsigned char c = (unsigned char)**input;
+            char errbuf[96];
+            if (c >= 0x20 && c < 0x7f)
+                snprintf(errbuf, sizeof(errbuf), "Unknown string escape: \\%c", c);
+            else
+                snprintf(errbuf, sizeof(errbuf), "Unknown string escape: backslash followed by byte 0x%02X", c);
+            return reader_error(errbuf);
+        }
+        }
+
+        /* Surrogates and out-of-range codepoints would encode to invalid
+         * UTF-8; utf8_put_codepoint does not reject surrogates itself. */
+        if ((codepoint >= 0xD800 && codepoint <= 0xDFFF) || codepoint > 0x10FFFF) {
+            char errbuf[96];
+            snprintf(errbuf, sizeof(errbuf), "Invalid codepoint U+%04X in string escape", codepoint);
+            return reader_error(errbuf);
+        }
+        length += (size_t)utf8_put_codepoint(codepoint, buffer + length);
     }
 
     if (**input == '"') {
@@ -324,17 +425,6 @@ static LispObject *read_vector(const char **input)
     }
 
     return vec;
-}
-
-static int hex_digit_value(char c)
-{
-    if (c >= '0' && c <= '9')
-        return c - '0';
-    if (c >= 'a' && c <= 'f')
-        return 10 + (c - 'a');
-    if (c >= 'A' && c <= 'F')
-        return 10 + (c - 'A');
-    return -1;
 }
 
 static LispObject *read_character(const char **input)
