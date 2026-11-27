@@ -484,11 +484,11 @@
 ;; ---------------------------------------------------------------------------
 (defun terminal-enable-mouse ()
   "Enable mouse reporting."
-  (princ "\033[?1003h\033[?1006h"))
+  (princ "\e[?1003h\e[?1006h"))
 
 (defun terminal-disable-mouse ()
   "Disable mouse reporting."
-  (princ "\033[?1003l\033[?1006l"))
+  (princ "\e[?1003l\e[?1006l"))
 
 (defun terminal-parse-mouse-sequence (seq)
   "Parse an SGR mouse sequence (ESC [ < Cb ; Cx ; Cy (M|m)) into an event.
@@ -525,11 +525,11 @@
 ;; ---------------------------------------------------------------------------
 (defun terminal-enable-focus-events ()
   "Enable focus in/out events."
-  (princ "\033[?1004h"))
+  (princ "\e[?1004h"))
 
 (defun terminal-disable-focus-events ()
   "Disable focus in/out events."
-  (princ "\033[?1004l"))
+  (princ "\e[?1004l"))
 
 (defun terminal-focus-sequence? (seq)
   "Return #t if SEQ is a CSI focus-in/focus-out sequence."
@@ -555,11 +555,11 @@
 ;; ---------------------------------------------------------------------------
 (defun terminal-enable-bracketed-paste ()
   "Enable bracketed paste mode."
-  (princ "\033[?2004h"))
+  (princ "\e[?2004h"))
 
 (defun terminal-disable-bracketed-paste ()
   "Disable bracketed paste mode."
-  (princ "\033[?2004l"))
+  (princ "\e[?2004l"))
 
 (defun terminal-paste-start? (seq)
   "Return #t if SEQ is the bracketed paste start marker ESC [ 2 0 0 ~."
@@ -576,53 +576,53 @@
 ;; ---------------------------------------------------------------------------
 (defun terminal-set-clipboard (text)
   "Set the system clipboard to TEXT using OSC 52."
-  (princ "\033]52;c;")
+  (princ "\e]52;c;")
   (princ text)
-  (princ "\033\\"))
+  (princ "\e\\"))
 
 (defun terminal-request-clipboard ()
   "Request the system clipboard contents via OSC 52."
-  (princ "\033]52;c;?\033\\"))
+  (princ "\e]52;c;?\e\\"))
 
 ;; ---------------------------------------------------------------------------
 ;; Mode helpers
 ;; ---------------------------------------------------------------------------
 (defun terminal-enter-alt-screen ()
   "Switch to the alternate screen buffer."
-  (princ "\033[?1049h"))
+  (princ "\e[?1049h"))
 
 (defun terminal-exit-alt-screen ()
   "Leave the alternate screen buffer."
-  (princ "\033[?1049l"))
+  (princ "\e[?1049l"))
 
 (defun terminal-hide-cursor ()
   "Hide the cursor."
-  (princ "\033[?25l"))
+  (princ "\e[?25l"))
 
 (defun terminal-show-cursor ()
   "Show the cursor."
-  (princ "\033[?25h"))
+  (princ "\e[?25h"))
 
 (defun terminal-disable-autowrap ()
   "Stop the cursor wrapping to the next line at the right margin: text written
    past the last column is clipped instead of wrapping."
-  (princ "\033[?7l"))
+  (princ "\e[?7l"))
 
 (defun terminal-enable-autowrap ()
   "Restore wrapping at the right margin (the usual terminal default)."
-  (princ "\033[?7h"))
+  (princ "\e[?7h"))
 
 (defun terminal-push-keyboard-flags (flags)
   "Push kitty keyboard protocol FLAGS onto the terminal's stack."
-  (princ (format nil "\033[>~Au" flags)))
+  (princ (format nil "\e[>~Au" flags)))
 
 (defun terminal-pop-keyboard-flags ()
   "Pop the kitty keyboard protocol flags pushed last."
-  (princ "\033[<u"))
+  (princ "\e[<u"))
 
 (defun terminal-query-keyboard-flags ()
   "Ask the terminal for its current kitty keyboard flags."
-  (princ "\033[?u"))
+  (princ "\e[?u"))
 
 ;; ---------------------------------------------------------------------------
 ;; Raw-mode sessions
@@ -727,12 +727,12 @@
 ;; ---------------------------------------------------------------------------
 ;; Capabilities
 ;; ---------------------------------------------------------------------------
-(defconst *terminal-probe-queries* "\033[?u\033[16t\033[14t\033[?2026$p"
+(defconst *terminal-probe-queries* "\e[?u\e[16t\e[14t\e[?2026$p"
   "The capability queries without the sentinel: kitty keyboard flags, cell
    size, pixel size, and the synchronized-output mode status (DECRQM, mode
    2026).  `terminal-query` appends the sentinel itself, so it takes these.")
 
-(defconst *terminal-probe* (concat *terminal-probe-queries* "\033[c")
+(defconst *terminal-probe* (concat *terminal-probe-queries* "\e[c")
   "Capability probe: `*terminal-probe-queries*` followed by the Device
    Attributes sentinel.  Every terminal answers DA1 and replies arrive in
    query order, so DA1 marks the end of the answers.  The event loop writes
@@ -876,7 +876,7 @@
       nil
       (terminal-call-with-raw
        (lambda () (princ query)
-         (princ "\033[c")
+         (princ "\e[c")
          (let ((reader (lambda () (read-byte-timeout timeout))))
            (let loop ((acc nil))
              (let ((b (reader)))
