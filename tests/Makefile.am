@@ -200,6 +200,7 @@ TESTS = \
     basic/path_expansion.lisp \
     basic/path_functions.lisp \
     basic/printing.lisp \
+    basic/read_from_string.lisp \
     basic/recursion.lisp \
     basic/string-index.lisp \
     basic/string_escapes.lisp \
@@ -307,6 +308,7 @@ EXTRA_DIST = \
     basic/path_expansion.lisp \
     basic/path_functions.lisp \
     basic/printing.lisp \
+    basic/read_from_string.lisp \
     basic/recursion.lisp \
     basic/string-index.lisp \
     basic/string_escapes.lisp \

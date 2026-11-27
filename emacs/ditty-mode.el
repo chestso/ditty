@@ -179,7 +179,7 @@
     "princ" "prin1" "print" "format" "terpri"
     ;; --- File I/O (src/builtins_file_io.c) ---
     "open" "close" "read-line" "write-line" "write-string"
-    "stream-eol" "read-sexp" "read-json" "read-file-raw"
+    "stream-eol" "read-sexp" "read-from-string" "read-json" "read-file-raw"
     "delete-file" "load"
     ;; --- String ports (src/builtins_string_ports.c) ---
     "open-input-string" "open-output-string"

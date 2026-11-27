@@ -251,6 +251,47 @@ Returns error if parse fails.
 
 - `load` - Load and evaluate file
 - `read-json` - Read JSON from file
+- `read-from-string` - Read an S-expression from a string
+
+## `read-from-string`
+
+Read the first S-expression from a string, as data (unevaluated).
+
+### Parameters
+
+- `text` - String containing Lisp source
+
+### Returns
+
+The first S-expression in the string. Returns `nil` if the string is
+empty or contains only whitespace and comments. Raises `reader-error`
+(or its child `unclosed-input`) if parsing fails.
+
+### Examples
+
+```lisp
+(read-from-string "(+ 1 2)")        ; => (+ 1 2)
+(eval (read-from-string "(+ 1 2)")) ; => 3
+(read-from-string "42")             ; => 42
+(read-from-string "hello")          ; => hello (a symbol)
+(read-from-string "")               ; => nil
+(read-from-string "; only a comment") ; => nil
+
+(condition-case err (read-from-string "(unclosed")
+  (unclosed-input 'incomplete))     ; => incomplete
+```
+
+### Notes
+
+- Only the first expression is read; any remaining text is ignored
+- The result is not evaluated — pass it to `eval` to evaluate it
+- Parse failures raise the reader's typed errors: `unclosed-input` for
+  incomplete forms, `reader-error` for malformed ones
+
+### See Also
+
+- `read-sexp` - Read S-expressions from file
+- `eval` - Evaluate an expression
 
 ## `read-json`
 

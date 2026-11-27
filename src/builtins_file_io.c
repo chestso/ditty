@@ -301,6 +301,26 @@ static LispObject *builtin_stream_eol(LispObject *args, Environment *env)
     return lisp_make_string(LISP_FILE_EOL(stream_obj));
 }
 
+/* Read the first S-expression from a string, as data (unevaluated).
+ * Parse failures raise with the reader's typed error, like read-sexp. */
+static LispObject *builtin_read_from_string(LispObject *args, Environment *env)
+{
+    (void)env;
+    CHECK_ARGS_1("read-from-string");
+
+    LispObject *arg = lisp_car(args);
+    if (LISP_TYPE(arg) != LISP_STRING)
+        return lisp_raise_typed(sym_type_error, "read-from-string requires a string");
+
+    const char *input = LISP_STR_VAL(arg);
+    LispObject *expr = lisp_read(&input);
+    if (expr == NULL)
+        return NIL; /* empty or whitespace/comment-only input */
+    if (LISP_TYPE(expr) == LISP_ERROR)
+        return lisp_raise(expr);
+    return expr;
+}
+
 /* Read S-expressions from file */
 static LispObject *builtin_read_sexp(LispObject *args, Environment *env)
 {
@@ -733,6 +753,7 @@ void register_file_io_builtins(Environment *env)
     REGISTER("write-string", builtin_write_string);
     REGISTER("stream-eol", builtin_stream_eol);
     REGISTER("read-sexp", builtin_read_sexp);
+    REGISTER("read-from-string", builtin_read_from_string);
     REGISTER("read-json", builtin_read_json);
     REGISTER("read-file-raw", builtin_read_file_raw);
     REGISTER("delete-file", builtin_delete_file);

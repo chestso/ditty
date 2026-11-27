@@ -40,35 +40,25 @@
 
 ;;; Malformed escapes signal reader-error, not silent text. The bad
 ;;; source cannot appear literally here (the reader would reject this
-;;; file), so it goes through a temp file and read-sexp.
-(defun read-source (text)
-  (let ((path "string-escape-test.tmp"))
-    (unwind-protect
-      (progn
-        (let ((port (open path "w")))
-          (write-string port text)
-          (close port))
-        (read-sexp path))
-      (delete-file path))))
-
+;;; file), so it goes through read-from-string.
 (assert-equal 'caught
- (condition-case err (read-source "\"\\q\"")
+ (condition-case err (read-from-string "\"\\q\"")
    (reader-error 'caught))
  "unknown escape signals reader-error")
 (assert-equal 'caught
- (condition-case err (read-source "\"\\x1\"")
+ (condition-case err (read-from-string "\"\\x1\"")
    (unclosed-input 'wrong)
    (reader-error 'caught))
  "short hex escape is reader-error, not unclosed-input")
 (assert-equal 'caught
- (condition-case err (read-source "\"\\u12x4\"")
+ (condition-case err (read-from-string "\"\\u12x4\"")
    (reader-error 'caught))
  "non-hex digit inside \\u signals reader-error")
 (assert-equal 'caught
- (condition-case err (read-source "\"\\ud800\"")
+ (condition-case err (read-from-string "\"\\ud800\"")
    (reader-error 'caught))
  "surrogate codepoint signals reader-error")
 (assert-equal 'caught
- (condition-case err (read-source "\"\\U00110000\"")
+ (condition-case err (read-from-string "\"\\U00110000\"")
    (reader-error 'caught))
  "codepoint beyond U+10FFFF signals reader-error")
