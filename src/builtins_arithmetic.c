@@ -175,7 +175,7 @@ static LispObject *builtin_divide(LispObject *args, Environment *env)
     if (args == NIL) {
         /* Unary reciprocal */
         if (result == 0) {
-            return lisp_raise_error("Division by zero");
+            return lisp_raise_typed("division-by-zero", "Division by zero");
         }
         return lisp_make_number(1.0 / result); /* Always return float */
     }
@@ -189,7 +189,7 @@ static LispObject *builtin_divide(LispObject *args, Environment *env)
             return lisp_raise_error("/ requires numbers");
         }
         if (val == 0) {
-            return lisp_raise_error("Division by zero");
+            return lisp_raise_typed("division-by-zero", "Division by zero");
         }
         result /= val;
         args = lisp_cdr(args);
@@ -238,7 +238,7 @@ static LispObject *builtin_quotient(LispObject *args, Environment *env)
         long long second_val = LISP_INT_VAL(second);
 
         if (second_val == 0)
-            return lisp_raise_error("Division by zero");
+            return lisp_raise_typed("division-by-zero", "Division by zero");
         /* LLONG_MIN / -1 is undefined behavior */
         if (second_val == -1)
             return make_integral_result(-(double)first_val);
@@ -248,7 +248,7 @@ static LispObject *builtin_quotient(LispObject *args, Environment *env)
     double first_val = numeric_double(first);
     double second_val = numeric_double(second);
     if (second_val == 0)
-        return lisp_raise_error("Division by zero");
+        return lisp_raise_typed("division-by-zero", "Division by zero");
 
     double result = trunc(first_val / second_val);
     if (!isfinite(result))
@@ -272,7 +272,7 @@ static LispObject *builtin_remainder(LispObject *args, Environment *env)
         long long second_val = LISP_INT_VAL(second);
 
         if (second_val == 0)
-            return lisp_raise_error("Division by zero");
+            return lisp_raise_typed("division-by-zero", "Division by zero");
         /* LLONG_MIN % -1 is undefined behavior; the remainder is 0 */
         if (second_val == -1)
             return lisp_make_integer(0);
@@ -282,7 +282,7 @@ static LispObject *builtin_remainder(LispObject *args, Environment *env)
     double first_val = numeric_double(first);
     double second_val = numeric_double(second);
     if (second_val == 0)
-        return lisp_raise_error("Division by zero");
+        return lisp_raise_typed("division-by-zero", "Division by zero");
 
     double result = fmod(first_val, second_val);
     if (!isfinite(result))
@@ -320,7 +320,7 @@ static LispObject *builtin_floor(LispObject *args, Environment *env)
         long long second_val = LISP_INT_VAL(second);
 
         if (second_val == 0)
-            return lisp_raise_error("Division by zero");
+            return lisp_raise_typed("division-by-zero", "Division by zero");
         /* LLONG_MIN / -1 is undefined behavior */
         if (second_val == -1)
             return make_integral_result(-(double)first_val);
@@ -335,7 +335,7 @@ static LispObject *builtin_floor(LispObject *args, Environment *env)
     double first_val = numeric_double(first);
     double second_val = numeric_double(second);
     if (second_val == 0)
-        return lisp_raise_error("Division by zero");
+        return lisp_raise_typed("division-by-zero", "Division by zero");
 
     double result = floor(first_val / second_val);
     if (!isfinite(result))
@@ -359,7 +359,7 @@ static LispObject *builtin_modulo(LispObject *args, Environment *env)
         long long second_val = LISP_INT_VAL(second);
 
         if (second_val == 0)
-            return lisp_raise_error("Division by zero");
+            return lisp_raise_typed("division-by-zero", "Division by zero");
         /* LLONG_MIN % -1 is undefined behavior; the remainder is 0 */
         if (second_val == -1)
             return lisp_make_integer(0);
@@ -374,7 +374,7 @@ static LispObject *builtin_modulo(LispObject *args, Environment *env)
     double first_val = numeric_double(first);
     double second_val = numeric_double(second);
     if (second_val == 0)
-        return lisp_raise_error("Division by zero");
+        return lisp_raise_typed("division-by-zero", "Division by zero");
 
     double result = fmod(first_val, second_val);
     if (result != 0 && ((result < 0) != (second_val < 0)))

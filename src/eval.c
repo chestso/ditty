@@ -48,10 +48,10 @@ LispObject *lisp_eval(LispObject *expr, Environment *env)
 LispObject *lisp_apply(LispObject *func, LispObject *args, Environment *env)
 {
     if (func == NULL || func == NIL) {
-        return lisp_raise_error("lisp_apply: nil is not a function");
+        return lisp_raise_typed("type-error", "lisp_apply: nil is not a function");
     }
     if (LISP_TYPE(func) != LISP_BUILTIN && LISP_TYPE(func) != LISP_LAMBDA) {
-        return lisp_raise_error("lisp_apply: not a function");
+        return lisp_raise_typed("type-error", "lisp_apply: not a function");
     }
     return apply(func, args, env, 0);
 }
@@ -136,7 +136,7 @@ static LispObject *lisp_eval_internal(LispObject *expr, Environment *env, int in
                          sym->namespace, sym->name);
             else
                 snprintf(error, sizeof(error), "Undefined symbol: %s", sym->name);
-            return lisp_raise_error(error);
+            return lisp_raise_typed_data(sym_unbound_variable, error, expr);
         }
         return value;
     }
@@ -160,7 +160,7 @@ static LispObject *eval_list(LispObject *list, Environment *env, int in_tail_pos
 
     LispObject *first = lisp_car(list);
     if (first == NULL) {
-        return lisp_raise_error("Empty list in function position");
+        return lisp_raise_typed("program-error", "Empty list in function position");
     }
 
     /* Check for special forms - these propagate tail position */
@@ -168,7 +168,7 @@ static LispObject *eval_list(LispObject *list, Environment *env, int in_tail_pos
         if (first == sym_quote) {
             LispObject *rest = lisp_cdr(list);
             if (rest == NIL) {
-                return lisp_raise_error("quote requires an argument");
+                return lisp_raise_typed("program-error", "quote requires an argument");
             }
             return lisp_car(rest);
         }
@@ -176,7 +176,7 @@ static LispObject *eval_list(LispObject *list, Environment *env, int in_tail_pos
         if (first == sym_quasiquote) {
             LispObject *rest = lisp_cdr(list);
             if (rest == NIL) {
-                return lisp_raise_error("quasiquote requires an argument");
+                return lisp_raise_typed("program-error", "quasiquote requires an argument");
             }
             return eval_quasiquote(lisp_car(rest), env);
         }
@@ -280,14 +280,14 @@ static LispObject *eval_list(LispObject *list, Environment *env, int in_tail_pos
 static LispObject *eval_if(LispObject *args, Environment *env, int in_tail_position)
 {
     if (args == NIL) {
-        return lisp_raise_error("if requires at least 2 arguments");
+        return lisp_raise_typed("program-error", "if requires at least 2 arguments");
     }
 
     LispObject *cond = lisp_car(args);
     LispObject *rest = lisp_cdr(args);
 
     if (rest == NIL) {
-        return lisp_raise_error("if requires at least 2 arguments");
+        return lisp_raise_typed("program-error", "if requires at least 2 arguments");
     }
 
     LispObject *then_expr = lisp_car(rest);
@@ -308,7 +308,7 @@ static LispObject *eval_if(LispObject *args, Environment *env, int in_tail_posit
 static LispObject *eval_define(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_error("define requires 2 arguments");
+        return lisp_raise_typed("program-error", "define requires 2 arguments");
     }
 
     LispObject *name = lisp_car(args);
@@ -321,22 +321,22 @@ static LispObject *eval_define(LispObject *args, Environment *env)
          * lambda naming, and docstring copy all behave identically. */
         LispObject *fn_name = lisp_car(name);
         if (LISP_TYPE(fn_name) != LISP_SYMBOL) {
-            return lisp_raise_error("define: function name must be a symbol");
+            return lisp_raise_typed("type-error", "define: function name must be a symbol");
         }
         LispObject *params = lisp_cdr(name);
         LispObject *body = lisp_cdr(args);
         if (body == NIL) {
-            return lisp_raise_error("define requires a body");
+            return lisp_raise_typed("program-error", "define requires a body");
         }
         value_expr = lisp_make_cons(sym_lambda, lisp_make_cons(params, body));
         name = fn_name;
     } else {
         if (LISP_TYPE(name) != LISP_SYMBOL) {
-            return lisp_raise_error("define requires a symbol as first argument");
+            return lisp_raise_typed("type-error", "define requires a symbol as first argument");
         }
         LispObject *rest = lisp_cdr(args);
         if (rest == NIL) {
-            return lisp_raise_error("define requires 2 arguments");
+            return lisp_raise_typed("program-error", "define requires 2 arguments");
         }
         value_expr = lisp_car(rest);
     }
@@ -364,17 +364,17 @@ static LispObject *eval_define(LispObject *args, Environment *env)
 static LispObject *eval_set_bang(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_error("set! requires 2 arguments");
+        return lisp_raise_typed("program-error", "set! requires 2 arguments");
     }
 
     LispObject *name = lisp_car(args);
     if (LISP_TYPE(name) != LISP_SYMBOL) {
-        return lisp_raise_error("set! requires a symbol as first argument");
+        return lisp_raise_typed("type-error", "set! requires a symbol as first argument");
     }
 
     LispObject *rest = lisp_cdr(args);
     if (rest == NIL) {
-        return lisp_raise_error("set! requires 2 arguments");
+        return lisp_raise_typed("program-error", "set! requires 2 arguments");
     }
 
     LispObject *value_expr = lisp_car(rest);
@@ -408,7 +408,7 @@ static LispObject *eval_set_bang(LispObject *args, Environment *env)
         else
             snprintf(error, sizeof(error),
                      "set!: cannot set undefined variable: %s", sym->name);
-        return lisp_raise_error(error);
+        return lisp_raise_typed_data(sym_unbound_variable, error, name);
     }
 
     return value;
@@ -595,14 +595,14 @@ static int parse_lambda_params(LispObject *params, LispObject **required_out, Li
 static LispObject *eval_lambda(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_error("lambda requires at least 2 arguments");
+        return lisp_raise_typed("program-error", "lambda requires at least 2 arguments");
     }
 
     LispObject *params = lisp_car(args);
     LispObject *rest = lisp_cdr(args);
 
     if (rest == NIL) {
-        return lisp_raise_error("lambda requires a body");
+        return lisp_raise_typed("program-error", "lambda requires a body");
     }
 
     /* Parse parameter list */
@@ -616,7 +616,7 @@ static LispObject *eval_lambda(LispObject *args, Environment *env)
 
     if (parse_lambda_params(params, &required_params, &optional_params, &optional_defaults, &rest_param, &required_count,
                             &optional_count, &error_msg) != 0) {
-        return lisp_raise_error(error_msg);
+        return lisp_raise_typed("program-error", error_msg);
     }
 
     /* Extract docstring from body if present */
@@ -648,7 +648,7 @@ static LispObject *eval_lambda(LispObject *args, Environment *env)
 static LispObject *eval_defmacro(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_error("defmacro requires at least 3 arguments");
+        return lisp_raise_typed("program-error", "defmacro requires at least 3 arguments");
     }
 
     LispObject *name = lisp_car(args);
@@ -660,25 +660,25 @@ static LispObject *eval_defmacro(LispObject *args, Environment *env)
          * Mirrors the define function shorthand. */
         LispObject *macro_name = lisp_car(name);
         if (LISP_TYPE(macro_name) != LISP_SYMBOL) {
-            return lisp_raise_error("defmacro: macro name must be a symbol");
+            return lisp_raise_typed("type-error", "defmacro: macro name must be a symbol");
         }
         params = lisp_cdr(name);
         body = lisp_cdr(args);
         name = macro_name;
     } else {
         if (LISP_TYPE(name) != LISP_SYMBOL) {
-            return lisp_raise_error("defmacro requires a symbol as first argument");
+            return lisp_raise_typed("type-error", "defmacro requires a symbol as first argument");
         }
         LispObject *rest = lisp_cdr(args);
         if (rest == NIL) {
-            return lisp_raise_error("defmacro requires parameter list");
+            return lisp_raise_typed("program-error", "defmacro requires parameter list");
         }
         params = lisp_car(rest);
         body = lisp_cdr(rest);
     }
 
     if (body == NIL) {
-        return lisp_raise_error("defmacro requires a body");
+        return lisp_raise_typed("program-error", "defmacro requires a body");
     }
 
     /* Extract docstring from body if present */
@@ -724,7 +724,7 @@ static LispObject *eval_quasiquote(LispObject *expr, Environment *env)
     if (first != NULL && LISP_TYPE(first) == LISP_SYMBOL && first == sym_unquote) {
         LispObject *rest = lisp_cdr(expr);
         if (rest == NIL) {
-            return lisp_raise_error("unquote requires an argument");
+            return lisp_raise_typed("program-error", "unquote requires an argument");
         }
         /* Evaluate the unquoted expression */
         return lisp_eval_internal(lisp_car(rest), env, 0);
@@ -736,7 +736,7 @@ static LispObject *eval_quasiquote(LispObject *expr, Environment *env)
         if (first_first != NULL && LISP_TYPE(first_first) == LISP_SYMBOL && first_first == sym_unquote_splicing) {
             LispObject *splice_rest = lisp_cdr(first);
             if (splice_rest == NIL) {
-                return lisp_raise_error("unquote-splicing requires an argument");
+                return lisp_raise_typed("program-error", "unquote-splicing requires an argument");
             }
             /* Evaluate the splice expression */
             LispObject *splice_value = lisp_eval_internal(lisp_car(splice_rest), env, 0);
@@ -803,16 +803,16 @@ static LispObject *expand_macro(LispObject *macro, LispObject *args, Environment
         }
 
         if (LISP_TYPE(params) != LISP_CONS) {
-            return lisp_raise_error("Invalid macro parameter list");
+            return lisp_raise_typed("program-error", "Invalid macro parameter list");
         }
 
         LispObject *param = lisp_car(params);
         if (LISP_TYPE(param) != LISP_SYMBOL) {
-            return lisp_raise_error("Macro parameter must be a symbol");
+            return lisp_raise_typed("type-error", "Macro parameter must be a symbol");
         }
 
         if (arg_list == NIL) {
-            return lisp_raise_error("Too few arguments to macro");
+            return lisp_raise_typed("program-error", "Too few arguments to macro");
         }
 
         LispObject *arg = lisp_car(arg_list);
@@ -824,7 +824,7 @@ static LispObject *expand_macro(LispObject *macro, LispObject *args, Environment
 
     /* If we exhausted params but still have args, and didn't encounter rest param, error */
     if (arg_list != NIL) {
-        return lisp_raise_error("Too many arguments to macro");
+        return lisp_raise_typed("program-error", "Too many arguments to macro");
     }
 
     /* Evaluate body (implicit progn) and return the result */
@@ -853,17 +853,17 @@ static LispObject *eval_named_let(LispObject *name, LispObject *bindings, LispOb
         LispObject *binding = lisp_car(bindings);
 
         if (LISP_TYPE(binding) != LISP_CONS) {
-            return lisp_raise_error("named let binding must be a list");
+            return lisp_raise_typed("type-error", "named let binding must be a list");
         }
 
         LispObject *param_name = lisp_car(binding);
         if (LISP_TYPE(param_name) != LISP_SYMBOL) {
-            return lisp_raise_error("named let binding name must be a symbol");
+            return lisp_raise_typed("type-error", "named let binding name must be a symbol");
         }
 
         LispObject *value_list = lisp_cdr(binding);
         if (value_list == NIL) {
-            return lisp_raise_error("named let binding requires a value");
+            return lisp_raise_typed("program-error", "named let binding requires a value");
         }
 
         params = lisp_make_cons(param_name, params);
@@ -914,14 +914,14 @@ static LispObject *eval_named_let(LispObject *name, LispObject *bindings, LispOb
 static LispObject *eval_let(LispObject *args, Environment *env, int in_tail_position)
 {
     if (args == NIL) {
-        return lisp_raise_error("let requires at least 2 arguments");
+        return lisp_raise_typed("program-error", "let requires at least 2 arguments");
     }
 
     LispObject *bindings = lisp_car(args);
     LispObject *body = lisp_cdr(args);
 
     if (body == NIL) {
-        return lisp_raise_error("let requires a body");
+        return lisp_raise_typed("program-error", "let requires a body");
     }
 
     /* Named let: (let name ((x init) ...) body ...) */
@@ -929,7 +929,7 @@ static LispObject *eval_let(LispObject *args, Environment *env, int in_tail_posi
         LispObject *real_bindings = lisp_car(body);
         LispObject *real_body = lisp_cdr(body);
         if (real_body == NIL) {
-            return lisp_raise_error("named let requires a body");
+            return lisp_raise_typed("program-error", "named let requires a body");
         }
         return eval_named_let(bindings, real_bindings, real_body, env, in_tail_position);
     }
@@ -942,17 +942,17 @@ static LispObject *eval_let(LispObject *args, Environment *env, int in_tail_posi
         LispObject *binding = lisp_car(bindings);
 
         if (LISP_TYPE(binding) != LISP_CONS) {
-            return lisp_raise_error("let binding must be a list");
+            return lisp_raise_typed("type-error", "let binding must be a list");
         }
 
         LispObject *name = lisp_car(binding);
         if (LISP_TYPE(name) != LISP_SYMBOL) {
-            return lisp_raise_error("let binding name must be a symbol");
+            return lisp_raise_typed("type-error", "let binding name must be a symbol");
         }
 
         LispObject *value_list = lisp_cdr(binding);
         if (value_list == NIL) {
-            return lisp_raise_error("let binding requires a value");
+            return lisp_raise_typed("program-error", "let binding requires a value");
         }
 
         LispObject *value_expr = lisp_car(value_list);
@@ -969,14 +969,14 @@ static LispObject *eval_let(LispObject *args, Environment *env, int in_tail_posi
 static LispObject *eval_let_star(LispObject *args, Environment *env, int in_tail_position)
 {
     if (args == NIL) {
-        return lisp_raise_error("let* requires at least 2 arguments");
+        return lisp_raise_typed("program-error", "let* requires at least 2 arguments");
     }
 
     LispObject *bindings = lisp_car(args);
     LispObject *body = lisp_cdr(args);
 
     if (body == NIL) {
-        return lisp_raise_error("let* requires a body");
+        return lisp_raise_typed("program-error", "let* requires a body");
     }
 
     /* Create new environment - will be extended as we process bindings */
@@ -987,17 +987,17 @@ static LispObject *eval_let_star(LispObject *args, Environment *env, int in_tail
         LispObject *binding = lisp_car(bindings);
 
         if (LISP_TYPE(binding) != LISP_CONS) {
-            return lisp_raise_error("let* binding must be a list");
+            return lisp_raise_typed("type-error", "let* binding must be a list");
         }
 
         LispObject *name = lisp_car(binding);
         if (LISP_TYPE(name) != LISP_SYMBOL) {
-            return lisp_raise_error("let* binding name must be a symbol");
+            return lisp_raise_typed("type-error", "let* binding name must be a symbol");
         }
 
         LispObject *value_list = lisp_cdr(binding);
         if (value_list == NIL) {
-            return lisp_raise_error("let* binding requires a value");
+            return lisp_raise_typed("program-error", "let* binding requires a value");
         }
 
         LispObject *value_expr = lisp_car(value_list);
@@ -1040,7 +1040,7 @@ static LispObject *eval_progn(LispObject *args, Environment *env, int in_tail_po
 static LispObject *eval_do(LispObject *args, Environment *env)
 {
     if (args == NIL) {
-        return lisp_raise_error("do requires at least 2 arguments");
+        return lisp_raise_typed("program-error", "do requires at least 2 arguments");
     }
 
     /* Parse bindings and test clause */
@@ -1048,7 +1048,7 @@ static LispObject *eval_do(LispObject *args, Environment *env)
     LispObject *rest = lisp_cdr(args);
 
     if (rest == NIL) {
-        return lisp_raise_error("do requires a test clause");
+        return lisp_raise_typed("program-error", "do requires a test clause");
     }
 
     LispObject *test_clause = lisp_car(rest);
@@ -1056,7 +1056,7 @@ static LispObject *eval_do(LispObject *args, Environment *env)
 
     /* Validate test clause is a list */
     if (LISP_TYPE(test_clause) != LISP_CONS) {
-        return lisp_raise_error("do test clause must be a list");
+        return lisp_raise_typed("type-error", "do test clause must be a list");
     }
 
     /* Extract test condition and result expressions */
@@ -1072,17 +1072,17 @@ static LispObject *eval_do(LispObject *args, Environment *env)
         LispObject *binding = lisp_car(binding_list);
 
         if (LISP_TYPE(binding) != LISP_CONS) {
-            return lisp_raise_error("do binding must be a list");
+            return lisp_raise_typed("type-error", "do binding must be a list");
         }
 
         LispObject *name = lisp_car(binding);
         if (LISP_TYPE(name) != LISP_SYMBOL) {
-            return lisp_raise_error("do binding name must be a symbol");
+            return lisp_raise_typed("type-error", "do binding name must be a symbol");
         }
 
         LispObject *init_list = lisp_cdr(binding);
         if (init_list == NIL) {
-            return lisp_raise_error("do binding requires an initial value");
+            return lisp_raise_typed("program-error", "do binding requires an initial value");
         }
 
         LispObject *init_val = lisp_car(init_list);
@@ -1143,7 +1143,7 @@ static LispObject *eval_cond(LispObject *args, Environment *env, int in_tail_pos
         LispObject *clause = lisp_car(args);
 
         if (LISP_TYPE(clause) != LISP_CONS) {
-            return lisp_raise_error("cond clause must be a list");
+            return lisp_raise_typed("type-error", "cond clause must be a list");
         }
 
         LispObject *test = lisp_car(clause);
@@ -1201,7 +1201,7 @@ static int objects_equal(LispObject *a, LispObject *b)
 static LispObject *eval_case(LispObject *args, Environment *env, int in_tail_position)
 {
     if (args == NIL) {
-        return lisp_raise_error("case requires at least 1 argument");
+        return lisp_raise_typed("program-error", "case requires at least 1 argument");
     }
 
     /* Evaluate key expression once (not in tail position) */
@@ -1213,7 +1213,7 @@ static LispObject *eval_case(LispObject *args, Environment *env, int in_tail_pos
         LispObject *clause = lisp_car(clauses);
 
         if (LISP_TYPE(clause) != LISP_CONS) {
-            return lisp_raise_error("case clause must be a list");
+            return lisp_raise_typed("type-error", "case clause must be a list");
         }
 
         LispObject *values = lisp_car(clause);
@@ -1380,9 +1380,9 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
 
         /* Arity check */
         if (arg_count < required_count)
-            lisp_raise_error("Too few arguments to lambda");
+            lisp_raise_typed("program-error", "Too few arguments to lambda");
         if (!rest_param && arg_count > required_count + optional_count)
-            lisp_raise_error("Too many arguments to lambda");
+            lisp_raise_typed("program-error", "Too many arguments to lambda");
 
         /* Bind required parameters */
         LispObject *params = LISP_LAMBDA_REQUIRED_PARAMS(func);
@@ -1439,7 +1439,7 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
 
             /* Handle non-lambdas: error */
             if (LISP_TYPE(tail_func) != LISP_LAMBDA)
-                lisp_raise_error("Cannot apply non-function");
+                lisp_raise_typed("type-error", "Cannot apply non-function");
 
             /* INLINE LAMBDA EXECUTION (key fix: no apply() call for lambdas) */
             /* Pop previous lambda's frame before executing next tail call */
@@ -1484,9 +1484,9 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
 
             /* Arity check */
             if (tail_arg_count < tail_required_count)
-                lisp_raise_error("Too few arguments to lambda");
+                lisp_raise_typed("program-error", "Too few arguments to lambda");
             if (!tail_rest_param && tail_arg_count > tail_required_count + tail_optional_count)
-                lisp_raise_error("Too many arguments to lambda");
+                lisp_raise_typed("program-error", "Too many arguments to lambda");
 
             /* Bind required parameters */
             LispObject *tail_params = LISP_LAMBDA_REQUIRED_PARAMS(tail_func);
@@ -1531,7 +1531,7 @@ static LispObject *apply(LispObject *func, LispObject *args, Environment *env, i
         return result;
     }
 
-    return lisp_raise_error("Cannot apply non-function");
+    return lisp_raise_typed("type-error", "Cannot apply non-function");
 }
 
 /* unwind-protect special form
@@ -1547,7 +1547,7 @@ static LispObject *eval_unwind_protect(LispObject *args, Environment *env, int i
     (void)in_tail_position; /* Body is never in tail position - cleanup must run */
 
     if (args == NIL)
-        return lisp_raise_error("unwind-protect requires at least 1 argument");
+        return lisp_raise_typed("program-error", "unwind-protect requires at least 1 argument");
 
     LispObject *bodyform = lisp_car(args);
     LispObject *cleanup_forms = lisp_cdr(args);
@@ -1585,15 +1585,15 @@ static LispObject *eval_condition_case(LispObject *args, Environment *env, int i
 {
     /* Validate before a frame exists: malformed forms raise outward. */
     if (args == NIL)
-        lisp_raise_error("condition-case requires at least 3 arguments");
+        lisp_raise_typed("program-error", "condition-case requires at least 3 arguments");
 
     LispObject *var = lisp_car(args); /* Can be symbol or nil */
     if (var != NIL && LISP_TYPE(var) != LISP_SYMBOL)
-        lisp_raise_error("condition-case: VAR must be a symbol or nil");
+        lisp_raise_typed("type-error", "condition-case: VAR must be a symbol or nil");
 
     LispObject *rest = lisp_cdr(args);
     if (rest == NIL)
-        lisp_raise_error("condition-case: missing body");
+        lisp_raise_typed("program-error", "condition-case: missing body");
 
     LispObject *bodyform = lisp_car(rest);
     LispObject *handlers = lisp_cdr(rest);
@@ -1602,10 +1602,10 @@ static LispObject *eval_condition_case(LispObject *args, Environment *env, int i
     for (LispObject *h = handlers; h != NIL && LISP_TYPE(h) == LISP_CONS; h = lisp_cdr(h)) {
         LispObject *handler = lisp_car(h);
         if (handler == NIL || LISP_TYPE(handler) != LISP_CONS)
-            lisp_raise_error("condition-case: handler must be a list");
+            lisp_raise_typed("type-error", "condition-case: handler must be a list");
         LispObject *handler_type = lisp_car(handler);
         if (handler_type == NIL || LISP_TYPE(handler_type) != LISP_SYMBOL)
-            lisp_raise_error("condition-case: handler type must be a symbol");
+            lisp_raise_typed("type-error", "condition-case: handler type must be a symbol");
     }
 
     EvalFrame frame;

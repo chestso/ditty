@@ -9,7 +9,7 @@
  * read-sexp, lisp_try_eval_string) may choose to raise. */
 static LispObject *reader_error(const char *message)
 {
-    return lisp_make_typed_error(sym_simple_error, message, NIL);
+    return lisp_make_typed_error(sym_reader_error, message, NIL);
 }
 
 static LispObject *reader_unclosed(const char *message)
