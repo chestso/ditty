@@ -530,7 +530,7 @@ LispObject *lisp_cdr(LispObject *obj)
 LispObject *lisp_set_car(LispObject *cell, LispObject *new_car)
 {
     if (cell == NULL || cell == NIL || LISP_TYPE(cell) != LISP_CONS)
-        return lisp_raise_typed("type-error", "set-car: argument must be a cons cell");
+        return lisp_raise_typed(sym_type_error, "set-car: argument must be a cons cell");
     LISP_CAR(cell) = new_car;
     return cell;
 }
@@ -538,7 +538,7 @@ LispObject *lisp_set_car(LispObject *cell, LispObject *new_car)
 LispObject *lisp_set_cdr(LispObject *cell, LispObject *new_cdr)
 {
     if (cell == NULL || cell == NIL || LISP_TYPE(cell) != LISP_CONS)
-        return lisp_raise_typed("type-error", "set-cdr: argument must be a cons cell");
+        return lisp_raise_typed(sym_type_error, "set-cdr: argument must be a cons cell");
     LISP_CDR(cell) = new_cdr;
     return cell;
 }

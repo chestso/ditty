@@ -12,7 +12,7 @@ static LispObject *builtin_car(LispObject *args, Environment *env)
     }
 
     if (LISP_TYPE(arg) != LISP_CONS) {
-        return lisp_raise_typed("type-error", "car requires a list");
+        return lisp_raise_typed(sym_type_error, "car requires a list");
     }
 
     return LISP_CAR(arg);
@@ -29,7 +29,7 @@ static LispObject *builtin_cdr(LispObject *args, Environment *env)
     }
 
     if (LISP_TYPE(arg) != LISP_CONS) {
-        return lisp_raise_typed("type-error", "cdr requires a list");
+        return lisp_raise_typed(sym_type_error, "cdr requires a list");
     }
 
     return LISP_CDR(arg);
@@ -74,7 +74,7 @@ static LispObject *builtin_set_car_bang(LispObject *args, Environment *env)
     LispObject *value = lisp_car(lisp_cdr(args));
 
     if (pair == NIL || LISP_TYPE(pair) != LISP_CONS) {
-        return lisp_raise_typed("type-error", "set-car! requires a cons cell as first argument");
+        return lisp_raise_typed(sym_type_error, "set-car! requires a cons cell as first argument");
     }
 
     LISP_CAR(pair) = value;
@@ -90,7 +90,7 @@ static LispObject *builtin_set_cdr_bang(LispObject *args, Environment *env)
     LispObject *value = lisp_car(lisp_cdr(args));
 
     if (pair == NIL || LISP_TYPE(pair) != LISP_CONS) {
-        return lisp_raise_typed("type-error", "set-cdr! requires a cons cell as first argument");
+        return lisp_raise_typed(sym_type_error, "set-cdr! requires a cons cell as first argument");
     }
 
     LISP_CDR(pair) = value;
@@ -146,7 +146,7 @@ static LispObject *builtin_length(LispObject *args, Environment *env)
         return lisp_make_integer((long long)LISP_VECTOR_SIZE(obj));
     }
     default:
-        return lisp_raise_typed("type-error", "length requires a list, string, or vector");
+        return lisp_raise_typed(sym_type_error, "length requires a list, string, or vector");
     }
 }
 
@@ -168,32 +168,32 @@ static LispObject *builtin_list_ref(LispObject *args, Environment *env)
         /* Reject NaN, infinities and values outside the long long range
            before casting (the cast itself would be undefined behavior) */
         if (!isfinite(index_val) || index_val > 9.2e18 || index_val < -9.2e18)
-            return lisp_raise_typed("type-error", "list-ref index out of bounds");
+            return lisp_raise_typed(sym_type_error, "list-ref index out of bounds");
         index = (long long)index_val;
     } else {
-        return lisp_raise_typed("type-error", "list-ref index must be a number");
+        return lisp_raise_typed(sym_type_error, "list-ref index must be a number");
     }
 
     if (index < 0) {
-        return lisp_raise_typed("type-error", "list-ref index must be non-negative");
+        return lisp_raise_typed(sym_type_error, "list-ref index must be non-negative");
     }
 
     /* Traverse the list, checking type at each step */
     for (long long i = 0; i < index && lst != NIL && lst != NULL; i++) {
         /* Type check before accessing cons fields */
         if (LISP_TYPE(lst) != LISP_CONS) {
-            return lisp_raise_typed("type-error", "list-ref: not a proper list");
+            return lisp_raise_typed(sym_type_error, "list-ref: not a proper list");
         }
         lst = LISP_CDR(lst);
     }
 
     if (lst == NIL || lst == NULL) {
-        return lisp_raise_typed("type-error", "list-ref index out of bounds");
+        return lisp_raise_typed(sym_type_error, "list-ref index out of bounds");
     }
 
     /* Final type check before accessing car */
     if (LISP_TYPE(lst) != LISP_CONS) {
-        return lisp_raise_typed("type-error", "list-ref: not a proper list");
+        return lisp_raise_typed(sym_type_error, "list-ref: not a proper list");
     }
 
     return LISP_CAR(lst);
@@ -204,7 +204,7 @@ static LispObject *builtin_reverse(LispObject *args, Environment *env)
     (void)env;
 
     if (args == NULL || args == NIL) {
-        return lisp_raise_typed("program-error", "reverse: expected 1 argument");
+        return lisp_raise_typed(sym_program_error, "reverse: expected 1 argument");
     }
 
     LispObject *lst = lisp_car(args);
@@ -216,7 +216,7 @@ static LispObject *builtin_reverse(LispObject *args, Environment *env)
 
     /* Validate it's a list */
     if (LISP_TYPE(lst) != LISP_CONS) {
-        return lisp_raise_typed("type-error", "reverse: argument must be a list");
+        return lisp_raise_typed(sym_type_error, "reverse: argument must be a list");
     }
 
     /* Build reversed list iteratively */
@@ -249,7 +249,7 @@ static LispObject *builtin_append(LispObject *args, Environment *env)
 
         /* Each argument must be a list (or NIL) */
         if (list != NIL && LISP_TYPE(list) != LISP_CONS) {
-            return lisp_raise_typed("type-error", "append requires list arguments");
+            return lisp_raise_typed(sym_type_error, "append requires list arguments");
         }
 
         /* Copy elements from this list */
@@ -361,7 +361,7 @@ static LispObject *alist_find(LispObject *key, LispObject *alist,
         if (LISP_TYPE(alist) != LISP_CONS) {
             char buf[128];
             snprintf(buf, sizeof(buf), "%s requires an association list", name);
-            return lisp_raise_typed("type-error", buf);
+            return lisp_raise_typed(sym_type_error, buf);
         }
         LispObject *pair = lisp_car(alist);
         if (pair != NIL && LISP_TYPE(pair) == LISP_CONS) {
@@ -401,7 +401,7 @@ static LispObject *builtin_alist_get(LispObject *args, Environment *env)
 {
     (void)env;
     if (args == NIL || lisp_cdr(args) == NIL) {
-        return lisp_raise_typed("program-error", "alist-get requires at least 2 arguments");
+        return lisp_raise_typed(sym_program_error, "alist-get requires at least 2 arguments");
     }
 
     LispObject *key = lisp_car(args);
@@ -416,7 +416,7 @@ static LispObject *builtin_alist_get(LispObject *args, Environment *env)
     /* Iterate through association list */
     while (alist != NIL && alist != NULL) {
         if (LISP_TYPE(alist) != LISP_CONS) {
-            return lisp_raise_typed("type-error", "alist-get requires an association list");
+            return lisp_raise_typed(sym_type_error, "alist-get requires an association list");
         }
 
         LispObject *pair = lisp_car(alist);
@@ -446,7 +446,7 @@ static LispObject *builtin_member(LispObject *args, Environment *env)
     /* Iterate through list using structural equality */
     while (list != NIL && list != NULL) {
         if (LISP_TYPE(list) != LISP_CONS) {
-            return lisp_raise_typed("type-error", "member requires a proper list");
+            return lisp_raise_typed(sym_type_error, "member requires a proper list");
         }
 
         LispObject *elem = lisp_car(list);
@@ -471,7 +471,7 @@ static LispObject *builtin_memq(LispObject *args, Environment *env)
     /* Iterate through list using pointer equality */
     while (list != NIL && list != NULL) {
         if (LISP_TYPE(list) != LISP_CONS) {
-            return lisp_raise_typed("type-error", "memq requires a proper list");
+            return lisp_raise_typed(sym_type_error, "memq requires a proper list");
         }
 
         LispObject *elem = lisp_car(list);
@@ -502,14 +502,14 @@ static LispObject *builtin_map(LispObject *args, Environment *env)
     LispObject *list = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(func) != LISP_BUILTIN && LISP_TYPE(func) != LISP_LAMBDA)
-        return lisp_raise_typed("type-error", "map requires a function as first argument");
+        return lisp_raise_typed(sym_type_error, "map requires a function as first argument");
 
     LispObject *result = NIL;
     LispObject *tail = NULL;
 
     while (list != NIL && list != NULL) {
         if (LISP_TYPE(list) != LISP_CONS)
-            return lisp_raise_typed("type-error", "map requires a list");
+            return lisp_raise_typed(sym_type_error, "map requires a list");
 
         /* A raising callback abandons the walk; a returned error object is
          * an ordinary element, not a failure. */
@@ -532,14 +532,14 @@ static LispObject *builtin_filter(LispObject *args, Environment *env)
     LispObject *list = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(func) != LISP_BUILTIN && LISP_TYPE(func) != LISP_LAMBDA)
-        return lisp_raise_typed("type-error", "filter requires a function as first argument");
+        return lisp_raise_typed(sym_type_error, "filter requires a function as first argument");
 
     LispObject *result = NIL;
     LispObject *tail = NULL;
 
     while (list != NIL && list != NULL) {
         if (LISP_TYPE(list) != LISP_CONS)
-            return lisp_raise_typed("type-error", "filter requires a list");
+            return lisp_raise_typed(sym_type_error, "filter requires a list");
 
         LispObject *item = lisp_car(list);
         LispObject *pred = apply_unary(func, item, env, "filter");
@@ -561,11 +561,11 @@ static LispObject *builtin_apply(LispObject *args, Environment *env)
     LispObject *func_args = lisp_car(lisp_cdr(args));
 
     if (LISP_TYPE(func) != LISP_BUILTIN && LISP_TYPE(func) != LISP_LAMBDA) {
-        return lisp_raise_typed("type-error", "apply requires a function as first argument");
+        return lisp_raise_typed(sym_type_error, "apply requires a function as first argument");
     }
 
     if (func_args != NIL && LISP_TYPE(func_args) != LISP_CONS) {
-        return lisp_raise_typed("type-error", "apply requires a list as second argument");
+        return lisp_raise_typed(sym_type_error, "apply requires a list as second argument");
     }
 
     return lisp_apply(func, func_args, env);

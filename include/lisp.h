@@ -288,7 +288,10 @@ LispStatus lisp_try_load_file(const char *filename, Environment *env, LispObject
  * eval does not signal. */
 _Noreturn LispObject *lisp_raise(LispObject *error);
 _Noreturn LispObject *lisp_raise_error(const char *message); /* type 'simple-error */
-_Noreturn LispObject *lisp_raise_typed(const char *type_name, const char *message);
+/* `type` is an interned symbol — a pre-interned ERROR_TYPES symbol (sym_type_error,
+ * sym_program_error, ...) for the runtime types, or lisp_intern("name") for a custom
+ * one. No interning happens here; pass the symbol you already have. */
+_Noreturn LispObject *lisp_raise_typed(LispObject *type, const char *message);
 _Noreturn LispObject *lisp_raise_typed_data(LispObject *type, const char *message, LispObject *data);
 
 /* The multi-line diagnostic for a signaled error ("ERROR: [...] ... Call

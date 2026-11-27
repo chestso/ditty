@@ -73,9 +73,9 @@ _Noreturn LispObject *lisp_raise_error(const char *message)
     lisp_raise(lisp_make_typed_error(sym_simple_error, message, NIL));
 }
 
-_Noreturn LispObject *lisp_raise_typed(const char *type_name, const char *message)
+_Noreturn LispObject *lisp_raise_typed(LispObject *type, const char *message)
 {
-    lisp_raise(lisp_make_typed_error(lisp_intern(type_name), message, NIL));
+    lisp_raise(lisp_make_typed_error(type, message, NIL));
 }
 
 _Noreturn LispObject *lisp_raise_typed_data(LispObject *type, const char *message, LispObject *data)
