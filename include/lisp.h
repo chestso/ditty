@@ -385,18 +385,18 @@ SPECIAL_FORMS(DECLARE_SYM)
  * child of `error`. `error` is both the hierarchy root and the catch-all
  * handler name; `simple-error` is the generic type the `error` function
  * signals. */
-#define ERROR_TYPES(X)                                              \
-    X(sym_error, "error", sym_error)                                \
-    X(sym_simple_error, "simple-error", sym_error)                  \
-    X(sym_type_error, "type-error", sym_error)                      \
-    X(sym_program_error, "program-error", sym_error)                \
-    X(sym_unbound_variable, "unbound-variable", sym_error)          \
-    X(sym_arithmetic_error, "arithmetic-error", sym_error)          \
+#define ERROR_TYPES(X)                                                \
+    X(sym_error, "error", sym_error)                                  \
+    X(sym_simple_error, "simple-error", sym_error)                    \
+    X(sym_type_error, "type-error", sym_error)                        \
+    X(sym_program_error, "program-error", sym_error)                  \
+    X(sym_unbound_variable, "unbound-variable", sym_error)            \
+    X(sym_arithmetic_error, "arithmetic-error", sym_error)            \
     X(sym_division_by_zero, "division-by-zero", sym_arithmetic_error) \
-    X(sym_file_error, "file-error", sym_error)                      \
-    X(sym_stream_error, "stream-error", sym_error)                  \
-    X(sym_reader_error, "reader-error", sym_error)                  \
-    X(sym_unclosed_input, "unclosed-input", sym_reader_error)       \
+    X(sym_file_error, "file-error", sym_error)                        \
+    X(sym_stream_error, "stream-error", sym_error)                    \
+    X(sym_reader_error, "reader-error", sym_error)                    \
+    X(sym_unclosed_input, "unclosed-input", sym_reader_error)         \
     X(sym_package_error, "package-error", sym_error)
 
 /* Declare error-type symbol globals (third column ignored) */

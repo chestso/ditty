@@ -245,16 +245,34 @@ or reported by the top level).
   (error (error-message outer)))   ; => "boom"
 ```
 
-### Common Error Types
+### Runtime Error Types
 
-- `'simple-error` - Generic error (the type raised by `error`)
-- `'division-by-zero` - Division by zero
-- `'wrong-type-argument` - Wrong type passed to function
-- `'wrong-number-of-arguments` - Arity mismatch
-- `'void-variable` - Undefined symbol
-- `'file-error` - File I/O errors
-- `'range-error` - Out of bounds access
-- `'unclosed-input` - Reader hit end-of-input inside an unclosed list or vector (signaled by `read-sexp` and the REPL parser). The REPL uses this to decide whether to keep reading another line; user code can catch it the same way:
+The runtime signals a small, Common Lisp-leaning set of condition types.
+Each type has a parent chain ending at `error`; `condition-case` matches a
+handler against the whole chain, so a handler for a parent type catches its
+children. Clauses are tried in order and the first match wins.
+
+| Type               | Parent             | Signaled when                                      |
+| ------------------ | ------------------ | -------------------------------------------------- |
+| `simple-error`     | `error`            | Generic error (the type `error` signals); fallback |
+| `type-error`       | `error`            | Wrong-type operand, or an index out of bounds      |
+| `program-error`    | `error`            | Arity mismatch or a malformed special form         |
+| `unbound-variable` | `error`            | Undefined symbol (data: the symbol)                |
+| `arithmetic-error` | `error`            | Non-finite result or a math domain violation       |
+| `division-by-zero` | `arithmetic-error` | Integer division by zero                           |
+| `file-error`       | `error`            | File I/O failure (data: the pathname)              |
+| `stream-error`     | `error`            | Operation on a closed stream                       |
+| `reader-error`     | `error`            | Reader/parse syntax failure                        |
+| `unclosed-input`   | `reader-error`     | End-of-input inside an unclosed list/vector/string |
+| `package-error`    | `error`            | Unknown package                                    |
+
+`error` is the root of the hierarchy and the catch-all handler name. A
+handler for `arithmetic-error` catches `division-by-zero`; a handler for
+`reader-error` catches `unclosed-input`; `error` catches everything.
+
+`unclosed-input` is what the reader signals for incomplete input. The REPL
+uses it to decide whether to keep reading another line; user code can catch
+it (or its parent `reader-error`) the same way:
 
 ```lisp
 (condition-case e
@@ -263,7 +281,9 @@ or reported by the top level).
   (error (concat "other error: " (error-message e))))
 ```
 
-You can define custom error types using any symbol:
+You can signal a custom type with any symbol. An unregistered type is
+treated as a direct child of `error`: it matches a handler of that exact
+name, or the `error` catch-all, but no other registered type.
 
 ### Notes
 

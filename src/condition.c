@@ -114,8 +114,8 @@ void condition_init_types(void)
     uint32_t masks[ERROR_TYPE_COUNT];
     for (int i = 0; i < ERROR_TYPE_COUNT; i++)
         masks[i] = (1u << i) | (err_parent[i] == i ? 0 : masks[err_parent[i]]);
-#define ERR_SET(c_name, lisp_name, parent)                  \
-    err_types[ERR_IDX_##c_name].sym = c_name;               \
+#define ERR_SET(c_name, lisp_name, parent)    \
+    err_types[ERR_IDX_##c_name].sym = c_name; \
     err_types[ERR_IDX_##c_name].mask = masks[ERR_IDX_##c_name];
     ERROR_TYPES(ERR_SET)
 #undef ERR_SET

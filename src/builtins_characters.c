@@ -66,15 +66,15 @@ static LispObject *builtin_string_to_char(LispObject *args, Environment *env)
     return lisp_make_char(codepoint);
 }
 
-#define DEFINE_CHAR_CMP(cname, opname, op)                                \
-    static LispObject *cname(LispObject *args, Environment *env)          \
-    {                                                                     \
-        (void)env;                                                        \
-        CHECK_ARGS_2(opname);                                             \
-        LispObject *c1 = lisp_car(args), *c2 = lisp_car(lisp_cdr(args));  \
-        if (LISP_TYPE(c1) != LISP_CHAR || LISP_TYPE(c2) != LISP_CHAR)     \
-            return lisp_raise_typed("type-error", opname " requires characters");       \
-        return lisp_make_boolean(LISP_CHAR_VAL(c1) op LISP_CHAR_VAL(c2)); \
+#define DEFINE_CHAR_CMP(cname, opname, op)                                        \
+    static LispObject *cname(LispObject *args, Environment *env)                  \
+    {                                                                             \
+        (void)env;                                                                \
+        CHECK_ARGS_2(opname);                                                     \
+        LispObject *c1 = lisp_car(args), *c2 = lisp_car(lisp_cdr(args));          \
+        if (LISP_TYPE(c1) != LISP_CHAR || LISP_TYPE(c2) != LISP_CHAR)             \
+            return lisp_raise_typed("type-error", opname " requires characters"); \
+        return lisp_make_boolean(LISP_CHAR_VAL(c1) op LISP_CHAR_VAL(c2));         \
     }
 DEFINE_CHAR_CMP(builtin_char_eq, "char=?", ==)
 DEFINE_CHAR_CMP(builtin_char_lt, "char<?", <)

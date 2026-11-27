@@ -420,17 +420,17 @@ static LispObject *builtin_join(LispObject *args, Environment *env)
     return lisp_make_string(result);
 }
 
-#define DEFINE_STR_CMP(cname, opname, op)                               \
-    static LispObject *cname(LispObject *args, Environment *env)        \
-    {                                                                   \
-        (void)env;                                                      \
-        CHECK_ARGS_2(opname);                                           \
-        LispObject *a = lisp_car(args), *b = lisp_car(lisp_cdr(args));  \
-        if (LISP_TYPE(a) != LISP_STRING || LISP_TYPE(b) != LISP_STRING) \
-            return lisp_raise_typed("type-error", opname " requires strings");        \
-        return (strcmp(LISP_STR_VAL(a), LISP_STR_VAL(b)) op 0)          \
-                   ? LISP_TRUE                                          \
-                   : NIL;                                               \
+#define DEFINE_STR_CMP(cname, opname, op)                                      \
+    static LispObject *cname(LispObject *args, Environment *env)               \
+    {                                                                          \
+        (void)env;                                                             \
+        CHECK_ARGS_2(opname);                                                  \
+        LispObject *a = lisp_car(args), *b = lisp_car(lisp_cdr(args));         \
+        if (LISP_TYPE(a) != LISP_STRING || LISP_TYPE(b) != LISP_STRING)        \
+            return lisp_raise_typed("type-error", opname " requires strings"); \
+        return (strcmp(LISP_STR_VAL(a), LISP_STR_VAL(b)) op 0)                 \
+                   ? LISP_TRUE                                                 \
+                   : NIL;                                                      \
     }
 DEFINE_STR_CMP(builtin_string_lt, "string<?", <)
 DEFINE_STR_CMP(builtin_string_gt, "string>?", >)
