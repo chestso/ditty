@@ -93,7 +93,7 @@
 
 (defface ditty-constant-face
   '((t (:inherit font-lock-constant-face)))
-  "Face for ditty constants (`nil', `#t', `#f')."
+  "Face for ditty constants (nil, `#t', `#f')."
   :group 'ditty)
 
 (defface ditty-keyword-literal-face
@@ -210,8 +210,10 @@
     ;; --- Aliases created via defalias in src/lisp.c ---
     "doc" "doc-set!" "string-append" "string-split" "string-join"
     "string-length" "package-set" "package-current" "package-list")
-  "Ditty built-in functions registered via REGISTER in src/builtins_*.c,
-plus Lisp-level aliases defined via `defalias' in src/lisp.c.")
+  "Ditty built-in function names.
+
+These are registered via REGISTER in src/builtins_*.c, plus Lisp-level
+aliases defined via `defalias' in src/lisp.c.")
 
 ;; ============================================================================
 ;; Font-lock
